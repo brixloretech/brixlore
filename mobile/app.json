@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Brixlore",
-    "slug": "brixlore-app",
+    "slug": "brixlore",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -33,7 +33,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "fe90e3ed-b48f-40f7-a6b2-54d0e7134ffd"
+        "projectId": "d8b9ad65-ef9b-4c87-b075-c716a6495a8e"
       },
       "apiUrl": "https://brick-tales-web-production-653a.up.railway.app",
       "r2WorkerBaseUrl": "https://shy-sea-9921.brixloretech.workers.dev"
@@ -57,6 +57,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "owner": "brixlore"
+    "owner": "rubabhashmi"
   }
 }

@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     borderTopColor: "rgba(255, 255, 255, 0.08)",
     borderTopWidth: 1,
-    height: 85,
+    height: 115,
     paddingBottom: 8,
     paddingTop: 8,
   },
@@ -121,6 +121,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     letterSpacing: 0.2,
-    paddingTop: 8,
+    paddingTop: 10,
+    paddingBottom: 8,
   },
 });
