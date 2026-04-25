@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* BRIXLORE brand: dark-only theme — off-black background, soft white accent, white/light gray text */
+:root {
+  --background: #0b0b0e;
+  --foreground: #f5f7fb;
+  --off-black: #0b0b0e;
+  --accent: #e5e7eb;
+  --accent-foreground: #0b0b0e;
+  color-scheme: dark;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.reveal {
+  animation: fadeUp 0.6s ease-out both;
+}
+
+.reveal-delay {
+  animation: fadeUp 0.8s ease-out both;
+}
+
+/* Ensure Video.js player is responsive and doesn't overflow on mobile. */
+.video-js {
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+}
+
+.vjs-fill {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.video-js .vjs-control-bar {
+  display: flex;
+  opacity: 1;
+  visibility: visible;
+}
+
+.video-js .vjs-big-play-button {
+  z-index: 2;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Custom select dropdown styling to match site color scheme */
+select option {
+  background-color: #0b0b0e !important;
+  color: #f5f7fb !important;
+}
+
+/* Selected option - dark text on light background for readability */
+select option:checked,
+select option[selected] {
+  background-color: #e5e7eb !important;
+  color: #0b0b0e !important;
+  font-weight: 600 !important;
+}
+
+select option:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  color: #f5f7fb !important;
+}

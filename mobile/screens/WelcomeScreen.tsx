@@ -1,0 +1,323 @@
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { View, StyleSheet, Pressable, Text, Image } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { Video, ResizeMode, type AVPlaybackStatus } from "expo-av";
+import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuthStore } from "../store/useAuthStore";
+import { siteService } from "../services/siteService";
+
+type BrandingSettings = {
+  mobileWelcomeVideoUrl?: string;
+};
+
+const WELCOME_VIDEO_URL_CACHE_KEY = "@welcome_video_url";
+
+function parseBranding(content?: string | null): BrandingSettings {
+  if (!content) return {};
+  try {
+    const data = JSON.parse(content) as BrandingSettings;
+    return {
+      mobileWelcomeVideoUrl:
+        typeof data.mobileWelcomeVideoUrl === "string" &&
+        data.mobileWelcomeVideoUrl.trim().length > 0
+          ? data.mobileWelcomeVideoUrl.trim()
+          : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+export default function WelcomeScreen() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuthStore();
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const videoRef = useRef<Video | null>(null);
+  const lastResumeAttemptRef = useRef(0);
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.replace("/(tabs)");
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  const updateVideoUrl = useCallback((nextUrl: string | null) => {
+    if (!nextUrl) return;
+    setVideoUrl((currentUrl) =>
+      currentUrl === nextUrl ? currentUrl : nextUrl,
+    );
+  }, []);
+
+  const fetchRemoteVideoUrl = useCallback(async () => {
+    try {
+      const brandingPage = await siteService.getPage("branding");
+      const branding = parseBranding(brandingPage?.content ?? "");
+      const remoteUrl = branding.mobileWelcomeVideoUrl?.trim();
+
+      if (!remoteUrl) {
+        return;
+      }
+
+      updateVideoUrl(remoteUrl);
+      await AsyncStorage.setItem(WELCOME_VIDEO_URL_CACHE_KEY, remoteUrl);
+    } catch {
+      // Keep current URL and fail silently
+    }
+  }, [updateVideoUrl]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadBranding = async () => {
+      try {
+        const cachedUrl = await AsyncStorage.getItem(
+          WELCOME_VIDEO_URL_CACHE_KEY,
+        );
+        if (mounted && cachedUrl && cachedUrl.trim().length > 0) {
+          updateVideoUrl(cachedUrl.trim());
+        }
+      } catch {
+        // Ignore cache read failures
+      }
+    };
+
+    void loadBranding();
+    void fetchRemoteVideoUrl();
+
+    return () => {
+      mounted = false;
+    };
+  }, [fetchRemoteVideoUrl, updateVideoUrl]);
+
+  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (!status.isLoaded) {
+      return;
+    }
+
+    const stalledWhileShouldPlay =
+      status.shouldPlay && !status.isPlaying && !status.isBuffering;
+
+    if (!stalledWhileShouldPlay) {
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastResumeAttemptRef.current < 1500) {
+      return;
+    }
+
+    lastResumeAttemptRef.current = now;
+    videoRef.current?.playAsync().catch(() => {
+      // Ignore playback retry failures
+    });
+  }, []);
+
+  return (
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
+      {/* Video Background Layer */}
+      <View style={styles.backgroundLayer}>
+        {videoUrl ? (
+          <Video
+            ref={(ref) => {
+              videoRef.current = ref;
+            }}
+            source={{ uri: videoUrl }}
+            style={StyleSheet.absoluteFill}
+            shouldPlay
+            isLooping
+            isMuted
+            resizeMode={ResizeMode.COVER}
+            progressUpdateIntervalMillis={1000}
+            onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+            onError={() => {
+              void fetchRemoteVideoUrl();
+            }}
+          />
+        ) : (
+          <View style={styles.fallbackBackground} />
+        )}
+
+        {/* Gradient Overlay - stronger at bottom */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0.06)", "rgba(0,0,0,0.22)", "rgba(0,0,0,0.58)"]}
+          locations={[0, 0.5, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      </View>
+
+      {/* Content Container */}
+      <View style={styles.content}>
+        {/* Logo */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("../assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Text Section */}
+        <View style={styles.textSection}>
+          <Text style={styles.mainText}>Culture With Substance</Text>
+          <Text style={styles.subtitleText}>
+            Join Brixlore and step into stories shaped by culture
+          </Text>
+        </View>
+
+        {/* Buttons Section */}
+        <View style={styles.buttonsSection}>
+          {/* Primary Button - Start Watching (Yellow/Accent) */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isLoading && styles.buttonDisabled,
+            ]}
+            disabled={isLoading}
+            onPress={() => router.replace("/(tabs)")}
+          >
+            <Text style={styles.primaryButtonText}>Start Watching</Text>
+          </Pressable>
+
+          {/* Secondary Button - Login (Orange Outline) */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              pressed && styles.secondaryButtonPressed,
+              isLoading && styles.buttonDisabled,
+            ]}
+            disabled={isLoading}
+            onPress={() => router.replace("/login")}
+          >
+            <Text style={styles.secondaryButtonText}>Log In</Text>
+          </Pressable>
+
+          {/* Create Account Link */}
+          <View style={styles.linkSection}>
+            <Text style={styles.linkText}>or </Text>
+            <Pressable onPress={() => router.replace("/signup")}>
+              <Text style={styles.createAccountLink}>Create Account</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  backgroundLayer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#000000",
+  },
+  fallbackBackground: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#000000",
+  },
+  content: {
+    flex: 1,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 40,
+    paddingBottom: 48,
+  },
+  logoContainer: {
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  logo: {
+    width: 220,
+    height: 66,
+  },
+  textSection: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  mainText: {
+    color: "#FFFFFF",
+    fontSize: 27,
+    fontWeight: "800",
+    lineHeight: 34,
+    textAlign: "center",
+    marginHorizontal: 12,
+  },
+  subtitleText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "500",
+    lineHeight: 22,
+    textAlign: "center",
+    marginTop: 10,
+    marginHorizontal: 20,
+    opacity: 0.9,
+  },
+  buttonsSection: {
+    gap: 14,
+  },
+  // Primary Button - Filled White (Start Watching)
+  primaryButton: {
+    height: 50,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+  },
+  primaryButtonPressed: {
+    opacity: 0.85,
+  },
+  primaryButtonText: {
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  // Secondary Button - Outlined White (Log In)
+  secondaryButton: {
+    height: 50,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  secondaryButtonPressed: {
+    opacity: 0.8,
+  },
+  secondaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+    lineHeight: 18,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  // Create Account Section
+  linkSection: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 12,
+  },
+  linkText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "500",
+  },
+  createAccountLink: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    textDecorationLine: "underline",
+  },
+});
