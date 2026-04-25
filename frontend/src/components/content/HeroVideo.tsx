@@ -4,13 +4,13 @@ import { useEffect, useRef, useState } from "react";
 
 type HeroVideoProps = {
   uploadedSrc?: string | null;
-  youtubeSrc: string;
+  // youtubeSrc: string;
   youtubeId: string; // pass the raw video ID e.g. "TEjHDF9QXTY"
 };
 
 export function HeroVideo({
   uploadedSrc,
-  youtubeSrc,
+  // youtubeSrc,
   youtubeId,
 }: HeroVideoProps) {
   const [mounted, setMounted] = useState(false);
