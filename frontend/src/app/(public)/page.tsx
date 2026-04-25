@@ -198,8 +198,8 @@ export default async function Home({ searchParams }: HomeProps) {
 
   const branding = parseBranding(brandingPage?.content ?? "");
   const bannerSrc = branding.bannerUrl?.trim() || "/hero-banner.png";
-  const heroVideoId = "TEjHDF9QXTY";
-  const heroVideoSrc = `https://www.youtube.com/embed/${heroVideoId}?autoplay=1&mute=1&loop=1&playlist=${heroVideoId}&controls=0&showinfo=0&modestbranding=1&rel=0&playsinline=1`;
+  // const heroVideoId = "TEjHDF9QXTY";
+  // const heroVideoSrc = `https://www.youtube.com/embed/${heroVideoId}?autoplay=1&mute=1&loop=1&playlist=${heroVideoId}&controls=0&showinfo=0&modestbranding=1&rel=0&playsinline=1`;
   const homePlans = [...plans].sort((a, b) => a.price - b.price);
   const showcaseItems = browseItems.slice(0, 6);
 
@@ -247,9 +247,7 @@ export default async function Home({ searchParams }: HomeProps) {
           )} */}
           <div className="absolute inset-0 overflow-hidden" aria-hidden>
             <HeroVideo
-              uploadedSrc={bannerVideoSrc}
-              youtubeSrc={heroVideoSrc}
-              youtubeId="TEjHDF9QXTY"
+              uploadedSrc={bannerVideoSrc ?? "/LandingPageBanner.mp4"}
             />
           </div>
           <div className="absolute inset-0 bg-black/35" aria-hidden />
