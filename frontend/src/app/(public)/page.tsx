@@ -865,7 +865,9 @@ export default async function Home({ searchParams }: HomeProps) {
             </div>
           )} */}
           <div className="absolute inset-0 overflow-hidden" aria-hidden>
-            <HeroVideo uploadedSrc={bannerVideoSrc ?? "/BannerVideo.mp4"} />
+            <HeroVideo
+              uploadedSrc={bannerVideoSrc ?? "/LandingPageBanner.mp4"}
+            />
           </div>
           <div className="absolute inset-0 bg-black/35" aria-hidden />
         </div>
