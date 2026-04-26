@@ -258,7 +258,7 @@ export default async function Home({ searchParams }: HomeProps) {
             />
           </div> */}
           <h1 className="text-3xl font-bold tracking-tight text-white drop-shadow-lg sm:text-4xl md:text-5xl lg:text-6xl">
-            Built From Culture
+            Brixlore - Built From Culture
           </h1>
           <p className="mt-4 max-w-xl text-center text-lg text-white/90 drop-shadow-md">
             Join Brixlore and Access the Urban Archive
