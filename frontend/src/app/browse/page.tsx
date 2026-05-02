@@ -226,7 +226,7 @@ export default async function BrowsePage({ searchParams }: BrowsePageProps) {
       <div className="pointer-events-none absolute bottom-0 left-0 h-72 w-72 rounded-full bg-violet-500/20 blur-[140px]" />
 
       <section className="px-4 pt-6 sm:px-6 lg:px-10">
-        <div className="mb-5 rounded-2xl border border-neutral-700/80 bg-gradient-to-r from-neutral-900/95 via-[#121212] to-neutral-900/95 px-4 py-3 text-sm text-neutral-200 shadow-[0_16px_34px_rgba(0,0,0,0.35)] sm:hidden">
+        <div className="mb-5 rounded-2xl border border-neutral-700/80 bg-gradient-to-r from-neutral-900/95 via-[#121212] to-neutral-900/95 px-4 py-3 text-sm text-neutral-200 shadow-[0_16px_34px_rgba(0,0,0,0.35)] ">
           <div className="flex items-center justify-between gap-3">
             <p className="font-medium text-neutral-100">
               Download the app for a faster, smoother experience.
