@@ -602,7 +602,7 @@ export default function WelcomeScreen() {
         ref={(ref) => {
           videoRef.current = ref;
         }}
-        source={require("../assets/BannerVideo.mp4")}
+        source={require("../assets/LandingPageBanner.mp4")}
         style={styles.video}
         shouldPlay
         isLooping
@@ -635,9 +635,9 @@ export default function WelcomeScreen() {
 
           {/* TEXT */}
           <View style={styles.textSection}>
-            <Text style={styles.mainText}>Culture With Substance</Text>
+            <Text style={styles.mainText}>Built From Culture</Text>
             <Text style={styles.subtitleText}>
-              Join Brixlore and step into stories shaped by culture
+              Join Brixlore and Access the Urban Archive
             </Text>
           </View>
 
