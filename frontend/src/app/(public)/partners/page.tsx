@@ -598,7 +598,6 @@ import { useEffect, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import PartnersImg from "../../../../public/Partners_HeroImg.jpeg";
-// import type { Metadata } from "next";
 
 // ─── Scroll reveal hook ───────────────────────────────────────────────────────
 function useReveal() {
