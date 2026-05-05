@@ -285,6 +285,9 @@ export default function PartnersPage() {
         <div className="mx-auto flex max-w-6xl flex-col items-center gap-10 lg:flex-row lg:items-center lg:gap-16">
           {/* LEFT — Text */}
           <div className="flex flex-1 flex-col items-start">
+            <p className="text-xs mb-3 font-semibold uppercase tracking-[0.28em] text-neutral-500">
+              Brixlore Partner Network
+            </p>
             <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
               Where <em className="not-italic font-bold text-white">Brands</em>{" "}
               Become Part of the Story.
