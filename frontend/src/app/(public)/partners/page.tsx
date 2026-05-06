@@ -497,7 +497,7 @@ export default function PartnersPage() {
           </div>
 
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden select-none"
+            className="pointer-events-none absolute inset-0 hidden sm:flex items-center justify-center overflow-hidden select-none"
             aria-hidden
           >
             <span
