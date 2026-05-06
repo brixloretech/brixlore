@@ -18,7 +18,7 @@ function useReveal() {
           observer.disconnect();
         }
       },
-      { threshold: 0.12 },
+      { threshold: 0.1 },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -318,139 +318,158 @@ export default function PartnersPage() {
   return (
     <>
       <style>{`
+        /* ── Scroll reveal ── */
         .reveal-block {
           opacity: 0;
-          transform: translateY(32px);
-          transition: opacity 0.7s cubic-bezier(0.16,1,0.3,1), transform 0.7s cubic-bezier(0.16,1,0.3,1);
+          transform: translateY(28px);
+          transition: opacity 0.75s cubic-bezier(0.16,1,0.3,1), transform 0.75s cubic-bezier(0.16,1,0.3,1);
         }
-        .reveal-block.revealed {
-          opacity: 1;
-          transform: translateY(0);
-        }
+        .reveal-block.revealed { opacity: 1; transform: translateY(0); }
 
-        /* Glassmorphism — dark tinted, not colored */
-        .glass-card {
+        /* ── Glassmorphism ── */
+        .glass {
           background: rgba(255,255,255,0.03);
-          backdrop-filter: blur(14px);
-          -webkit-backdrop-filter: blur(14px);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
           border: 1px solid rgba(255,255,255,0.07);
-          transition: background 0.3s ease, border-color 0.3s ease;
+          transition: background 0.3s, border-color 0.3s, transform 0.3s;
         }
-        .glass-card:hover {
-          background: rgba(255,255,255,0.055);
-          border-color: rgba(255,255,255,0.14);
-        }
+        .glass:hover { background: rgba(255,255,255,0.055); border-color: rgba(255,255,255,0.13); }
 
-        /* Accent line — white fade */
-        .accent-line {
-          background: linear-gradient(90deg, transparent, #e5e7eb, transparent);
-        }
-
-        /* Perk icon hover */
-        .perk-card:hover .perk-icon {
-          transform: scale(1.12) rotate(-3deg);
-        }
-        .perk-icon {
-          transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
-        }
-
-        /* Floating orbs — very subtle white */
-        @keyframes floatOrb {
-          0%, 100% { transform: translateY(0px) scale(1); }
-          50% { transform: translateY(-20px) scale(1.04); }
-        }
-        .orb   { animation: floatOrb  8s ease-in-out infinite; }
-        .orb-2 { animation: floatOrb 11s ease-in-out infinite reverse; }
-        .orb-3 { animation: floatOrb 14s ease-in-out infinite 2s; }
-
-        /* Step cards */
-        .step-card {
-          transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), border-color 0.3s ease;
-        }
-        .step-card:hover {
-          transform: translateY(-6px);
-          border-color: rgba(255,255,255,0.2);
-        }
-
-        /* Why rows */
-        .why-row {
-          transition: all 0.3s ease;
-        }
-        .why-row:hover {
-          background: rgba(255,255,255,0.04);
-          border-color: rgba(255,255,255,0.14);
-          transform: translateX(4px);
-        }
-
-        /* Gradient text utility */
-        .text-gradient {
+        /* ── Gradient text — white → mid-gray ── */
+        .grad-text {
           background: linear-gradient(135deg, #ffffff 0%, #9ca3af 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
         }
 
-        /* CTA button shimmer */
-        @keyframes shimmer {
-          0%   { background-position: -200% center; }
-          100% { background-position: 200% center; }
+        /* ── Section divider line ── */
+        .div-line {
+          background: linear-gradient(90deg, transparent 0%, rgba(229,231,235,0.5) 50%, transparent 100%);
         }
-        .btn-primary {
-          background: linear-gradient(110deg, #ffffff 0%, #e5e7eb 50%, #ffffff 100%);
-          background-size: 200% auto;
-          transition: background-position 0.6s ease, box-shadow 0.3s ease;
+
+        /* ── Floating orbs ── */
+        @keyframes floatOrb {
+          0%,100% { transform: translateY(0) scale(1); }
+          50%      { transform: translateY(-22px) scale(1.05); }
         }
-        .btn-primary:hover {
+        .orb  { animation: floatOrb  9s ease-in-out infinite; }
+        .orb2 { animation: floatOrb 13s ease-in-out infinite reverse; }
+        .orb3 { animation: floatOrb 16s ease-in-out infinite 3s; }
+
+        /* ── Noise texture overlay ── */
+        .noise::after {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+          pointer-events: none;
+          opacity: 0.35;
+          mix-blend-mode: overlay;
+        }
+
+        /* ── Step cards ── */
+        .step-card {
+          transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1), border-color 0.3s;
+        }
+        .step-card:hover { transform: translateY(-8px); border-color: rgba(229,231,235,0.25); }
+
+        /* ── Perk cards ── */
+        .perk-card { transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), border-color 0.3s; }
+        .perk-card:hover { transform: translateY(-6px); border-color: rgba(229,231,235,0.18); }
+        .perk-card:hover .perk-icon { transform: scale(1.15) rotate(-4deg); }
+        .perk-icon { transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+
+        /* ── Why rows ── */
+        .why-row { transition: transform 0.3s ease, background 0.3s, border-color 0.3s; }
+        .why-row:hover { transform: translateX(5px); background: rgba(255,255,255,0.045); border-color: rgba(255,255,255,0.15); }
+
+        /* ── CTA button shimmer ── */
+        .btn-shine {
+          background: linear-gradient(110deg, #f9fafb 0%, #e5e7eb 40%, #f9fafb 60%, #e5e7eb 100%);
+          background-size: 250% auto;
+          transition: background-position 0.7s ease, box-shadow 0.3s;
+        }
+        .btn-shine:hover {
           background-position: right center;
-          box-shadow: 0 0 28px rgba(255,255,255,0.2);
+          box-shadow: 0 0 36px rgba(229,231,235,0.28), 0 0 80px rgba(229,231,235,0.1);
         }
+
+        /* ── Icon ring glow on hover ── */
+        .icon-ring { transition: box-shadow 0.3s ease; }
+        .icon-ring:hover { box-shadow: 0 0 20px rgba(229,231,235,0.12); }
       `}</style>
 
-      <main className="flex flex-1 flex-col overflow-hidden bg-[#0e0e0e]">
-        {/* ── 1. HERO ──────────────────────────────────────────────────── */}
+      <main
+        className="relative flex flex-1 flex-col overflow-hidden"
+        style={{ background: "#0b0b0e" }}
+      >
+        {/* ════════════════════════════════════════════════════════════
+            1. HERO
+        ════════════════════════════════════════════════════════════ */}
         <section
           className="relative w-full overflow-hidden px-4 py-20 sm:px-6 lg:px-8"
           aria-label="Hero"
         >
-          {/* Subtle white ambient orbs */}
+          {/* Page-wide gradient mesh — top left warm, top right cool */}
           <div
-            className="orb pointer-events-none absolute -left-48 top-16 h-96 w-96 rounded-full opacity-[0.04]"
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
             style={{
               background:
-                "radial-gradient(circle, #ffffff 0%, transparent 70%)",
+                "radial-gradient(ellipse 70% 60% at 0% 0%, rgba(255,255,255,0.05) 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 100% 0%, rgba(180,180,200,0.04) 0%, transparent 55%)",
             }}
-            aria-hidden
-          />
-          <div
-            className="orb-2 pointer-events-none absolute -right-32 top-8 h-72 w-72 rounded-full opacity-[0.03]"
-            style={{
-              background:
-                "radial-gradient(circle, #ffffff 0%, transparent 70%)",
-            }}
-            aria-hidden
           />
 
-          <div className="mx-auto flex max-w-6xl flex-col items-center gap-12 lg:flex-row lg:items-center lg:gap-20">
+          {/* Floating orbs */}
+          <div
+            className="orb pointer-events-none absolute -left-48 top-10 h-[500px] w-[500px] rounded-full"
+            aria-hidden
+            style={{
+              background:
+                "radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 65%)",
+            }}
+          />
+          <div
+            className="orb2 pointer-events-none absolute -right-40 top-0 h-80 w-80 rounded-full"
+            aria-hidden
+            style={{
+              background:
+                "radial-gradient(circle, rgba(200,200,220,0.04) 0%, transparent 70%)",
+            }}
+          />
+
+          <div className="relative mx-auto flex max-w-6xl flex-col items-center gap-12 lg:flex-row lg:items-center lg:gap-20">
             {/* LEFT */}
             <div className="flex flex-1 flex-col items-start">
-              <div className="reveal-block revealed mb-4 flex items-center gap-3">
-                <div className="h-px w-8 bg-white/40" />
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-400">
+              <div className="reveal-block revealed mb-5 flex items-center gap-3">
+                <div
+                  className="h-px w-10"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, rgba(229,231,235,0.8), transparent)",
+                  }}
+                />
+                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-neutral-400">
                   Brixlore Partner Network
                 </p>
               </div>
 
               <h1
-                className="reveal-block revealed text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-[3.5rem] lg:leading-[1.1]"
-                style={{ transitionDelay: "80ms" }}
+                className="reveal-block revealed text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-[3.6rem] lg:leading-[1.08]"
+                style={{ transitionDelay: "70ms" }}
               >
-                Where <em className="text-gradient">Brands</em> Become Part of
+                Where <em className="grad-text">Brands</em>
+                <br />
+                Become Part of
+                <br />
                 the Story.
               </h1>
 
               <p
-                className="reveal-block revealed mt-5 max-w-lg text-base leading-7 text-neutral-400"
-                style={{ transitionDelay: "160ms" }}
+                className="reveal-block revealed mt-6 max-w-md text-base leading-7 text-neutral-400"
+                style={{ transitionDelay: "150ms" }}
               >
                 The Brixlore Partner Network integrates brands directly into
                 premium original content—distributed across our platform and
@@ -458,31 +477,32 @@ export default function PartnersPage() {
               </p>
 
               <div
-                className="reveal-block revealed mt-8 flex flex-wrap items-center gap-4"
-                style={{ transitionDelay: "240ms" }}
+                className="reveal-block revealed mt-9 flex flex-wrap items-center gap-4"
+                style={{ transitionDelay: "230ms" }}
               >
                 <Link
                   href="/contact?subject=Partnership+Inquiry"
-                  className="btn-primary group inline-flex h-11 items-center justify-center rounded-lg px-7 text-sm font-semibold text-black"
+                  className="btn-shine group inline-flex h-11 items-center justify-center rounded-lg px-8 text-xd font-bold text-black"
                 >
                   Become a Partner
-                  <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1">
+                  <span className="text-xl ml-2 transition-transform duration-300 group-hover:translate-x-1">
                     →
                   </span>
                 </Link>
                 <Link
                   href="#how-it-works"
-                  className="inline-flex h-11 items-center justify-center rounded-lg border border-neutral-700 px-7 text-sm font-semibold text-neutral-300 transition-all duration-300 hover:border-white/30 hover:text-white"
+                  className="inline-flex h-11 items-center justify-center rounded-lg px-7 text-xd font-semibold text-neutral-300 transition-all duration-300 hover:text-white"
+                  style={{ border: "1px solid rgba(255,255,255,0.12)" }}
                 >
                   View Opportunities
                 </Link>
               </div>
             </div>
 
-            {/* RIGHT */}
+            {/* RIGHT — image with cinematic overlay */}
             <div
-              className="reveal-block revealed w-full lg:w-[46%]"
-              style={{ transitionDelay: "120ms" }}
+              className="reveal-block revealed w-full lg:w-[47%]"
+              style={{ transitionDelay: "110ms" }}
             >
               <div className="relative aspect-[4/3] overflow-hidden rounded-2xl">
                 <Image
@@ -490,116 +510,187 @@ export default function PartnersPage() {
                   alt="Brand integration behind the scenes"
                   fill
                   priority
-                  className="object-cover object-center transition-transform duration-700 hover:scale-105"
-                  sizes="(max-width: 1024px) 100vw, 46vw"
+                  className="object-cover object-center transition-transform duration-700 hover:scale-[1.04]"
+                  sizes="(max-width: 1024px) 100vw, 47vw"
                   unoptimized
                 />
-                {/* Glass caption */}
+                {/* Cinematic overlay: dark vignette + subtle gradient tint */}
                 <div
-                  className="absolute inset-x-0 bottom-0 p-5"
+                  className="absolute inset-0"
                   style={{
                     background:
-                      "linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 100%)",
+                      "linear-gradient(135deg, rgba(11,11,14,0.55) 0%, rgba(11,11,14,0.1) 50%, rgba(11,11,14,0.4) 100%)",
                   }}
-                >
-                  <div className="glass-card inline-flex items-center gap-2 rounded-full px-4 py-2">
-                    <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-white/60" />
-                    <span className="text-xs font-medium text-white/70">
+                  aria-hidden
+                />
+                {/* Bottom fade */}
+                <div
+                  className="absolute inset-x-0 bottom-0 h-2/5"
+                  style={{
+                    background:
+                      "linear-gradient(to top, rgba(11,11,14,0.85) 0%, transparent 100%)",
+                  }}
+                  aria-hidden
+                />
+                {/* Top edge shine */}
+                <div
+                  className="absolute inset-x-0 top-0 h-px"
+                  style={{
+                    background:
+                      "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
+                  }}
+                  aria-hidden
+                />
+
+                {/* Glass caption badge */}
+                <div className="absolute inset-x-0 bottom-0 p-5">
+                  <div className="glass inline-flex items-center gap-2.5 rounded-full px-4 py-2.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-50" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+                    </span>
+                    <span className="text-xs font-medium tracking-wide text-white/75">
                       Production in progress
                     </span>
                   </div>
                 </div>
+
+                {/* Outer frame glow */}
+                <div
+                  className="pointer-events-none absolute inset-0 rounded-2xl"
+                  style={{
+                    boxShadow:
+                      "inset 0 0 0 1px rgba(255,255,255,0.09), 0 0 60px rgba(255,255,255,0.04)",
+                  }}
+                  aria-hidden
+                />
               </div>
             </div>
           </div>
 
-          {/* Fade to next section */}
+          {/* Seamless bottom fade */}
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-b from-transparent to-[#0e0e0e]"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+            style={{
+              background: "linear-gradient(to bottom, transparent, #0b0b0e)",
+            }}
             aria-hidden
           />
         </section>
 
-        {/* ── 2. THIS ISN'T ADVERTISING ────────────────────────────────── */}
+        {/* ════════════════════════════════════════════════════════════
+            2. THIS ISN'T ADVERTISING
+        ════════════════════════════════════════════════════════════ */}
         <section
-          className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8"
+          className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8"
           aria-labelledby="core-idea-heading"
         >
-          {/* Ghost text bg */}
+          {/* Large gradient circle behind section */}
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center justify-center"
+            aria-hidden
+          >
+            <div
+              className="h-[600px] w-[600px] rounded-full opacity-[0.06]"
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(229,231,235,1) 0%, transparent 70%)",
+              }}
+            />
+          </div>
+
+          {/* Ghost watermark */}
           <div
             className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden select-none"
             aria-hidden
           >
-            <span className="text-[10rem] font-black uppercase leading-none tracking-tighter text-white/[0.018] sm:text-[16rem]">
+            <span
+              className="text-[9rem] font-black uppercase leading-none tracking-tighter sm:text-[15rem]"
+              style={{ color: "rgba(255, 255, 255, 0.05)" }}
+            >
               INTEGRATE
             </span>
           </div>
 
           <div className="relative mx-auto max-w-3xl text-center">
             <Reveal>
-              <div className="mx-auto mb-6 h-px w-16 accent-line" />
+              <div className="mx-auto mb-7 h-px w-20 div-line" />
               <h2
                 id="core-idea-heading"
-                className="text-4xl font-bold tracking-tight text-white sm:text-5xl"
+                className="text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl"
               >
-                This Isn&apos;t Advertising
+                This Isn&apos;t
+                <br />
+                Advertising
               </h2>
             </Reveal>
             <Reveal delay={100}>
-              <p className="mt-5 text-xl text-neutral-500">
+              <p className="mt-6 text-xl text-neutral-500">
                 Traditional ads interrupt.
               </p>
-              <p className="mt-2 text-3xl font-bold text-gradient">
+              <p className="mt-2 text-4xl font-black grad-text sm:text-5xl">
                 We integrate.
               </p>
             </Reveal>
             <Reveal delay={200}>
-              <p className="mx-auto mt-6 max-w-xl text-base leading-8 text-neutral-400">
+              <p className="mx-auto mt-7 max-w-lg text-base leading-8 text-neutral-400">
                 Brixlore partners don&apos;t sit outside the content—they live
                 inside it. Through narrative-driven storytelling, your brand
                 becomes part of the culture, not a break from it.
               </p>
             </Reveal>
             <Reveal delay={300}>
-              <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+              <div className="mt-10 flex flex-wrap justify-center gap-3">
                 {[
                   "Story-driven placements",
                   "Cultural integration",
                   "Zero interruption",
                 ].map((label) => (
-                  <div
+                  <span
                     key={label}
-                    className="glass-card rounded-full px-5 py-2.5 text-sm font-medium text-neutral-400 transition-colors hover:text-white"
+                    className="glass rounded-full px-5 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:text-white"
                   >
                     {label}
-                  </div>
+                  </span>
                 ))}
               </div>
             </Reveal>
           </div>
         </section>
 
-        {/* ── 3. HOW IT WORKS ──────────────────────────────────────────── */}
+        {/* ════════════════════════════════════════════════════════════
+            3. HOW IT WORKS
+        ════════════════════════════════════════════════════════════ */}
         <section
           id="how-it-works"
-          className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8"
+          className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8"
           aria-labelledby="how-it-works-heading"
         >
+          {/* Right-side gradient wash */}
           <div
-            className="orb-3 pointer-events-none absolute right-0 top-1/2 h-96 w-96 -translate-y-1/2 rounded-full opacity-[0.03]"
+            className="pointer-events-none absolute inset-0"
+            aria-hidden
             style={{
               background:
-                "radial-gradient(circle, #ffffff 0%, transparent 65%)",
+                "radial-gradient(ellipse 60% 80% at 100% 50%, rgba(255,255,255,0.03) 0%, transparent 60%)",
             }}
-            aria-hidden
           />
 
-          <div className="mx-auto max-w-6xl">
+          <div
+            className="orb3 pointer-events-none absolute -right-32 top-1/2 h-80 w-80 rounded-full -translate-y-1/2"
+            aria-hidden
+            style={{
+              background:
+                "radial-gradient(circle, rgba(229,231,235,0.07) 0%, transparent 70%)",
+            }}
+          />
+
+          <div className="relative mx-auto max-w-6xl">
             <Reveal className="text-center">
-              <div className="mx-auto mb-6 h-px w-16 accent-line" />
+              <div className="mx-auto mb-7 h-px w-20 div-line" />
               <h2
                 id="how-it-works-heading"
-                className="text-3xl font-bold tracking-tight text-white sm:text-4xl"
+                className="text-3xl font-black tracking-tight text-white sm:text-4xl"
               >
                 How the Brixlore Partner Network Works
               </h2>
@@ -608,15 +699,15 @@ export default function PartnersPage() {
               </p>
             </Reveal>
 
-            <div className="relative mt-14 grid gap-6 sm:grid-cols-3">
-              {/* Connector */}
+            <div className="relative mt-16 grid gap-6 sm:grid-cols-3">
+              {/* Connector line */}
               <div
-                className="absolute left-[calc(16.67%+1rem)] right-[calc(16.67%+1rem)] top-12 hidden h-px sm:block"
+                className="pointer-events-none absolute left-[calc(16.67%+1.5rem)] right-[calc(16.67%+1.5rem)] top-11 hidden h-px sm:block"
+                aria-hidden
                 style={{
                   background:
-                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.2) 30%, rgba(255,255,255,0.2) 70%, transparent)",
+                    "linear-gradient(90deg, transparent, rgba(229,231,235,0.25) 25%, rgba(229,231,235,0.25) 75%, transparent)",
                 }}
-                aria-hidden
               />
 
               {[
@@ -679,18 +770,30 @@ export default function PartnersPage() {
                   ),
                 },
               ].map((step, i) => (
-                <Reveal key={step.num} delay={i * 120}>
-                  <div className="step-card glass-card flex h-full flex-col items-center rounded-2xl p-7 text-center">
+                <Reveal key={step.num} delay={i * 130}>
+                  <div
+                    className="step-card glass flex h-full flex-col items-center rounded-2xl p-8 text-center"
+                    style={{
+                      background:
+                        "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)",
+                    }}
+                  >
                     <div
                       className="relative mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.1)",
+                        background:
+                          "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
+                        border: "1px solid rgba(255,255,255,0.12)",
                       }}
                     >
                       <span className="text-white/80">{step.icon}</span>
-                      {/* Step number badge */}
-                      <span className="absolute -right-2 -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-white text-[0.65rem] font-bold text-black">
+                      <span
+                        className="absolute -right-2 -top-1 flex h-7 w-7 items-center justify-center rounded-full text-[0.65rem] font-black text-black"
+                        style={{
+                          background:
+                            "linear-gradient(135deg, #f9fafb 0%, #e5e7eb 100%)",
+                        }}
+                      >
                         {step.num}
                       </span>
                     </div>
@@ -707,26 +810,29 @@ export default function PartnersPage() {
           </div>
         </section>
 
-        {/* ── 4. WHAT PARTNERS RECEIVE ─────────────────────────────────── */}
+        {/* ════════════════════════════════════════════════════════════
+            4. WHAT PARTNERS RECEIVE
+        ════════════════════════════════════════════════════════════ */}
         <section
-          className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8"
+          className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8"
           aria-labelledby="partners-receive-heading"
         >
+          {/* Top glow wash */}
           <div
             className="pointer-events-none absolute inset-0"
+            aria-hidden
             style={{
               background:
-                "radial-gradient(ellipse at 50% 0%, rgba(255,255,255,0.025) 0%, transparent 60%)",
+                "radial-gradient(ellipse 80% 40% at 50% 0%, rgba(255,255,255,0.04) 0%, transparent 65%)",
             }}
-            aria-hidden
           />
 
-          <div className="mx-auto max-w-6xl">
+          <div className="relative mx-auto max-w-6xl">
             <Reveal className="text-center">
-              <div className="mx-auto mb-6 h-px w-16 accent-line" />
+              <div className="mx-auto mb-7 h-px w-20 div-line" />
               <h2
                 id="partners-receive-heading"
-                className="text-3xl font-bold tracking-tight text-white sm:text-4xl"
+                className="text-3xl font-black tracking-tight text-white sm:text-4xl"
               >
                 What Partners Receive
               </h2>
@@ -735,20 +841,27 @@ export default function PartnersPage() {
               </p>
             </Reveal>
 
-            <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-4">
               {partnerPerks.map((perk, i) => (
                 <Reveal key={perk.title} delay={i * 55}>
-                  <div className="perk-card glass-card group flex h-full flex-col items-center rounded-2xl p-5 text-center transition-all duration-300 hover:-translate-y-1">
+                  <div
+                    className="perk-card glass group flex h-full flex-col items-center rounded-2xl p-5 text-center"
+                    style={{
+                      background:
+                        "linear-gradient(160deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%)",
+                    }}
+                  >
                     <div
-                      className="perk-icon mb-3 inline-flex h-12 w-12 items-center justify-center rounded-xl text-white/70"
+                      className="perk-icon icon-ring mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl text-white/75"
                       style={{
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background:
+                          "linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%)",
+                        border: "1px solid rgba(255,255,255,0.1)",
                       }}
                     >
                       {perk.icon}
                     </div>
-                    <p className="text-sm font-semibold leading-snug text-white">
+                    <p className="text-sm font-bold leading-snug text-white">
                       {perk.title}
                     </p>
                     <p className="mt-1.5 text-xs leading-5 text-neutral-500">
@@ -761,26 +874,28 @@ export default function PartnersPage() {
           </div>
         </section>
 
-        {/* ── 5. WHY BRIXLORE ──────────────────────────────────────────── */}
+        {/* ════════════════════════════════════════════════════════════
+            5. WHY BRIXLORE
+        ════════════════════════════════════════════════════════════ */}
         <section
-          className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8"
+          className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8"
           aria-labelledby="why-brixlore-heading"
         >
           <div
-            className="orb pointer-events-none absolute -left-40 top-1/3 h-80 w-80 rounded-full opacity-[0.03]"
+            className="orb pointer-events-none absolute -left-48 top-1/3 h-[500px] w-[500px] rounded-full"
+            aria-hidden
             style={{
               background:
-                "radial-gradient(circle, #ffffff 0%, transparent 70%)",
+                "radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 65%)",
             }}
-            aria-hidden
           />
 
-          <div className="mx-auto max-w-5xl">
+          <div className="relative mx-auto max-w-5xl">
             <Reveal className="text-center">
-              <div className="mx-auto mb-6 h-px w-16 accent-line" />
+              <div className="mx-auto mb-7 h-px w-20 div-line" />
               <h2
                 id="why-brixlore-heading"
-                className="text-3xl font-bold tracking-tight text-white sm:text-4xl"
+                className="text-3xl font-black tracking-tight text-white sm:text-4xl"
               >
                 Why Partner With Brixlore
               </h2>
@@ -789,21 +904,28 @@ export default function PartnersPage() {
               </p>
             </Reveal>
 
-            <div className="mt-10 space-y-3">
+            <div className="mt-12 space-y-2.5">
               {whyPoints.map((point, i) => (
-                <Reveal key={point.title} delay={i * 65}>
-                  <div className="why-row glass-card flex gap-5 rounded-2xl px-5 py-5 sm:px-6">
+                <Reveal key={point.title} delay={i * 60}>
+                  <div
+                    className="why-row glass flex gap-5 rounded-2xl px-5 py-5 sm:px-6"
+                    style={{
+                      background:
+                        "linear-gradient(100deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)",
+                    }}
+                  >
                     <div
-                      className="mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white/70"
+                      className="icon-ring mt-0.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white/70"
                       style={{
-                        background: "rgba(255,255,255,0.04)",
-                        border: "1px solid rgba(255,255,255,0.08)",
+                        background:
+                          "linear-gradient(135deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)",
+                        border: "1px solid rgba(255,255,255,0.09)",
                       }}
                     >
                       {point.icon}
                     </div>
                     <div>
-                      <p className="font-semibold text-white">{point.title}</p>
+                      <p className="font-bold text-white">{point.title}</p>
                       <p className="mt-1.5 text-sm leading-6 text-neutral-400">
                         {point.description}
                       </p>
@@ -815,81 +937,108 @@ export default function PartnersPage() {
           </div>
         </section>
 
-        {/* ── 6. CTA ───────────────────────────────────────────────────── */}
+        {/* ════════════════════════════════════════════════════════════
+            6. CTA
+        ════════════════════════════════════════════════════════════ */}
         <section
-          className="relative overflow-hidden px-4 py-24 sm:px-6 lg:px-8"
+          className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8"
           aria-labelledby="cta-heading"
         >
-          {/* White glow behind card */}
+          {/* Large centered glow */}
           <div
             className="pointer-events-none absolute inset-0 flex items-center justify-center"
             aria-hidden
           >
             <div
-              className="h-64 w-96 rounded-full opacity-[0.07] blur-3xl"
-              style={{ background: "#ffffff" }}
+              className="h-[500px] w-[700px] rounded-full opacity-[0.08]"
+              style={{
+                background:
+                  "radial-gradient(ellipse, rgba(229,231,235,1) 0%, transparent 65%)",
+                filter: "blur(60px)",
+              }}
             />
           </div>
 
           <Reveal>
             <div
-              className="relative mx-auto max-w-4xl overflow-hidden rounded-[2rem] px-8 py-16 text-center sm:px-12 sm:py-20"
+              className="relative mx-auto max-w-4xl overflow-hidden rounded-[2.5rem] px-8 py-20 text-center sm:px-16 sm:py-24"
               style={{
-                background: "rgba(255,255,255,0.025)",
-                border: "1px solid rgba(255,255,255,0.09)",
-                backdropFilter: "blur(20px)",
-                WebkitBackdropFilter: "blur(20px)",
+                background:
+                  "linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 60%, rgba(255,255,255,0.04) 100%)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                backdropFilter: "blur(24px)",
+                WebkitBackdropFilter: "blur(24px)",
               }}
             >
-              {/* Top shine line */}
+              {/* Top shimmer line */}
               <div
                 className="pointer-events-none absolute inset-x-0 top-0 h-px"
+                aria-hidden
                 style={{
                   background:
-                    "linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)",
+                    "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.4) 50%, transparent 100%)",
                 }}
-                aria-hidden
               />
               {/* Bottom glow */}
               <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 h-32 opacity-20"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-48 opacity-25"
+                aria-hidden
                 style={{
                   background:
-                    "radial-gradient(ellipse at 50% 100%, rgba(255,255,255,0.5), transparent 70%)",
+                    "radial-gradient(ellipse at 50% 100%, rgba(229,231,235,0.6), transparent 70%)",
                 }}
+              />
+              {/* Corner accents */}
+              <div
+                className="pointer-events-none absolute left-8 top-8 h-12 w-12 rounded-tl-xl border-l border-t border-white/15"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute right-8 top-8 h-12 w-12 rounded-tr-xl border-r border-t border-white/15"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute bottom-8 left-8 h-12 w-12 rounded-bl-xl border-b border-l border-white/15"
+                aria-hidden
+              />
+              <div
+                className="pointer-events-none absolute bottom-8 right-8 h-12 w-12 rounded-br-xl border-b border-r border-white/15"
                 aria-hidden
               />
 
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">
-                Get Started
-              </p>
-              <h2
-                id="cta-heading"
-                className="mt-4 text-4xl font-bold tracking-tight text-white sm:text-5xl"
-              >
-                Ready to Build a Partnership?
-              </h2>
-              <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-neutral-400">
-                If you&apos;re looking to move beyond traditional advertising
-                and become part of the story—we should talk.
-              </p>
-              <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-                <Link
-                  href="/contact?subject=Book+a+Partnership+Call"
-                  className="btn-primary group inline-flex h-12 items-center justify-center rounded-xl px-8 text-sm font-bold text-black"
+              <div className="relative z-10">
+                <p className="text-xs font-semibold uppercase tracking-[0.32em] text-neutral-500">
+                  Get Started
+                </p>
+                <h2
+                  id="cta-heading"
+                  className="mt-5 text-4xl font-black tracking-tight text-white sm:text-5xl lg:text-6xl"
                 >
-                  Book a Partnership Call
-                  <span className="ml-2 transition-transform duration-300 group-hover:translate-x-1">
-                    →
-                  </span>
-                </Link>
-                <Link
-                  href="/contact?subject=Request+the+Partner+Deck"
-                  className="inline-flex h-12 items-center justify-center rounded-xl border px-8 text-sm font-semibold text-neutral-300 transition-all duration-300 hover:border-white/30 hover:text-white"
-                  style={{ borderColor: "rgba(255,255,255,0.1)" }}
-                >
-                  Request the Partner Deck ↓
-                </Link>
+                  Ready to Build
+                  <br />a Partnership?
+                </h2>
+                <p className="mx-auto mt-5 max-w-lg text-base leading-7 text-neutral-400">
+                  If you&apos;re looking to move beyond traditional advertising
+                  and become part of the story—we should talk.
+                </p>
+                <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+                  <Link
+                    href="/contact?subject=Book+a+Partnership+Call"
+                    className="btn-shine group inline-flex h-12 items-center justify-center rounded-xl px-9 text-xd font-bold text-black"
+                  >
+                    Book a Partnership Call
+                    <span className="text-xl ml-2 transition-transform duration-300 group-hover:translate-x-1">
+                      →
+                    </span>
+                  </Link>
+                  <Link
+                    href="/contact?subject=Request+the+Partner+Deck"
+                    className="inline-flex h-12 items-center justify-center rounded-xl px-8 text-xd font-semibold text-neutral-300 transition-all duration-300 hover:text-white"
+                    style={{ border: "1px solid rgba(255,255,255,0.12)" }}
+                  >
+                    Request the Partner Deck
+                  </Link>
+                </div>
               </div>
             </div>
           </Reveal>
