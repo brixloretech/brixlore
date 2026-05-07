@@ -19,3 +19,14 @@ Streaming-Platform-API-Collection.json
 mobile/brixlore-latest.apk
 temp_auto_push.bat
 temp_interactive_push.bat
+
+# Temporary video processing files
+server/tmp/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+#md files new
+VIDEO_PREVIEW_SETTINGS.md
+requirements.txt
