@@ -75,8 +75,20 @@ export interface SignupSubscriptionFinalizeRequestDto extends RegisterRequestDto
   customerId: string;
 }
 
-/** Response for POST /auth/register (same shape as login). */
-export type RegisterResponseDto = LoginResponseDto;
+/** Response for POST /auth/register. */
+export interface RegisterResponseDto {
+  message: string;
+}
+
+/** Request body for POST /auth/verify-email */
+export interface VerifyEmailRequestDto {
+  token: string;
+}
+
+/** Response for POST /auth/verify-email */
+export interface VerifyEmailResponseDto {
+  message: string;
+}
 
 /** Request body for POST /auth/forgot-password */
 export interface ForgotPasswordRequestDto {

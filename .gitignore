@@ -28,5 +28,7 @@ server/tmp/
 Thumbs.db
 
 #md files new
-VIDEO_PREVIEW_SETTINGS.md
+
 requirements.txt
+VIDEO_PREVIEW_SETTINGS.md
+mobile/VIDEO_PLAYER_MIGRATION_GUIDE.md

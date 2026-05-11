@@ -127,6 +127,12 @@ export default function WatchScreen() {
   const updateEpisodeCumulativeTime = useLimitedAccessStore(
     (state) => state.updateEpisodeCumulativeTime,
   );
+  const freeUnlockedVideoId = useLimitedAccessStore(
+    (state) => state.freeUnlockedVideoId,
+  );
+  const setFreeUnlockedVideoId = useLimitedAccessStore(
+    (state) => state.setFreeUnlockedVideoId,
+  );
   const videoRef = useRef<Video>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasPlayingRef = useRef(false);
@@ -142,6 +148,7 @@ export default function WatchScreen() {
   const initialCumulativeTimeRef = useRef<number>(0);
   const watchedEpisodeIdRef = useRef<string | null>(null);
   const [savedProgress, setSavedProgress] = useState<number>(0);
+  const [videoKey, setVideoKey] = useState<string>("");
   const [content, setContent] = useState<ContentDetailDto | null>(null);
   const [primaryEpisode, setPrimaryEpisode] = useState<PlayableEpisode | null>(
     null,
@@ -165,7 +172,8 @@ export default function WatchScreen() {
     "video-limit" | "watch-time" | "free-tier-limit" | "guest-limit"
   >("watch-time");
   const { subscription, fetchSubscription } = useSubscriptionStore();
-  const isFreeTier = !subscription?.isSubscribed;
+  const isFreeTier = isAuthenticated && !subscription?.isSubscribed;
+  const isGuest = !isAuthenticated;
   const showUpgradeModal2SecRef = useRef(false);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resetControlsTimeout = useCallback(() => {
@@ -278,13 +286,16 @@ export default function WatchScreen() {
 
     // Load cumulative time for this episode (for free tier tracking)
     const episodeId = episodeIdFromUrl || contentId;
-    if (episodeId && isFreeTier) {
+    if (episodeId && (isFreeTier || isGuest)) {
+      // Check if this is the unlocked video (Free Tier only)
+      const isUnlocked = isFreeTier && episodeId === freeUnlockedVideoId;
+
       const cumulativeTime = getEpisodeCumulativeTime(episodeId);
       initialCumulativeTimeRef.current = cumulativeTime;
       watchedEpisodeIdRef.current = episodeId;
 
-      // If already watched for 2+ minutes, show modal immediately
-      if (cumulativeTime >= 120) {
+      // If already watched for 2+ minutes AND NOT UNLOCKED, show modal immediately
+      if (cumulativeTime >= 120 && !isUnlocked) {
         showUpgradeModal2SecRef.current = true;
         setShowLimitedAccessLoginModal(true);
         setLimitedAccessModalReason("free-tier-limit");
@@ -309,22 +320,17 @@ export default function WatchScreen() {
   }, [currentTime]);
 
   // Limited Access: Check if user is trying to watch more than 3 videos
+  // (This is a backup check to ensure modal stays visible if state changes)
   useEffect(() => {
-    if (!isAuthenticated && contentId && !isTrailerPlayback) {
-      const hasWatchedThisVideo = useLimitedAccessStore
-        .getState()
-        .watchedVideoIds.has(contentId);
-      // Check if we've already incremented this video
-      if (!hasWatchedThisVideo) {
-        // If trying to watch a 4th video, show login modal
-        if (videosWatchedCount >= 3) {
-          setShowLimitedAccessLoginModal(true);
-          setLimitedAccessModalReason("video-limit");
-          setIsPlaying(false);
-        }
+    if (isGuest && selectedEpisodeId && !isTrailerPlayback) {
+      const liveState = useLimitedAccessStore.getState();
+      if (!liveState.watchedVideoIds.has(selectedEpisodeId) && liveState.videosWatchedCount >= 3) {
+        setShowLimitedAccessLoginModal(true);
+        setLimitedAccessModalReason("video-limit");
+        setIsPlaying(false);
       }
     }
-  }, [contentId, isAuthenticated, videosWatchedCount, isTrailerPlayback]);
+  }, [selectedEpisodeId, isGuest, videosWatchedCount, isTrailerPlayback]);
 
   // Limited Access: Track actual video playback time and show login after 30 seconds (or 2 minutes for free tier)
   useEffect(() => {
@@ -355,6 +361,21 @@ export default function WatchScreen() {
 
           // FREE TIER: Show modal after 2 minutes (cumulative across sessions)
           if (isFreeTier && watchedEpisodeIdRef.current) {
+            const isUnlocked = watchedEpisodeIdRef.current === freeUnlockedVideoId;
+
+            // If this is the FIRST video they play, unlock it permanently
+            if (!freeUnlockedVideoId) {
+              setFreeUnlockedVideoId(watchedEpisodeIdRef.current);
+              saveLimitedAccessToStorage();
+              // Don't apply limit for the first video
+              return;
+            }
+
+            // If it's the unlocked video, don't apply 2-minute limit
+            if (isUnlocked) {
+              return;
+            }
+
             const totalWatchedTime =
               initialCumulativeTimeRef.current + actualPlaybackTime;
 
@@ -379,7 +400,7 @@ export default function WatchScreen() {
               setLimitedAccessModalReason("free-tier-limit");
               setIsPlaying(false);
               if (videoRef.current) {
-                videoRef.current.pauseAsync().catch(() => {});
+                videoRef.current.pauseAsync().catch(() => { });
               }
               if (watchTimeTrackerRef.current) {
                 clearInterval(watchTimeTrackerRef.current);
@@ -389,16 +410,16 @@ export default function WatchScreen() {
             }
           }
 
-          // GUEST (NOT AUTHENTICATED): Show login modal after 30 seconds of actual playback
-          if (!isAuthenticated && !isFreeTier) {
+          // GUEST (NOT AUTHENTICATED): Show login modal after 120 seconds (2 minutes) of actual playback
+          if (isGuest) {
             const { loginModalShownFor30s } = useLimitedAccessStore.getState();
-            if (actualPlaybackTime >= 30 && !loginModalShownFor30s) {
+            if (actualPlaybackTime >= 120 && !loginModalShownFor30s) {
               setLoginModalShownFor30s(true);
               setShowLimitedAccessLoginModal(true);
               setLimitedAccessModalReason("guest-limit");
               setIsPlaying(false);
               if (videoRef.current) {
-                videoRef.current.pauseAsync().catch(() => {});
+                videoRef.current.pauseAsync().catch(() => { });
               }
               if (watchTimeTrackerRef.current) {
                 clearInterval(watchTimeTrackerRef.current);
@@ -435,7 +456,6 @@ export default function WatchScreen() {
       setPlaybackError(null);
       setComingSoon(false);
       try {
-        // Get content detail
         const detailRes = await contentService.getContentById(contentId);
         if (cancelled) return;
         const contentDetail = detailRes?.content ?? null;
@@ -555,6 +575,23 @@ export default function WatchScreen() {
           contentDetail.type === "TRAILER" ||
           (contentDetail.trailer && episode.id === contentDetail.trailer.id);
 
+        // ===== GUEST VIDEO LIMIT CHECK =====
+        // Now we know the EXACT episode that will play and whether it's a trailer.
+        // Block BEFORE fetching playback URL if guest has exceeded 3 previews.
+        if (isGuest && !isTrailerSelection) {
+          const liveState = useLimitedAccessStore.getState();
+          if (
+            liveState.videosWatchedCount >= 3 &&
+            !liveState.watchedVideoIds.has(episode.id)
+          ) {
+            setLoading(false);
+            setShowLimitedAccessLoginModal(true);
+            setLimitedAccessModalReason("video-limit");
+            setIsPlaying(false);
+            return;
+          }
+        }
+
         if (isAuthenticated) {
           // Fetch saved progress from continue watching BEFORE loading video
           try {
@@ -589,11 +626,16 @@ export default function WatchScreen() {
         }
         console.log("[Watch] Loaded playback info successfully");
         setPlaybackInfo(playbackRes);
+        setVideoKey(playbackRes.url);
 
-        // Mark video as watched for limited access tracking (only if not authenticated)
-        if (!isAuthenticated && contentId && !isTrailerSelection) {
-          incrementVideosWatched(contentId);
-          saveLimitedAccessToStorage();
+        // Mark video as watched for limited access tracking (only if Guest)
+        // Track by EPISODE ID, not content ID, so each episode counts separately
+        if (isGuest && episode && !isTrailerSelection) {
+          const liveState = useLimitedAccessStore.getState();
+          if (!liveState.watchedVideoIds.has(episode.id)) {
+            incrementVideosWatched(episode.id);
+            saveLimitedAccessToStorage();
+          }
         }
       } catch (err: any) {
         if (cancelled) return;
@@ -973,6 +1015,12 @@ export default function WatchScreen() {
       setPlaybackError(null);
       setSavedProgress(0);
       hasSeekedToSavedProgressRef.current = false;
+      // Reset time display for new episode
+      setCurrentTime(0);
+      setDuration(0);
+      // Reset watch time tracking for new episode
+      videoStartPositionRef.current = null;
+      showUpgradeModal2SecRef.current = false;
       try {
         if (isAuthenticated) {
           // Fetch saved progress BEFORE loading video
@@ -1003,6 +1051,7 @@ export default function WatchScreen() {
         });
         if (playbackRes?.url) {
           setPlaybackInfo(playbackRes);
+          setVideoKey(playbackRes.url);
           const allEpisodes = [
             ...(content?.episodes ?? []),
             ...Object.values(seasonEpisodesById).flat(),
@@ -1016,13 +1065,25 @@ export default function WatchScreen() {
             });
           }
 
-          if (!isAuthenticated && contentId) {
+          if (isGuest) {
             const isTrailerSelection =
               content?.type === "TRAILER" ||
               (content?.trailer && episodeId === content.trailer.id);
             if (!isTrailerSelection) {
-              incrementVideosWatched(contentId);
-              saveLimitedAccessToStorage();
+              // Check guest limit BEFORE allowing playback
+              const liveState = useLimitedAccessStore.getState();
+              if (!liveState.watchedVideoIds.has(episodeId)) {
+                if (liveState.videosWatchedCount >= 3) {
+                  // Already at limit, block this episode
+                  setPlaybackInfo(null);
+                  setShowLimitedAccessLoginModal(true);
+                  setLimitedAccessModalReason("video-limit");
+                  setIsPlaying(false);
+                  return;
+                }
+                incrementVideosWatched(episodeId);
+                saveLimitedAccessToStorage();
+              }
             }
           }
         } else {
@@ -1268,8 +1329,8 @@ export default function WatchScreen() {
     null;
   const embeddedEpisodesForSelectedSeason = selectedSeason
     ? (content.episodes ?? [])
-        .filter((episode) => episode.seasonId === selectedSeason.id)
-        .sort((a, b) => a.episodeNumber - b.episodeNumber)
+      .filter((episode) => episode.seasonId === selectedSeason.id)
+      .sort((a, b) => a.episodeNumber - b.episodeNumber)
     : [];
   const episodesForSelectedSeason = selectedSeason
     ? embeddedEpisodesForSelectedSeason.length > 0
@@ -1302,6 +1363,7 @@ export default function WatchScreen() {
         <View style={styles.playerContainer}>
           <View style={styles.videoWrapper}>
             <Video
+              key={videoKey}
               ref={videoRef}
               source={{ uri: playbackInfo.url }}
               style={styles.video}
@@ -1623,7 +1685,7 @@ export default function WatchScreen() {
                       <Text style={styles.seasonDropdownValue}>
                         {selectedSeason
                           ? selectedSeason.title ||
-                            `Season ${selectedSeason.seasonNumber}`
+                          `Season ${selectedSeason.seasonNumber}`
                           : "Select season"}
                       </Text>
                       <Ionicons
@@ -1656,7 +1718,7 @@ export default function WatchScreen() {
                               style={[
                                 styles.seasonDropdownItemText,
                                 isActiveSeason &&
-                                  styles.seasonDropdownItemTextActive,
+                                styles.seasonDropdownItemTextActive,
                               ]}
                             >
                               {season.title || `Season ${season.seasonNumber}`}
@@ -1823,7 +1885,7 @@ export default function WatchScreen() {
                 ? "Free users can watch up to 2 minutes per video. Upgrade to Premium for unlimited watching."
                 : limitedAccessModalReason === "video-limit"
                   ? "You've watched 3 videos. Sign in or create an account to continue watching unlimited content."
-                  : "You've watched 30 seconds. Sign in or create an account to continue watching without limits."}
+                  : "You've watched 2 minutes. Sign in or create an account to continue watching without limits."}
             </Text>
             <View style={styles.modalButtons}>
               {limitedAccessModalReason === "free-tier-limit" ? (
@@ -1931,7 +1993,7 @@ export default function WatchScreen() {
                       style={[
                         styles.settingsOptionText,
                         playbackRate === rate &&
-                          styles.settingsOptionTextActive,
+                        styles.settingsOptionTextActive,
                       ]}
                     >
                       {rate}x

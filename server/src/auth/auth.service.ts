@@ -18,6 +18,7 @@ const SALT_ROUNDS = 10;
 const ACCESS_TOKEN_EXPIRES_SEC = 900; // 15 min
 const REFRESH_TOKEN_EXPIRES_SEC = 7 * 24 * 60 * 60; // 7 days
 const PASSWORD_RESET_EXPIRES_MS = 60 * 60 * 1000; // 1 hour
+const EMAIL_VERIFICATION_EXPIRES_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export interface JwtPayload {
   sub: string;
@@ -46,7 +47,10 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: { email: normalizedEmail, passwordHash, name },
     });
-    return this.issueTokens(user);
+    
+    await this.sendVerificationEmail(user);
+    
+    return { message: 'Registration successful. Please check your email to verify your account.' };
   }
 
   async signUpWithSubscription(
@@ -106,7 +110,9 @@ export class AuthService {
       throw err;
     }
 
-    return this.issueTokens(user);
+    await this.sendVerificationEmail(user);
+
+    return { message: 'Registration successful. Please check your email to verify your account.' };
   }
 
   async createSignupSubscriptionIntent(
@@ -183,13 +189,19 @@ export class AuthService {
       throw err;
     }
 
-    return this.issueTokens(user);
+    await this.sendVerificationEmail(user);
+
+    return { message: 'Registration successful. Please check your email to verify your account.' };
   }
 
   async login(email: string, password: string, platform?: Platform, deviceIdentifier?: string) {
     const user = await this.validateUser(email, password);
     if (!user) {
       throw new UnauthorizedException('Invalid email or password');
+    }
+
+    if (!user.emailVerified) {
+      throw new UnauthorizedException('Please verify your email address before signing in.');
     }
 
     const hasPlatform = platform !== undefined;
@@ -323,6 +335,42 @@ export class AuthService {
       }),
     ]);
     return { message: 'Your password has been reset. You can sign in with your new password.' };
+  }
+
+  /** Verify email using token from verification link. */
+  async verifyEmail(token: string): Promise<{ message: string }> {
+    const tokenHash = this.hashToken(token);
+    const record = await this.prisma.emailVerificationToken.findUnique({
+      where: { tokenHash },
+      include: { user: true },
+    });
+    if (!record || record.expiresAt < new Date()) {
+      throw new BadRequestException('Invalid or expired verification link.');
+    }
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: record.userId },
+        data: { emailVerified: true },
+      }),
+      this.prisma.emailVerificationToken.delete({
+        where: { id: record.id },
+      }),
+    ]);
+    return { message: 'Your email has been verified. You can now sign in.' };
+  }
+
+  private async sendVerificationEmail(user: User) {
+    const rawToken = randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(rawToken);
+    const expiresAt = new Date(Date.now() + EMAIL_VERIFICATION_EXPIRES_MS);
+
+    await this.prisma.emailVerificationToken.create({
+      data: { userId: user.id, tokenHash, expiresAt },
+    });
+
+    const baseUrl = process.env.FRONTEND_URL ?? process.env.APP_URL ?? 'http://localhost:3000';
+    const verificationLink = `${baseUrl.replace(/\/$/, '')}/verify-email?token=${rawToken}`;
+    await this.mailService.sendVerificationEmail(user.email, verificationLink);
   }
 
   /** Change password for authenticated user. */

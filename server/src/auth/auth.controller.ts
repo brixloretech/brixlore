@@ -10,6 +10,7 @@ import { SignUpWithSubscriptionDto } from './dto/sign-up-with-subscription.dto';
 import { SignupSubscriptionIntentDto } from './dto/signup-subscription-intent.dto';
 import { SignupSubscriptionFinalizeDto } from './dto/signup-subscription-finalize.dto';
 import { TokensResponseDto } from './dto/tokens-response.dto';
+import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { User } from '@prisma/client';
@@ -20,13 +21,13 @@ export class AuthController {
 
   @Public()
   @Post('signup')
-  async signUp(@Body() dto: SignUpDto): Promise<TokensResponseDto> {
+  async signUp(@Body() dto: SignUpDto): Promise<{ message: string }> {
     return this.authService.signUp(dto.email, dto.password, dto.name);
   }
 
   @Public()
   @Post('signup-with-subscription')
-  async signUpWithSubscription(@Body() dto: SignUpWithSubscriptionDto): Promise<TokensResponseDto> {
+  async signUpWithSubscription(@Body() dto: SignUpWithSubscriptionDto): Promise<{ message: string }> {
     return this.authService.signUpWithSubscription(
       dto.email,
       dto.password,
@@ -54,7 +55,7 @@ export class AuthController {
   @Post('signup-subscription-finalize')
   async signupSubscriptionFinalize(
     @Body() dto: SignupSubscriptionFinalizeDto,
-  ): Promise<TokensResponseDto> {
+  ): Promise<{ message: string }> {
     return this.authService.finalizeSignupWithSubscription(
       dto.email,
       dto.password,
@@ -91,6 +92,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
     return this.authService.resetPassword(dto.token, dto.newPassword);
+  }
+
+  @Public()
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Body() dto: VerifyEmailDto): Promise<{ message: string }> {
+    return this.authService.verifyEmail(dto.token);
   }
 
   @Post('change-password')

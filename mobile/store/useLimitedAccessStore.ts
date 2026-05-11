@@ -39,6 +39,11 @@ interface LimitedAccessState {
    */
   videoWatchStartTime: number | null;
 
+  /**
+   * The ID of the first video a free user played (unlocked for full access)
+   */
+  freeUnlockedVideoId: string | null;
+
   // Actions
   incrementVideosWatched: (videoId: string) => void;
   resetWatchedVideos: () => void;
@@ -52,6 +57,7 @@ interface LimitedAccessState {
   stopVideoWatch: () => void;
   loadFromStorage: () => Promise<void>;
   saveToStorage: () => Promise<void>;
+  setFreeUnlockedVideoId: (videoId: string) => void;
 }
 
 const LIMITED_ACCESS_STORAGE_KEY = "@limited_access_state";
@@ -64,13 +70,16 @@ export const useLimitedAccessStore = create<LimitedAccessState>((set, get) => ({
   loginModalShownFor30s: false,
   loginModalShownForVideoLimit: false,
   videoWatchStartTime: null,
+  freeUnlockedVideoId: null,
 
   incrementVideosWatched: (videoId: string) => {
     const current = get();
     if (!current.watchedVideoIds.has(videoId)) {
-      current.watchedVideoIds.add(videoId);
+      const newWatchedIds = new Set(current.watchedVideoIds);
+      newWatchedIds.add(videoId);
       set({
         videosWatchedCount: current.videosWatchedCount + 1,
+        watchedVideoIds: newWatchedIds,
       });
     }
   },
@@ -82,6 +91,7 @@ export const useLimitedAccessStore = create<LimitedAccessState>((set, get) => ({
       episodeWatchTimes: new Map(),
       loginModalShownFor30s: false,
       loginModalShownForVideoLimit: false,
+      freeUnlockedVideoId: null,
     });
   },
 
@@ -135,6 +145,7 @@ export const useLimitedAccessStore = create<LimitedAccessState>((set, get) => ({
           videosWatchedCount: parsed.videosWatchedCount || 0,
           watchedVideoIds: new Set(parsed.watchedVideoIds || []),
           episodeWatchTimes: episodeTimesMap,
+          freeUnlockedVideoId: parsed.freeUnlockedVideoId || null,
         });
       }
     } catch (error) {
@@ -151,10 +162,15 @@ export const useLimitedAccessStore = create<LimitedAccessState>((set, get) => ({
           videosWatchedCount: state.videosWatchedCount,
           watchedVideoIds: Array.from(state.watchedVideoIds),
           episodeWatchTimes: Array.from(state.episodeWatchTimes.entries()),
+          freeUnlockedVideoId: state.freeUnlockedVideoId,
         }),
       );
     } catch (error) {
       console.error("Failed to save limited access state:", error);
     }
+  },
+
+  setFreeUnlockedVideoId: (videoId: string) => {
+    set({ freeUnlockedVideoId: videoId });
   },
 }));

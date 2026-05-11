@@ -49,7 +49,7 @@ function buildStreamUrl(streamKey: string): string {
   const apiUrl =
     Constants.expoConfig?.extra?.apiUrl ||
     process.env.EXPO_PUBLIC_API_URL ||
-    "https://brick-tales-web-production.up.railway.app";
+    "https://brick-tales-web-production-653a.up.railway.app";
 
   if (apiUrl) {
     const base = apiUrl.trim().replace(/\/$/, "");

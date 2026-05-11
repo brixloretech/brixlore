@@ -59,6 +59,8 @@ function SignupFormInner() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const stripeReady = Boolean(stripe);
   const hasStripeKey = stripePublishableKey.length > 0;
 
@@ -155,13 +157,8 @@ function SignupFormInner() {
     try {
       if (!requiresPayment) {
         const response = await authService.register({ name, email, password });
-        setSubscribed(false);
-        await login({
-          email: response.user.email,
-          name: response.user.name,
-          role: response.user.role,
-        });
-        router.replace("/dashboard");
+        setSuccessMessage(response.message);
+        setIsSuccess(true);
         return;
       }
 
@@ -241,18 +238,49 @@ function SignupFormInner() {
         subscriptionId: intent.subscriptionId,
         customerId: intent.customerId,
       });
-      setSubscribed(true);
-      await login({
-        email: response.user.email,
-        name: response.user.name,
-        role: response.user.role,
-      });
-      router.replace("/dashboard");
+      setSuccessMessage(response.message);
+      setIsSuccess(true);
     } catch (err) {
       setSubmitError(getApiErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
+  }
+
+  if (isSuccess) {
+    return (
+      <Card>
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+            <svg
+              className="h-6 w-6 text-green-600 dark:text-green-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+          </div>
+          <CardTitle>Check your email</CardTitle>
+          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
+            {successMessage || "Registration successful. Please check your email to verify your account."}
+          </p>
+        </CardHeader>
+        <CardFooter className="flex flex-col gap-3">
+          <Button fullWidth onClick={() => router.push("/login")}>
+            Go to Login
+          </Button>
+          <p className="text-center text-xs text-neutral-500">
+            Didn't receive an email? Check your spam folder.
+          </p>
+        </CardFooter>
+      </Card>
+    );
   }
 
   return (

@@ -52,6 +52,33 @@ export class MailService {
   }
 
   /** Returns true if email was sent (or skipped in dev with log). */
+  async sendVerificationEmail(to: string, verificationLink: string): Promise<boolean> {
+    const from = process.env.SMTP_FROM ?? process.env.SMTP_USER ?? 'noreply@example.com';
+    const subject = 'Verify your email address';
+    const html = `
+      <p>Welcome to Brixlore!</p>
+      <p>Please click the link below to verify your email address and activate your account:</p>
+      <p><a href="${verificationLink}" style="display:inline-block;padding:10px 16px;border-radius:6px;background:#f5d90a;color:#111;text-decoration:none;">Verify Email</a></p>
+      <p>If you didn't create an account, you can ignore this email.</p>
+    `;
+    const text = `Verify your email address: ${verificationLink}`;
+
+    if (this.transporter) {
+      await this.transporter.sendMail({
+        from,
+        to,
+        subject,
+        text,
+        html,
+      });
+      return true;
+    }
+
+    console.log('[Mail] Verification link (SMTP not configured):', verificationLink);
+    return true;
+  }
+
+  /** Returns true if email was sent (or skipped in dev with log). */
   async sendAdminInviteEmail(to: string, inviteLink: string): Promise<boolean> {
     const from = process.env.SMTP_FROM ?? process.env.SMTP_USER ?? 'noreply@example.com';
     const subject = 'You have been invited as an admin';

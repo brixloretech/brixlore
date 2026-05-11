@@ -13,6 +13,8 @@ import type {
   ResetPasswordResponseDto,
   ChangePasswordRequestDto,
   ChangePasswordResponseDto,
+  VerifyEmailRequestDto,
+  VerifyEmailResponseDto,
   UserDto,
 } from "@/types/api";
 import type { User } from "@/types";
@@ -158,31 +160,16 @@ export const authService = {
       const result = await mockSignup(body.name, body.email, body.password);
       if (!result.success)
         throw new Error(result.error ?? "Registration failed");
-      persistMockSession(result.user);
       return {
-        user: userToDto(result.user),
-        accessToken: MOCK_TOKEN,
-        expiresIn: 3600,
+        message: "Registration successful. Please check your email to verify your account. (Mock Mode)",
       };
     }
 
-    const tokens = await post<TokensResponse>("auth/signup", {
+    return post<RegisterResponseDto>("auth/signup", {
       email: body.email,
       password: body.password,
       name: body.name,
     });
-    setStoredAuth({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: Date.now() + tokens.expiresIn * 1000,
-    });
-    const user = await getMe();
-    return {
-      user,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresIn: tokens.expiresIn,
-    };
   },
 
   async registerWithSubscription(
@@ -192,31 +179,12 @@ export const authService = {
       const result = await mockSignup(body.name, body.email, body.password);
       if (!result.success)
         throw new Error(result.error ?? "Registration failed");
-      persistMockSession(result.user);
-      setMockSubscription(true);
       return {
-        user: userToDto(result.user),
-        accessToken: MOCK_TOKEN,
-        expiresIn: 3600,
+        message: "Registration successful. Please check your email to verify your account. (Mock Mode)",
       };
     }
 
-    const tokens = await post<TokensResponse>(
-      "auth/signup-with-subscription",
-      body,
-    );
-    setStoredAuth({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: Date.now() + tokens.expiresIn * 1000,
-    });
-    const user = await getMe();
-    return {
-      user,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresIn: tokens.expiresIn,
-    };
+    return post<RegisterResponseDto>("auth/signup-with-subscription", body);
   },
 
   async createSignupSubscriptionIntent(
@@ -231,22 +199,20 @@ export const authService = {
   async finalizeSignupWithSubscription(
     body: SignupSubscriptionFinalizeRequestDto,
   ): Promise<RegisterResponseDto> {
-    const tokens = await post<TokensResponse>(
-      "auth/signup-subscription-finalize",
-      body,
-    );
-    setStoredAuth({
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresAt: Date.now() + tokens.expiresIn * 1000,
-    });
-    const user = await getMe();
-    return {
-      user,
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-      expiresIn: tokens.expiresIn,
-    };
+    if (USE_MOCK_API) {
+      return {
+        message: "Registration successful. Please check your email to verify your account. (Mock Mode)",
+      };
+    }
+    return post<RegisterResponseDto>("auth/signup-subscription-finalize", body);
+  },
+
+  async verifyEmail(body: VerifyEmailRequestDto): Promise<VerifyEmailResponseDto> {
+    if (USE_MOCK_API) {
+      if (body.token === "invalid") throw new Error("Invalid token");
+      return { message: "Email verified successfully! You can now sign in." };
+    }
+    return post<VerifyEmailResponseDto>("auth/verify-email", body);
   },
 
   async forgotPassword(

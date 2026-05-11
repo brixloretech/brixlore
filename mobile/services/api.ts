@@ -9,7 +9,7 @@ function resolveApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL;
 
   // Keep a concrete fallback to avoid invalid placeholder domains in dev builds.
-  const fallback = "https://brick-tales-web-production.up.railway.app";
+  const fallback = "https://brick-tales-web-production-653a.up.railway.app";
 
   return (fromEnv || fromExpoConfig || fallback).replace(/\/$/, "");
 }

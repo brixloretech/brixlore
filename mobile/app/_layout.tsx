@@ -17,6 +17,7 @@ import { NotificationHandler } from "../components/NotificationHandler";
 import { ProtectedRoute } from "../components/ProtectedRoute";
 import { useNotificationStore } from "../store/useNotificationStore";
 import { useAuthStore } from "../store/useAuthStore";
+import { useLimitedAccessStore } from "../store/useLimitedAccessStore";
 import * as Notifications from "expo-notifications";
 import { downloadService } from "../services/downloadService";
 import {
@@ -34,6 +35,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 export default function RootLayout() {
   const { register, loadNotifications } = useNotificationStore();
   const { isAuthenticated, user } = useAuthStore();
+  const { loadFromStorage: loadLimitedAccess } = useLimitedAccessStore();
   const [isLayoutReady, setIsLayoutReady] = useState(false);
   // Removed checkAuth from here - it's called in index.tsx to avoid duplicate calls
 
@@ -167,6 +169,11 @@ export default function RootLayout() {
     // Load existing notifications
     loadNotifications().catch((error) => {
       console.error("Failed to load notifications:", error);
+    });
+
+    // Load limited access state (Guest/Free tracking)
+    loadLimitedAccess().catch((error) => {
+      console.error("Failed to load limited access state:", error);
     });
 
     return () => {

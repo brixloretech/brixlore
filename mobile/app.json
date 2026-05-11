@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Brixlore",
-    "slug": "brixlore",
+    "slug": "brixlore-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,7 +13,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#000000"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       [
         "expo-notifications",
@@ -28,12 +30,18 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.brixlore.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio", "remote-notification"]
+        "UIBackgroundModes": [
+          "audio",
+          "remote-notification",
+          "audio",
+          "remote-notification"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "extra": {
       "eas": {
-        "projectId": "d8b9ad65-ef9b-4c87-b075-c716a6495a8e"
+        "projectId": "2e5d2815-755e-442b-9973-9a67355eac65"
       },
       "apiUrl": "https://brick-tales-web-production-653a.up.railway.app",
       "r2WorkerBaseUrl": "https://shy-sea-9921.brixloretech.workers.dev"
