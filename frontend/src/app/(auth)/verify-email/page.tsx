@@ -102,7 +102,7 @@ function VerifyEmailInner() {
         <Button
           fullWidth
           onClick={() => router.push("/login")}
-          variant={status === "error" ? "outline" : "default"}
+          variant={status === "error" ? "outline" : "primary"}
         >
           Go to Login
         </Button>
