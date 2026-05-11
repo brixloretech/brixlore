@@ -32,7 +32,6 @@ import {
   setMockSession,
   clearMockSession,
   getMockSubscription,
-  setMockSubscription,
 } from "@/lib/mock-auth";
 
 const MOCK_TOKEN = "mock-jwt-token";

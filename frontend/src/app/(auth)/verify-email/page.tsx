@@ -2,10 +2,10 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
+
 import {
   Card,
-  CardContent,
+
   CardFooter,
   CardHeader,
   CardTitle,

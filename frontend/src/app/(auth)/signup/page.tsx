@@ -40,7 +40,7 @@ function SignupFormInner() {
   const stripe = useStripe();
   const elements = useElements();
 
-  const { login, setSubscribed } = useAuth();
+  const {} = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [name, setName] = useState("");
@@ -276,7 +276,7 @@ function SignupFormInner() {
             Go to Login
           </Button>
           <p className="text-center text-xs text-neutral-500">
-            Didn't receive an email? Check your spam folder.
+            Didn&apos;t receive an email? Check your spam folder.
           </p>
         </CardFooter>
       </Card>
