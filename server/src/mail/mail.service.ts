@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 
 @Injectable()
 export class MailService {
+  private readonly logger = new Logger(MailService.name);
   private transporter: Transporter | null = null;
 
   constructor() {
@@ -11,7 +12,9 @@ export class MailService {
     const port = process.env.SMTP_PORT;
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
-    const secure = process.env.SMTP_SECURE !== 'false';
+    // Robust check: Vercel strips quotes from env vars, so value is the bare string 'false'
+    const secureRaw = (process.env.SMTP_SECURE ?? '').trim().toLowerCase();
+    const secure = secureRaw !== 'false' && secureRaw !== '0';
 
     if (host && user && pass) {
       this.transporter = nodemailer.createTransport({
@@ -20,6 +23,9 @@ export class MailService {
         secure,
         auth: { user, pass },
       });
+      this.logger.log(`[Mail] SMTP configured: host=${host} port=${port ?? (secure ? 465 : 587)} secure=${secure} user=${user}`);
+    } else {
+      this.logger.warn('[Mail] SMTP not configured – emails will be logged to console only.');
     }
   }
 
@@ -36,18 +42,17 @@ export class MailService {
     const text = `Reset your password: ${resetLink}\n\nIf you didn't request this, ignore this email.`;
 
     if (this.transporter) {
-      await this.transporter.sendMail({
-        from,
-        to,
-        subject,
-        text,
-        html,
-      });
-      return true;
+      try {
+        await this.transporter.sendMail({ from, to, subject, text, html });
+        this.logger.log(`[Mail] Password reset email sent to ${to}`);
+        return true;
+      } catch (err) {
+        this.logger.error(`[Mail] Failed to send password reset email to ${to}:`, err);
+        throw err;
+      }
     }
 
-    // Dev: log link when SMTP is not configured
-    console.log('[Mail] Password reset link (SMTP not configured):', resetLink);
+    this.logger.warn(`[Mail] SMTP not configured – reset link for ${to}: ${resetLink}`);
     return true;
   }
 
@@ -64,17 +69,17 @@ export class MailService {
     const text = `Verify your email address: ${verificationLink}`;
 
     if (this.transporter) {
-      await this.transporter.sendMail({
-        from,
-        to,
-        subject,
-        text,
-        html,
-      });
-      return true;
+      try {
+        await this.transporter.sendMail({ from, to, subject, text, html });
+        this.logger.log(`[Mail] Verification email sent to ${to}`);
+        return true;
+      } catch (err) {
+        this.logger.error(`[Mail] Failed to send verification email to ${to}:`, err);
+        throw err;
+      }
     }
 
-    console.log('[Mail] Verification link (SMTP not configured):', verificationLink);
+    this.logger.warn(`[Mail] SMTP not configured – verification link for ${to}: ${verificationLink}`);
     return true;
   }
 
