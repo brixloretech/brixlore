@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -29,6 +30,8 @@ export interface JwtPayload {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -48,7 +51,12 @@ export class AuthService {
       data: { email: normalizedEmail, passwordHash, name },
     });
     
-    await this.sendVerificationEmail(user);
+    try {
+      await this.sendVerificationEmail(user);
+    } catch (err) {
+      this.logger.error(`[Auth] Failed to send verification email to ${user.email}:`, err);
+      // Don't fail signup if email sending fails - user account is created successfully
+    }
     
     return { message: 'Registration successful. Please check your email to verify your account.' };
   }
@@ -110,7 +118,12 @@ export class AuthService {
       throw err;
     }
 
-    await this.sendVerificationEmail(user);
+    try {
+      await this.sendVerificationEmail(user);
+    } catch (err) {
+      this.logger.error(`[Auth] Failed to send verification email to ${user.email}:`, err);
+      // Don't fail signup if email sending fails - user account is created successfully
+    }
 
     return { message: 'Registration successful. Please check your email to verify your account.' };
   }
@@ -189,7 +202,12 @@ export class AuthService {
       throw err;
     }
 
-    await this.sendVerificationEmail(user);
+    try {
+      await this.sendVerificationEmail(user);
+    } catch (err) {
+      this.logger.error(`[Auth] Failed to send verification email to ${user.email}:`, err);
+      // Don't fail signup if email sending fails - user account is created successfully
+    }
 
     return { message: 'Registration successful. Please check your email to verify your account.' };
   }
