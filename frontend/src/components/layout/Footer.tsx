@@ -18,7 +18,7 @@ export function Footer() {
     { label: "Privacy Policy", href: "/privacy-policy" },
     { label: "Cookie Preferences", href: "/cookie-consent" },
     { label: "Press Inquiries", href: "/press-inquiries" },
-    { label: "Advertising Inquiries", href: "/advertising-inquiries" },
+    { label: "Partnerships", href: "/partners" },
     { label: "Get the App", href: "/get-the-app" },
   ];
 
