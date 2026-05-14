@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../src/theme/colors";
 import { spacing, typography } from "../constants/theme";
 import { useAuthStore } from "../store/useAuthStore";
+import EmailVerificationPendingScreen from "./EmailVerificationPendingScreen";
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -25,6 +26,8 @@ export default function SignUpScreen() {
     isAuthenticated,
     error: authError,
     clearError,
+    pendingVerification,
+    verificationMessage,
   } = useAuthStore();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -65,6 +68,7 @@ export default function SignUpScreen() {
       subscription.remove();
     };
   }, [router]);
+
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -144,6 +148,11 @@ export default function SignUpScreen() {
       setIsLoading(false);
     }
   };
+
+  // Keep this return after all hooks to preserve hook order across renders.
+  if (pendingVerification) {
+    return <EmailVerificationPendingScreen message={verificationMessage} />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>

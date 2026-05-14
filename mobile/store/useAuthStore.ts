@@ -22,6 +22,8 @@ type AuthState = {
   isLoading: boolean;
   isAuthenticated: boolean;
   error: string | null;
+  pendingVerification: boolean;
+  verificationMessage?: string | null;
 };
 
 type AuthActions = {
@@ -31,13 +33,17 @@ type AuthActions = {
   refreshUser: () => Promise<void>;
   checkAuth: () => Promise<void>;
   clearError: () => void;
+  clearPendingVerification: () => void;
 };
+
 
 export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   user: null,
-  isLoading: false, // Start as false - will be set to true only during actual operations
+  isLoading: false,
   isAuthenticated: false,
   error: null,
+  pendingVerification: false,
+  verificationMessage: null,
 
   signup: async (name, email, password) => {
     const state = get();
@@ -45,17 +51,32 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       return;
     }
 
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, pendingVerification: false, verificationMessage: null });
 
     try {
       const service = await getAuthService();
       const response = await service.signUp({ name, email, password });
 
+      // If pending verification
+      if ((response as any).pendingVerification) {
+        set({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+          error: null,
+          pendingVerification: true,
+          verificationMessage: (response as any).message || null,
+        });
+        return;
+      }
+
       set({
-        user: response.user,
+        user: (response as any).user,
         isAuthenticated: true,
         isLoading: false,
         error: null,
+        pendingVerification: false,
+        verificationMessage: null,
       });
 
       deviceService.registerDevice().catch(() => {
@@ -70,92 +91,83 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         error: errorMessage,
         isLoading: false,
         isAuthenticated: false,
+        pendingVerification: false,
+        verificationMessage: null,
       });
     }
   },
 
   login: async (email, password) => {
     const state = get();
-    if (state.isLoading) {
-      return;
-    }
+      if (state.isLoading) {
+        return;
+      }
 
-    // Set loading state immediately
-    set({ isLoading: true, error: null });
+      set({ isLoading: true, error: null, pendingVerification: false, verificationMessage: null });
 
-    // Safety net: Force stop loading after 60 seconds no matter what (for very unstable connections)
-    const safetyTimeoutId = setTimeout(() => {
-      const currentState = get();
-      if (currentState.isLoading) {
+      const safetyTimeoutId = setTimeout(() => {
+        const currentState = get();
+        if (currentState.isLoading) {
+          set({
+            isLoading: false,
+            error:
+              "Login request timed out. Please check your internet connection and try again.",
+            isAuthenticated: false,
+            user: null,
+            pendingVerification: false,
+            verificationMessage: null,
+          });
+        }
+      }, 60000);
+
+      try {
+        const service = await getAuthService();
+        const response = await service.login({ email, password });
+
+        clearTimeout(safetyTimeoutId);
+
+        const currentState = get();
+        if (!currentState.isLoading) {
+          return;
+        }
+
         set({
+          user: response.user,
+          isAuthenticated: true,
           isLoading: false,
-          error:
-            "Login request timed out. Please check your internet connection and try again.",
+          error: null,
+          pendingVerification: false,
+          verificationMessage: null,
+        });
+      } catch (error: any) {
+        clearTimeout(safetyTimeoutId);
+        const errorMessage =
+          error?.message ||
+          error?.toString() ||
+          "Login failed. Please try again.";
+        if (
+          typeof errorMessage === "string" &&
+          errorMessage.toLowerCase().includes("verify your email")
+        ) {
+          set({
+            error: null,
+            isLoading: false,
+            isAuthenticated: false,
+            pendingVerification: true,
+            verificationMessage: errorMessage,
+          });
+          return;
+        }
+        set({
+          error: errorMessage,
+          isLoading: false,
           isAuthenticated: false,
-          user: null,
+          pendingVerification: false,
+          verificationMessage: null,
         });
       }
-    }, 60000); // 60 seconds - much longer for unstable connections
+    },
 
-    try {
-      // No timeout on login - let axios handle it (axios timeout is 30 seconds)
-      // This allows for slower connections without premature timeouts
-      const service = await getAuthService();
-      const response = await service.login({ email, password });
-
-      // Clear safety timeout
-      clearTimeout(safetyTimeoutId);
-
-      // Double-check we're still supposed to be loading
-      const currentState = get();
-      if (!currentState.isLoading) {
-        return;
-      }
-
-      set({
-        user: response.user,
-        isAuthenticated: true,
-        isLoading: false,
-        error: null,
-      });
-
-      // Clear limited access tracking on successful login
-      try {
-        const { useLimitedAccessStore } =
-          await import("./useLimitedAccessStore");
-        useLimitedAccessStore.getState().resetWatchedVideos();
-        await useLimitedAccessStore.getState().saveToStorage();
-      } catch (error) {
-        console.error("Failed to reset limited access tracking:", error);
-      }
-
-      // Register device in the background (does not block login)
-      deviceService.registerDevice().catch(() => {
-        // Ignore registration failures (e.g., no device allowance)
-      });
-    } catch (error: any) {
-      // Clear safety timeout
-      clearTimeout(safetyTimeoutId);
-
-      // Double-check we're still supposed to be loading
-      const currentState = get();
-      if (!currentState.isLoading) {
-        return;
-      }
-
-      const errorMessage =
-        error?.message ||
-        error?.toString() ||
-        "Login failed. Please try again.";
-      set({
-        error: errorMessage,
-        isLoading: false,
-        isAuthenticated: false,
-        user: null,
-      });
-      // Don't throw - let the component handle the error state
-    }
-  },
 
   logout: async () => {
     try {
@@ -308,5 +320,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
   clearError: () => {
     set({ error: null });
+  },
+
+  clearPendingVerification: () => {
+    set({ pendingVerification: false, verificationMessage: null });
   },
 }));

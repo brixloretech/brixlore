@@ -180,8 +180,13 @@ class NotificationService {
       // Ensure database is initialized
       await databaseService.initialize();
 
+      const normalizedNotificationId =
+        typeof notification.id === "string" && notification.id.trim().length > 0
+          ? notification.id.trim()
+          : `local-${notification.receivedAt}-${Math.random().toString(36).slice(2, 10)}`;
+
       await databaseService.insertNotification({
-        notificationId: notification.id,
+        notificationId: normalizedNotificationId,
         title: notification.title,
         body: notification.body,
         data: notification.data ? JSON.stringify(notification.data) : "{}",

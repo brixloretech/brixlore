@@ -45,6 +45,37 @@ export type ForgotPasswordDto = {
   email: string;
 };
 
+function maskEmail(email: string): string {
+  const normalized = (email || "").trim();
+  const atIndex = normalized.indexOf("@");
+  if (atIndex <= 1) return "***";
+
+  const local = normalized.slice(0, atIndex);
+  const domain = normalized.slice(atIndex + 1);
+  const localMasked = `${local.slice(0, 2)}***`;
+
+  if (!domain) return `${localMasked}@***`;
+
+  const domainParts = domain.split(".");
+  const root = domainParts[0] || "";
+  const tld = domainParts.slice(1).join(".");
+  const rootMasked = root.length > 2 ? `${root.slice(0, 2)}***` : "***";
+
+  return `${localMasked}@${rootMasked}${tld ? `.${tld}` : ""}`;
+}
+
+function getCredentialDiagnostics(email: string, password: string) {
+  return {
+    emailLength: email.length,
+    emailTrimmedLength: email.trim().length,
+    emailHasWhitespace: /\s/.test(email),
+    passwordLength: password.length,
+    passwordHasAnyWhitespace: /\s/.test(password),
+    passwordHasLeadingOrTrailingWhitespace: password !== password.trim(),
+    passwordHasNonAscii: /[^\x20-\x7E]/.test(password),
+  };
+}
+
 class AuthService {
   private refreshPromise: Promise<string | null> | null = null;
 
@@ -117,7 +148,20 @@ class AuthService {
    * Login user
    */
   async login(credentials: LoginCredentials): Promise<LoginResponse> {
+    const diagnostics = getCredentialDiagnostics(
+      credentials.email,
+      credentials.password,
+    );
+
     try {
+      if (__DEV__) {
+        console.log("[AuthService][login] Request", {
+          email: maskEmail(credentials.email),
+          apiBaseUrl: api.defaults.baseURL,
+          diagnostics,
+        });
+      }
+
       const { deviceIdentifier, platform } =
         await deviceService.getDeviceIdentity();
 
@@ -166,8 +210,29 @@ class AuthService {
       }
 
       await this.storeUser(user);
+
+      if (__DEV__) {
+        console.log("[AuthService][login] Success", {
+          email: maskEmail(credentials.email),
+          userId: user.id,
+        });
+      }
+
       return { user, accessToken, refreshToken };
     } catch (error: any) {
+      if (__DEV__) {
+        const statusCode = error?.response?.status;
+        const serverMessage = error?.response?.data?.message;
+        console.log("[AuthService][login] Failed", {
+          email: maskEmail(credentials.email),
+          apiBaseUrl: api.defaults.baseURL,
+          statusCode,
+          serverMessage,
+          errorMessage: error?.message,
+          diagnostics,
+        });
+      }
+
       const message =
         error.response?.data?.message || error.message || "Login failed";
       if (
@@ -185,46 +250,51 @@ class AuthService {
   /**
    * Sign up user and start an authenticated session immediately.
    */
-  async signUp(credentials: SignUpCredentials): Promise<LoginResponse> {
+
+  /**
+   * Sign up user and handle both verified and unverified responses.
+   */
+  async signUp(credentials: SignUpCredentials): Promise<LoginResponse | { pendingVerification: true; message: string }> {
     try {
-      const response = await api.post<{
-        accessToken: string;
-        refreshToken: string;
-        expiresIn?: number;
-      }>("/auth/signup", {
+      const response = await api.post<any>("/auth/signup", {
         name: credentials.name?.trim() || undefined,
         email: credentials.email.trim(),
         password: credentials.password,
       });
 
-      const { accessToken, refreshToken } = response.data;
+      // If backend returns tokens, user is verified
+      if (response.data.accessToken && response.data.refreshToken) {
+        const { accessToken, refreshToken } = response.data;
+        await this.storeTokens(accessToken, refreshToken);
 
-      if (!accessToken || !refreshToken) {
-        throw new Error("Invalid response from server: missing tokens");
+        const userPromise = this.getCurrentUser();
+        const timeoutPromise = new Promise<User | null>((resolve) =>
+          setTimeout(() => resolve(null), 30000),
+        );
+
+        const user = await Promise.race([userPromise, timeoutPromise]);
+
+        if (!user) {
+          const basicUser: User = {
+            id: "temp",
+            email: credentials.email,
+            name: credentials.name?.trim() || credentials.email.split("@")[0],
+            role: "user",
+          };
+          await this.storeUser(basicUser);
+          return { user: basicUser, accessToken, refreshToken };
+        }
+
+        await this.storeUser(user);
+        return { user, accessToken, refreshToken };
       }
 
-      await this.storeTokens(accessToken, refreshToken);
-
-      const userPromise = this.getCurrentUser();
-      const timeoutPromise = new Promise<User | null>((resolve) =>
-        setTimeout(() => resolve(null), 30000),
-      );
-
-      const user = await Promise.race([userPromise, timeoutPromise]);
-
-      if (!user) {
-        const basicUser: User = {
-          id: "temp",
-          email: credentials.email,
-          name: credentials.name?.trim() || credentials.email.split("@")[0],
-          role: "user",
-        };
-        await this.storeUser(basicUser);
-        return { user: basicUser, accessToken, refreshToken };
+      // If no tokens, treat as pending verification
+      if (typeof response.data.message === "string") {
+        return { pendingVerification: true, message: response.data.message };
       }
 
-      await this.storeUser(user);
-      return { user, accessToken, refreshToken };
+      throw new Error("Unexpected signup response from server.");
     } catch (error: any) {
       const message =
         error.response?.data?.message || error.message || "Registration failed";

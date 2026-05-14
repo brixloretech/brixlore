@@ -17,11 +17,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../src/theme/colors";
 import { spacing, typography } from "../constants/theme";
 import { useAuthStore } from "../store/useAuthStore";
+import EmailVerificationPendingScreen from "./EmailVerificationPendingScreen";
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, isLoading, error, clearError, isAuthenticated } =
-    useAuthStore();
+  const { login, isLoading, error, clearError, isAuthenticated, pendingVerification, verificationMessage } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -123,6 +123,11 @@ export default function LoginScreen() {
       setIsLoginInProgress(false);
     }
   };
+
+  // Keep this return after all hooks to preserve hook order across renders.
+  if (pendingVerification) {
+    return <EmailVerificationPendingScreen message={verificationMessage} />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
