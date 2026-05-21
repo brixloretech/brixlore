@@ -52,7 +52,7 @@ export class SiteController {
   }): Promise<{ success: boolean }> {
     await this.mailService.sendMail({
       // to: ['content@brixlore.tv', 'sarah@brixlore.tv'],
-      to: 'rubabhashmi4709@gmail.com',
+      to: ['rubabhashmi4709@gmail.com'],
       replyTo: body.email,
       subject: `New Film Submission: ${body.filmTitle}`,
       html: `
