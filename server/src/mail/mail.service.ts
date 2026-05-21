@@ -126,4 +126,37 @@ export class MailService {
     });
     return true;
   }
+
+  async sendMail(options: {
+  to: string | string[];
+  subject: string;
+  html: string;
+  text?: string;
+  replyTo?: string;
+}): Promise<boolean> {
+  const from =
+    process.env.SMTP_FROM ??
+    process.env.SMTP_USER ??
+    'noreply@example.com';
+
+  if (this.transporter) {
+    await this.transporter.sendMail({
+      from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: options.text,
+      replyTo: options.replyTo,
+    });
+
+    return true;
+  }
+
+  console.log('[Mail] Generic email (SMTP not configured):', {
+    to: options.to,
+    subject: options.subject,
+  });
+
+  return true;
+}
 }

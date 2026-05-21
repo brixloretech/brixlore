@@ -3,9 +3,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { SiteController } from './site.controller';
 import { SiteService } from './site.service';
 import { StorageModule } from '../storage/storage.module';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
-  imports: [PrismaModule, StorageModule],
+  imports: [PrismaModule, StorageModule, MailModule],
   controllers: [SiteController],
   providers: [SiteService],
   exports: [SiteService],
