@@ -162,17 +162,17 @@
 // }
 
 
-
 import { Injectable } from '@nestjs/common';
-import * as Brevo from 'sib-api-v3-sdk';
+
+const Brevo = require('sib-api-v3-sdk');
 
 @Injectable()
 export class MailService {
-  private api: Brevo.TransactionalEmailsApi;
+  private api: any;
 
   constructor() {
     const client = Brevo.ApiClient.instance;
-    client.authentications['api-key'].apiKey = process.env.BREVO_API_KEY;
+    client.authentications['api-key'].apiKey = process.env.BREVO_API;
 
     this.api = new Brevo.TransactionalEmailsApi();
   }
@@ -187,21 +187,44 @@ export class MailService {
       ? options.to.map((email) => ({ email }))
       : [{ email: options.to }];
 
-    try {
-      await this.api.sendTransacEmail({
-        sender: {
-          email: process.env.SMTP_FROM ?? 'support@brixlore.tv',
-        },
-        to: toList,
-        subject: options.subject,
-        htmlContent: options.html,
-        replyTo: options.replyTo ? { email: options.replyTo } : undefined,
-      });
+    await this.api.sendTransacEmail({
+      sender: { email: process.env.SMTP_FROM || 'support@brixlore.tv' },
+      to: toList,
+      subject: options.subject,
+      htmlContent: options.html,
+      replyTo: options.replyTo ? { email: options.replyTo } : undefined,
+    });
 
-      return true;
-    } catch (err) {
-      console.error('Brevo API Error:', err);
-      throw err;
-    }
+    return true;
+  }
+
+  // Keep your old methods (no change needed below)
+  async sendPasswordResetEmail(to: string, resetLink: string) {
+    return this.sendMail({
+      to,
+      subject: 'Reset Password',
+      html: `<a href="${resetLink}">${resetLink}</a>`,
+    });
+  }
+
+  async sendAdminInviteEmail(to: string, inviteLink: string) {
+    return this.sendMail({
+      to,
+      subject: 'Admin Invite',
+      html: `<a href="${inviteLink}">Activate</a>`,
+    });
+  }
+
+  async sendSupportReplyEmail(
+    to: string,
+    subject: string,
+    replyMessage: string,
+    originalMessage?: string,
+  ) {
+    return this.sendMail({
+      to,
+      subject: `Re: ${subject}`,
+      html: `<p>${replyMessage}</p>`,
+    });
   }
 }
