@@ -5,6 +5,11 @@ import { useEffect, useState } from "react";
 import { adminService } from "@/lib/services";
 import type { DashboardStatsDto } from "@/lib/services";
 import { Loader } from "@/components/ui";
+import {
+  FIRST_RELEASE_ADMIN_SCREENS,
+  VIDEO_AD_PLACEMENTS,
+  VIDEO_STACK_FLOW,
+} from "@/lib/video-stack-scope";
 
 export default function AdminPage() {
   const [stats, setStats] = useState<DashboardStatsDto | null>(null);
@@ -217,6 +222,54 @@ export default function AdminPage() {
           >
             Go to content manager →
           </Link>
+        </div>
+      </section>
+
+      <section className="mt-8 rounded-2xl border border-neutral-800/70 bg-neutral-950/70 p-6">
+        <h2 className="text-lg font-semibold text-white">Release scope lock</h2>
+        <p className="mt-1 text-sm text-neutral-400">
+          Day 1 baseline for the new player stack and admin rollout.
+        </p>
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+              Stack flow
+            </p>
+            <ul className="mt-3 space-y-2 text-sm text-neutral-200">
+              {VIDEO_STACK_FLOW.map((item) => (
+                <li key={item} className="rounded-lg border border-neutral-800/70 px-3 py-2">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+              Ad placements
+            </p>
+            <ul className="mt-3 space-y-2 text-sm text-neutral-200">
+              {VIDEO_AD_PLACEMENTS.map((item) => (
+                <li key={item} className="rounded-lg border border-neutral-800/70 px-3 py-2">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+              First release screens
+            </p>
+            <ul className="mt-3 space-y-2 text-sm text-neutral-200">
+              {FIRST_RELEASE_ADMIN_SCREENS.map((item) => (
+                <li key={item} className="rounded-lg border border-neutral-800/70 px-3 py-2">
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
     </div>

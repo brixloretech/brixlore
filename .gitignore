@@ -27,8 +27,9 @@ server/tmp/
 .DS_Store
 Thumbs.db
 
-#md files new
+# md files new
 
 requirements.txt
+# knowledgebase files
 VIDEO_PREVIEW_SETTINGS.md
-mobile/VIDEO_PLAYER_MIGRATION_GUIDE.md
+mobile/VIDEO_PLAYER_MIGRATION_GUIDE.md

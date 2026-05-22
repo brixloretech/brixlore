@@ -13,7 +13,7 @@ If your repo has both `frontend/` and `server/` at the root:
 
 In Vercel → Project Settings → **Environment Variables**, add at least:
 
-| Variable             | Required    | Notes                                                              |
+| Variable             | Required    || Notes                                                              |
 | -------------------- | ----------- | ------------------------------------------------------------------ |
 | `DATABASE_URL`       | Yes         | PostgreSQL connection string (e.g. Neon, Supabase, Railway).       |
 | `JWT_ACCESS_SECRET`  | Yes         | Min 32 characters.                                                 |

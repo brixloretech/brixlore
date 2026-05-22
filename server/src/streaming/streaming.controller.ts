@@ -3,6 +3,7 @@ import {
   Get,
   Patch,
   Delete,
+  Post,
   Query,
   Param,
   Body,
@@ -11,14 +12,35 @@ import {
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { User } from '@prisma/client';
+import { Public } from '../auth/decorators/public.decorator';
 import { StreamingService } from './streaming.service';
 import { PlayUrlResponseDto } from './dto/play-url-response.dto';
 import type { ContinueWatchingItemDto } from './dto/continue-watching-item.dto';
 import { UpdateProgressDto } from './dto/update-progress.dto';
+import type { CloudflareDirectUploadResponseDto } from './dto/cloudflare-direct-upload-response.dto';
 
 @Controller('streaming')
 export class StreamingController {
   constructor(private readonly streamingService: StreamingService) {}
+
+  /** Public: verify Cloudflare Stream backend configuration (token never returned). */
+  @Public()
+  @Get('cloudflare/status')
+  getCloudflareStatus(): {
+    configured: boolean;
+    accountId: string | null;
+    customerSubdomain: string | null;
+  } {
+    return this.streamingService.getCloudflareStreamStatus();
+  }
+
+  /** Authenticated: create a Cloudflare Stream direct-upload URL. */
+  @Post('cloudflare/direct-upload')
+  async createCloudflareDirectUpload(
+    @CurrentUser() user: User,
+  ): Promise<CloudflareDirectUploadResponseDto> {
+    return this.streamingService.createCloudflareDirectUploadUrl(user.id);
+  }
 
   /** Authenticated: get playback metadata. */
   @Get('play-url')
