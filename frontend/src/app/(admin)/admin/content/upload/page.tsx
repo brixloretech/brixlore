@@ -391,6 +391,10 @@ export default function AdminUploadPage() {
           !isEpisodic && canUploadPrimaryVideo
             ? (uploadedVideo?.key ?? undefined)
             : undefined,
+        hlsKey:
+          !isEpisodic && canUploadPrimaryVideo && uploadedVideo?.cloudflareStream
+            ? uploadedVideo.key
+            : undefined,
       });
 
       if (canUploadEpisodeOnCreate && uploadedVideo) {
@@ -408,6 +412,7 @@ export default function AdminUploadPage() {
           title: episodeTitle.trim(),
           duration: episodeDuration.trim(),
           videoKey: uploadedVideo.key,
+          hlsKey: uploadedVideo.cloudflareStream ? uploadedVideo.key : undefined,
         });
       }
 
@@ -421,6 +426,9 @@ export default function AdminUploadPage() {
           ageRating: ageRating.trim(),
           duration: trailerDuration.trim(),
           videoKey: uploadedTrailerVideo.key,
+          hlsKey: uploadedTrailerVideo.cloudflareStream
+            ? uploadedTrailerVideo.key
+            : undefined,
         });
       }
 

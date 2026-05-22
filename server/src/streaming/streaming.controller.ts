@@ -9,6 +9,7 @@ import {
   Body,
   UnauthorizedException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { User } from '@prisma/client';
@@ -18,6 +19,13 @@ import { PlayUrlResponseDto } from './dto/play-url-response.dto';
 import type { ContinueWatchingItemDto } from './dto/continue-watching-item.dto';
 import { UpdateProgressDto } from './dto/update-progress.dto';
 import type { CloudflareDirectUploadResponseDto } from './dto/cloudflare-direct-upload-response.dto';
+
+function ensureAdminUploadAccess(user: User): void {
+  const allowed = new Set(['admin', 'SUPER_ADMIN', 'CONTENT_MANAGER']);
+  if (!allowed.has(user.role)) {
+    throw new ForbiddenException('Admin upload access required');
+  }
+}
 
 @Controller('streaming')
 export class StreamingController {
@@ -39,6 +47,7 @@ export class StreamingController {
   async createCloudflareDirectUpload(
     @CurrentUser() user: User,
   ): Promise<CloudflareDirectUploadResponseDto> {
+    ensureAdminUploadAccess(user);
     return this.streamingService.createCloudflareDirectUploadUrl(user.id);
   }
 

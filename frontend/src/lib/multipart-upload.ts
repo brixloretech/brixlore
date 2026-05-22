@@ -5,12 +5,17 @@ const MIN_MULTIPART_PART_SIZE_BYTES = 5 * 1024 * 1024;
 const DEFAULT_MULTIPART_PART_SIZE_BYTES = 64 * 1024 * 1024;
 const MAX_PART_UPLOAD_RETRIES = 3;
 
-export type VideoUploadStrategy = "multipart" | "legacy-single-put";
+export type VideoUploadStrategy =
+  | "cloudflare-direct"
+  | "multipart"
+  | "legacy-single-put";
 
 export const DEFAULT_VIDEO_UPLOAD_STRATEGY: VideoUploadStrategy =
   process.env.NEXT_PUBLIC_ADMIN_VIDEO_UPLOAD_STRATEGY === "legacy"
     ? "legacy-single-put"
-    : "multipart";
+    : process.env.NEXT_PUBLIC_ADMIN_VIDEO_UPLOAD_PROVIDER === "r2"
+      ? "multipart"
+      : "cloudflare-direct";
 
 export const ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE =
   process.env.NEXT_PUBLIC_ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE === "true";
@@ -27,6 +32,12 @@ type UploadWithStrategyParams = {
   file: File;
   strategy: VideoUploadStrategy;
   onProgress?: (uploadedBytes: number, totalBytes: number) => void;
+};
+
+type UploadedVideoAsset = {
+  key: string;
+  uploadId: string;
+  cloudflareStream: boolean;
 };
 
 function getEtagFromResponse(response: Response): string | null {
@@ -154,10 +165,34 @@ export async function uploadVideoFileWithStrategy({
   file,
   strategy,
   onProgress,
-}: UploadWithStrategyParams): Promise<{ key: string; uploadId: string }> {
-  if (strategy === "legacy-single-put") {
-    return uploadFileWithSinglePut({ kind: "video", file, onProgress });
+}: UploadWithStrategyParams): Promise<UploadedVideoAsset> {
+  if (strategy === "cloudflare-direct") {
+    onProgress?.(0, file.size);
+    const directUpload = await adminService.createCloudflareDirectUpload();
+    const response = await fetch(directUpload.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type || "application/octet-stream" },
+      body: file,
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || "Cloudflare Stream upload failed");
+    }
+
+    onProgress?.(file.size, file.size);
+    return {
+      key: directUpload.uid,
+      uploadId: directUpload.uid,
+      cloudflareStream: true,
+    };
   }
 
-  return uploadFileWithMultipart({ kind: "video", file, onProgress });
+  if (strategy === "legacy-single-put") {
+    const uploaded = await uploadFileWithSinglePut({ kind: "video", file, onProgress });
+    return { ...uploaded, cloudflareStream: false };
+  }
+
+  const uploaded = await uploadFileWithMultipart({ kind: "video", file, onProgress });
+  return { ...uploaded, cloudflareStream: false };
 }
