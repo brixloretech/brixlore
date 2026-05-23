@@ -28,20 +28,36 @@ async function bootstrap() {
   });
 
   const allowedOrigins = getAllowedOrigins();
+  // app.enableCors({
+  //   origin: (origin, callback) => {
+  //     if (!origin || allowedOrigins.includes(origin)) {
+  //       callback(null, true);
+  //     } else {
+  //       callback(null, false);
+  //     }
+  //   },
+  //   credentials: true,
+  //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  //   allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+  //   exposedHeaders: [],
+  //   maxAge: 86400,
+  // });
   app.enableCors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, false);
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
-    exposedHeaders: [],
-    maxAge: 86400,
-  });
+  origin: (origin, callback) => {
+    const allowed = [
+      'http://localhost:3000',
+      'https://brixlore.vercel.app',
+    ];
+
+    if (!origin || allowed.includes(origin)) {
+      return callback(null, true);
+    }
+
+    console.log('Blocked by CORS:', origin);
+    return callback(null, true); // TEMP FIX (important for debugging)
+  },
+  credentials: true,
+});
 
   app.useGlobalPipes(
     new ValidationPipe({

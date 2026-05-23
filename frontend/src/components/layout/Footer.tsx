@@ -19,6 +19,7 @@ export function Footer() {
     { label: "Cookie Preferences", href: "/cookie-consent" },
     { label: "Press Inquiries", href: "/press-inquiries" },
     { label: "Partnerships", href: "/partners" },
+    { label: "Distribute With Brixlore", href: "/distribute" },
     { label: "Get the App", href: "/get-the-app" },
   ];
 
