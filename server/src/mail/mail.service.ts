@@ -158,4 +158,32 @@ export class MailService {
     });
     return true;
   }
+
+  /** Generic transactional email sender used by site flows (e.g., distribute form). */
+  async sendMail(options: {
+    to: string | string[];
+    subject: string;
+    html: string;
+    text?: string;
+    replyTo?: string;
+  }): Promise<boolean> {
+    const from = process.env.SMTP_FROM ?? process.env.SMTP_USER ?? 'noreply@example.com';
+
+    if (this.transporter) {
+      await this.transporter.sendMail({
+        from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        replyTo: options.replyTo || undefined,
+      });
+      return true;
+    }
+
+    this.logger.warn('[Mail] SMTP not configured – generic email logged only.');
+    this.logger.warn(`[Mail] To: ${Array.isArray(options.to) ? options.to.join(',') : options.to}`);
+    this.logger.warn(`[Mail] Subject: ${options.subject}`);
+    return true;
+  }
 }
