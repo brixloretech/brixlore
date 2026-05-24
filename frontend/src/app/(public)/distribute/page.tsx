@@ -1846,8 +1846,7 @@ export default function DistributePage() {
                     </div>
                     <h3 className="text-2xl font-black text-white">Submission Received</h3>
                     <p className="mx-auto mt-3 max-w-sm text-base leading-7 text-neutral-400">
-                      Thanks for reaching out. Our Head of Content,{" "}
-                      <span className="font-semibold text-white">Sarah</span>, will be in touch shortly.
+                      Thanks for reaching out. Our Head of Content, will be in touch shortly.
                     </p>
                     <button
                       onClick={() => { setSubmitted(false); setForm(EMPTY_FORM); setCharCount(0); }}
