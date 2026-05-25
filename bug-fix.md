@@ -41,3 +41,23 @@
 **Files changed**
 - `frontend/src/lib/multipart-upload.ts`
 - `server/src/main.ts`
+
+## 2026-05-26 - HLS badge flips to missing after publish
+
+**Issue**
+- In admin content list, an item could show `HLS ready` before publish, then switch to `No HLS yet` immediately after pressing Publish.
+
+**Root cause**
+- `publishContent` returned a partial content object without `episodes` and `trailer.episodes`.
+- HLS status mapping (`toAdminContentItemDto`) depends on those relations to compute `hlsReadyCount`/`hlsTotalCount`.
+- Frontend context replaced the row with the partial publish response, causing `hlsTotalCount` to become `0`.
+
+**Fix**
+- Updated `publishContent` queries in `server/src/admin/admin.service.ts` to include the same relations used by content list/get-by-id:
+	- `seasons` with episode counts
+	- `episodes`
+	- `trailer` with `episodes`
+- This keeps HLS aggregation stable after publish/unpublish.
+
+**Files changed**
+- `server/src/admin/admin.service.ts`

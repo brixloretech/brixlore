@@ -572,7 +572,12 @@ export class AdminService {
   async publishContent(id: string, isPublished: boolean): Promise<AdminContentItemDto | null> {
     const content = await (this.prisma as any).content.findUnique({
       where: { id },
-      include: { category: true },
+      include: {
+        category: true,
+        seasons: { include: { _count: { select: { episodes: true } } } },
+        episodes: true,
+        trailer: { include: { episodes: true } },
+      },
     });
     if (!content) return null;
 
@@ -588,7 +593,12 @@ export class AdminService {
       const next = await tx.content.update({
         where: { id },
         data: { isPublished },
-        include: { category: true },
+        include: {
+          category: true,
+          seasons: { include: { _count: { select: { episodes: true } } } },
+          episodes: true,
+          trailer: { include: { episodes: true } },
+        },
       });
 
       if (content.trailerId) {
