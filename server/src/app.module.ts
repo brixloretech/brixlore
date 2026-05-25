@@ -16,6 +16,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { AdminModule } from './admin/admin.module';
 import { SiteModule } from './site/site.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AdConfigModule } from './ad-config/ad-config.module';
 
 @Module({
   controllers: [AppController],
@@ -34,6 +35,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     AdminModule,
     SiteModule,
     NotificationsModule,
+    AdConfigModule,
   ],
   providers: [
     {

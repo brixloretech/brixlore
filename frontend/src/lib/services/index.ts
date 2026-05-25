@@ -12,6 +12,7 @@ export { streamingService } from "./streaming.service";
 export { analyticsService } from "./analytics.service";
 export type { CategoryCountDto } from "./analytics.service";
 export { adminService } from "./admin.service";
+export { adConfigService } from "./ad-config.service";
 export type {
   DashboardStatsDto,
   AdminContentItemDto,
