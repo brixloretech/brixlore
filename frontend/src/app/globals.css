@@ -58,6 +58,17 @@ body {
   visibility: visible;
 }
 
+.video-js .vjs-quality-selector-control {
+  flex: 0 0 auto;
+  margin-left: auto;
+  margin-right: 0.35rem;
+}
+
+.video-js .vjs-quality-selector-control select {
+  min-width: 4.25rem;
+  line-height: 1.1;
+}
+
 .video-js .vjs-big-play-button {
   z-index: 2;
 }

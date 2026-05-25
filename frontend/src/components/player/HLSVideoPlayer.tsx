@@ -84,6 +84,12 @@ const VIDEO_JS_OPTIONS = {
   controls: true,
   fill: true,
   playbackRates: [0.5, 1, 1.25, 1.5, 2],
+  controlBar: {
+    remainingTimeDisplay: false,
+    currentTimeDisplay: true,
+    timeDivider: true,
+    durationDisplay: true,
+  },
   userActions: {
     doubleClick: false,
   },
@@ -229,6 +235,9 @@ export function HLSVideoPlayer({
 
   const activeAdOverlayRef = useRef<ActiveAdOverlay | null>(null);
   const adOverlayHideTimerRef = useRef<number | null>(null);
+  const qualityOptionsRef = useRef<QualityOption[]>([]);
+  const qualityControlContainerRef = useRef<HTMLDivElement | null>(null);
+  const qualityControlSelectRef = useRef<HTMLSelectElement | null>(null);
 
   const emitAdEventUI = (
     name: AdEventName,
@@ -302,6 +311,10 @@ export function HLSVideoPlayer({
   useEffect(() => {
     onAdEventRef.current = onAdEvent;
   }, [onAdEvent]);
+
+  useEffect(() => {
+    qualityOptionsRef.current = qualityOptions;
+  }, [qualityOptions]);
 
   useEffect(() => {
     activeAdOverlayRef.current = activeAdOverlay;
@@ -477,6 +490,43 @@ export function HLSVideoPlayer({
       const firedTimestampBreaks = new Set<number>();
       let lastIntervalBreakIndex = 0;
 
+      const controlBar = (
+        player as VideoJsPlayer & {
+          controlBar?: {
+            el: () => HTMLElement;
+            getChild: (name: string) => { el: () => HTMLElement } | undefined;
+          };
+        }
+      ).controlBar;
+      const controlBarEl = controlBar?.el();
+
+      if (controlBar && controlBarEl) {
+        const qualityContainer = document.createElement("div");
+        qualityContainer.className =
+          "vjs-quality-selector-control vjs-control flex items-center";
+        qualityContainer.style.display = "none";
+
+        const qualitySelect = document.createElement("select");
+        qualitySelect.className =
+          "h-7 rounded border border-white/20 bg-black/70 px-2 text-xs text-white outline-none";
+        qualitySelect.setAttribute("aria-label", "Video quality");
+        qualitySelect.addEventListener("change", (event) => {
+          applyQuality((event.target as HTMLSelectElement).value);
+        });
+
+        qualityContainer.appendChild(qualitySelect);
+
+        const beforeControl =
+          controlBar.getChild("PlaybackRateMenuButton")?.el() ??
+          controlBar.getChild("PictureInPictureToggle")?.el() ??
+          controlBar.getChild("FullscreenToggle")?.el() ??
+          null;
+
+        controlBarEl.insertBefore(qualityContainer, beforeControl);
+        qualityControlContainerRef.current = qualityContainer;
+        qualityControlSelectRef.current = qualitySelect;
+      }
+
       const onDoubleClick = (event: MouseEvent) => {
         if (isGestureBlockedTarget(event.target)) return;
         event.preventDefault();
@@ -518,6 +568,8 @@ export function HLSVideoPlayer({
       cleanupGestureListeners = () => {
         playerElement.removeEventListener("dblclick", onDoubleClick, true);
         playerElement.removeEventListener("touchend", onTouchEnd);
+        qualityControlSelectRef.current = null;
+        qualityControlContainerRef.current = null;
       };
 
       const rebuildQualityOptions = () => {
@@ -675,6 +727,38 @@ export function HLSVideoPlayer({
     [qualityOptions.length, src, type],
   );
 
+  useEffect(() => {
+    const container = qualityControlContainerRef.current;
+    const select = qualityControlSelectRef.current;
+    if (!container || !select) return;
+
+    container.style.display = showQualityControl ? "flex" : "none";
+    if (!showQualityControl) {
+      select.replaceChildren();
+      return;
+    }
+
+    const previousValue = select.value;
+    select.replaceChildren();
+
+    const autoOption = document.createElement("option");
+    autoOption.value = "auto";
+    autoOption.textContent = "Auto";
+    select.appendChild(autoOption);
+
+    for (const option of qualityOptions) {
+      const item = document.createElement("option");
+      item.value = option.id;
+      item.textContent = option.label;
+      select.appendChild(item);
+    }
+
+    const nextValue = qualityOptions.some((option) => option.id === selectedQuality)
+      ? selectedQuality
+      : "auto";
+    select.value = previousValue === nextValue ? previousValue : nextValue;
+  }, [qualityOptions, selectedQuality, showQualityControl]);
+
   function applyQuality(value: string): void {
     const player = playerRef.current;
     if (!player) return;
@@ -709,24 +793,6 @@ export function HLSVideoPlayer({
       data-vjs-player
       title={title}
     >
-      {showQualityControl ? (
-        <div className="absolute right-2 top-2 z-20 flex items-center gap-2 rounded bg-black/70 px-2 py-1 text-xs text-white backdrop-blur-sm">
-          <label className="mr-1">Quality</label>
-          <select
-            className="rounded border border-white/30 bg-black/70 px-1 py-0.5 text-xs text-white"
-            value={selectedQuality}
-            onChange={(event) => applyQuality(event.target.value)}
-            aria-label="Video quality"
-          >
-            <option value="auto">Auto</option>
-            {qualityOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      ) : null}
       {activeAdOverlay ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-end p-3 sm:p-4">
           <div className="pointer-events-auto rounded-md border border-white/20 bg-black/70 px-3 py-2 text-xs text-white shadow-lg backdrop-blur-sm">
