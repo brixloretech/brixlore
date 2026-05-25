@@ -28,10 +28,11 @@ export async function uploadVideoFileWithStrategy({
 
   onProgress?.(0, file.size);
   const directUpload = await adminService.createCloudflareDirectUpload();
+  const formData = new FormData();
+  formData.append("file", file, file.name);
   const response = await fetch(directUpload.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
-    body: file,
+    method: "POST",
+    body: formData,
   });
 
   if (!response.ok) {

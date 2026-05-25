@@ -12,14 +12,29 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 
 function getAllowedOrigins(): string[] {
-  const origin = process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL;
-  if (!origin?.trim()) {
-    return ['http://localhost:3000'];
-  }
-  return origin
+  const defaults = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://brixlore.tv',
+    'https://www.brixlore.tv',
+    'https://brick-tales-web-eight.vercel.app',
+  ];
+
+  const configured = (process.env.CORS_ORIGIN ?? process.env.FRONTEND_URL ?? '')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
+
+  return Array.from(new Set([...defaults, ...configured]));
+}
+
+function isAllowedVercelPreview(origin: string): boolean {
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === 'https:' && parsed.hostname.endsWith('.vercel.app');
+  } catch {
+    return false;
+  }
 }
 
 async function bootstrap() {
@@ -28,36 +43,24 @@ async function bootstrap() {
   });
 
   const allowedOrigins = getAllowedOrigins();
-  // app.enableCors({
-  //   origin: (origin, callback) => {
-  //     if (!origin || allowedOrigins.includes(origin)) {
-  //       callback(null, true);
-  //     } else {
-  //       callback(null, false);
-  //     }
-  //   },
-  //   credentials: true,
-  //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  //   allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
-  //   exposedHeaders: [],
-  //   maxAge: 86400,
-  // });
   app.enableCors({
-  origin: (origin, callback) => {
-    const allowed = [
-      'http://localhost:3000',
-      'https://brixlore.vercel.app',
-    ];
+    origin: (origin, callback) => {
+      if (!origin) {
+        return callback(null, true);
+      }
 
-    if (!origin || allowed.includes(origin)) {
-      return callback(null, true);
-    }
+      if (allowedOrigins.includes(origin) || isAllowedVercelPreview(origin)) {
+        return callback(null, true);
+      }
 
-    console.log('Blocked by CORS:', origin);
-    return callback(null, true); // TEMP FIX (important for debugging)
-  },
-  credentials: true,
-});
+      console.warn('Blocked by CORS:', origin);
+      return callback(null, false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+    maxAge: 86400,
+  });
 
   app.useGlobalPipes(
     new ValidationPipe({

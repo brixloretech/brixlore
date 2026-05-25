@@ -22,3 +22,22 @@
 **Notes**
 - Live deployments should always provide `NEXT_PUBLIC_API_BASE_URL` explicitly.
 - If this variable is missing in production, the app should now fail clearly instead of silently targeting localhost.
+
+## 2026-05-26 - Cloudflare Stream uploads stuck in pending
+
+**Issue**
+- Admin uploads created Cloudflare Stream entries, but videos stayed in `Pending Upload`.
+- UI showed network failure even for small files.
+
+**Root cause**
+- Frontend direct-upload request used `PUT` with raw body.
+- Cloudflare Stream direct upload URL expects `POST` with `multipart/form-data` (`file` field).
+- Backend logs also showed production-origin CORS denials, which could fail follow-up admin API calls.
+
+**Fix**
+- Switched Cloudflare direct upload client to `POST` using `FormData` in `frontend/src/lib/multipart-upload.ts`.
+- Restored strict CORS allowlist logic in `server/src/main.ts` with explicit production domains and optional `*.vercel.app` preview allowance.
+
+**Files changed**
+- `frontend/src/lib/multipart-upload.ts`
+- `server/src/main.ts`
