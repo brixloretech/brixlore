@@ -361,3 +361,59 @@ enum SupportStatus {
   RESOLVED
   CLOSED
 }
+
+/// Global AdButler / ad-network configuration.
+/// Singleton pattern: always one row with id = "singleton".
+/// All ad behaviour is driven from the admin panel – nothing is hardcoded in the player.
+model AdConfig {
+  id String @id @default("singleton")
+
+  // ─── Master toggle ───────────────────────────────────────────────────────────
+  adsEnabled Boolean @default(false)
+
+  // ─── Pre-roll ────────────────────────────────────────────────────────────────
+  preRollEnabled          Boolean @default(false)
+  preRollTagUrl           String  @default("")
+  preRollSkippable        Boolean @default(false)
+  preRollSkipAfterSeconds Int     @default(5)
+
+  // ─── Mid-roll ────────────────────────────────────────────────────────────────
+  midRollEnabled           Boolean @default(false)
+  midRollTagUrl            String  @default("")
+  /// "INTERVAL" | "FIXED_TIMESTAMPS"
+  midRollTriggerMode       String  @default("INTERVAL")
+  midRollIntervalMinutes   Int     @default(10)
+  /// JSON-encoded string[] of HH:MM:SS timestamps e.g. '["00:05:00","00:15:00"]'
+  midRollTimestamps        String  @default("[]")
+  midRollSkippable         Boolean @default(false)
+  midRollSkipAfterSeconds  Int     @default(5)
+  midRollMaxPerVideo       Int     @default(2)
+
+  // ─── Post-roll ───────────────────────────────────────────────────────────────
+  postRollEnabled          Boolean @default(false)
+  postRollTagUrl           String  @default("")
+  postRollSkippable        Boolean @default(false)
+  postRollSkipAfterSeconds Int     @default(5)
+
+  // ─── Outstream / Banner ──────────────────────────────────────────────────────
+  outstreamEnabled Boolean @default(false)
+  outstreamTagUrl  String  @default("")
+  bannerEnabled    Boolean @default(false)
+  bannerTagUrl     String  @default("")
+
+  // ─── Failure behaviour ───────────────────────────────────────────────────────
+  /// "SKIP_IMMEDIATELY" | "RETRY_ONCE"
+  adFailureBehavior    String @default("SKIP_IMMEDIATELY")
+  adLoadTimeoutSeconds Int    @default(8)
+
+  // ─── Geo restrictions ────────────────────────────────────────────────────────
+  geoRestrictionsEnabled Boolean @default(false)
+  /// JSON-encoded string[] of ISO-3166-1-alpha-2 country codes e.g. '["US","GB"]'
+  geoBlockedCountries    String  @default("[]")
+
+  // ─── Age restriction ─────────────────────────────────────────────────────────
+  ageRestrictionEnabled Boolean @default(false)
+  minAge                Int     @default(18)
+
+  updatedAt DateTime @updatedAt
+}

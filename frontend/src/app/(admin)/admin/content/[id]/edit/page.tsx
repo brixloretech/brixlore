@@ -16,8 +16,6 @@ import { adminService } from "@/lib/services";
 import { useAuth } from "@/contexts";
 import {
   DEFAULT_VIDEO_UPLOAD_STRATEGY,
-  ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE,
-  type VideoUploadStrategy,
   uploadVideoFileWithStrategy,
 } from "@/lib/multipart-upload";
 import type { AdminCategoryDto, ContentType } from "@/types/api";
@@ -105,16 +103,11 @@ export default function AdminEditVideoPage() {
   const [episodeSubmitting, setEpisodeSubmitting] = useState(false);
   const [episodeError, setEpisodeError] = useState<string | null>(null);
   const [episodeSuccess, setEpisodeSuccess] = useState<string | null>(null);
-  const [legacyVideoUploadEnabled, setLegacyVideoUploadEnabled] =
-    useState<boolean>(DEFAULT_VIDEO_UPLOAD_STRATEGY === "legacy-single-put");
   const [episodeVideoProgress, setEpisodeVideoProgress] = useState<{
     uploadedBytes: number;
     totalBytes: number;
   } | null>(null);
-  const videoUploadStrategy: VideoUploadStrategy =
-    ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE && legacyVideoUploadEnabled
-      ? "legacy-single-put"
-      : "multipart";
+  const videoUploadStrategy = DEFAULT_VIDEO_UPLOAD_STRATEGY;
 
   useEffect(() => {
     if (!videoId) return;
@@ -629,19 +622,6 @@ export default function AdminEditVideoPage() {
                   <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                     {episodeSuccess}
                   </p>
-                )}
-                {ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE && (
-                  <label className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                    <input
-                      type="checkbox"
-                      checked={legacyVideoUploadEnabled}
-                      onChange={(e) =>
-                        setLegacyVideoUploadEnabled(e.target.checked)
-                      }
-                      disabled={episodeSubmitting}
-                    />
-                    Use legacy single-request video upload (rollout fallback)
-                  </label>
                 )}
                 <p className="text-xs text-neutral-400">
                   Video upload mode:{" "}

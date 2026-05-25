@@ -6,9 +6,9 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { HLSVideoPlayerLazy } from "@/components/player";
 import { SubscriptionPrompt } from "@/components/content";
 import { useAuth } from "@/contexts";
-import { contentService, streamingService } from "@/lib/services";
+import { adConfigService, contentService, streamingService } from "@/lib/services";
 import { ApiError } from "@/lib/api-client";
-import type { ContentDetailDto, PlaybackType } from "@/types/api";
+import type { AdConfigDto, ContentDetailDto, PlaybackType } from "@/types/api";
 import {
   formatDuration,
   isLongForm,
@@ -166,6 +166,7 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [playbackType, setPlaybackType] = useState<PlaybackType | undefined>();
+  const [adConfig, setAdConfig] = useState<AdConfigDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [usingDevStream, setUsingDevStream] = useState(false);
   const [comingSoon, setComingSoon] = useState(false);
@@ -273,6 +274,22 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
       }
     }
   }
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const config = await adConfigService.getPublicAdConfig();
+        if (!cancelled) setAdConfig(config);
+      } catch {
+        if (!cancelled) setAdConfig(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -385,8 +402,8 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
           const isWorkerConfigMissing =
             err instanceof ApiError &&
             err.status === 500 &&
-            (err.message?.includes("R2 worker") ||
-              err.message?.includes("worker base URL"));
+            (err.message?.includes("Cloudflare Stream subdomain") ||
+              err.message?.includes("Playback URL is not configured"));
           if (isWorkerConfigMissing) {
             setStreamUrl(null);
             setPlaybackType(undefined);
@@ -523,7 +540,7 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
             : playbackError === "forbidden"
               ? "An active subscription is required to watch. Subscribe to get access."
               : playbackError === "config_required"
-                ? "Set NEXT_PUBLIC_R2_WORKER_BASE_URL in your frontend .env to the base URL of your R2 media worker (no trailing slash). The frontend loads video directly from that worker using the stream key returned by the backend."
+                ? "Set NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN for Cloudflare Stream playback."
                 : "This video cannot be played right now. Try again later."}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3">
@@ -639,6 +656,7 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
                   type={playbackType}
                   title={title}
                   className="vjs-theme-stream"
+                  adConfig={adConfig}
                   onProgress={
                     primaryEpisode && accessTier === "paid"
                       ? (progressSeconds) => {

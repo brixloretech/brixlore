@@ -105,6 +105,7 @@ export interface CreateAdminContentRequestDto {
   categoryId?: string;
   category?: string;
   videoKey?: string;
+  hlsKey?: string;
   isPublished?: boolean;
 }
 
@@ -190,6 +191,7 @@ export interface CreateAdminEpisodeRequestDto {
   description?: string;
   duration: string;
   videoKey: string;
+  hlsKey?: string;
   thumbnailKey?: string;
 }
 
@@ -202,6 +204,7 @@ export interface CreateAdminTrailerRequestDto {
   ageRating: string;
   duration: string;
   videoKey: string;
+  hlsKey?: string;
   isPublished?: boolean;
 }
 

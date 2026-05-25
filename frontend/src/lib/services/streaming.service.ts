@@ -8,7 +8,6 @@ import { get, patch, del, ApiError } from "@/lib/api-client";
 import { getStoredAuth } from "@/lib/auth-storage";
 import { DEFAULT_HLS_TEST_STREAM, HLS_TEST_STREAMS } from "@/lib/hls-streams";
 import { USE_MOCK_API } from "./config";
-import { getR2WorkerBaseUrl } from "@/lib/env";
 
 /** Backend GET /episodes/:id/play response (authenticated, requires subscription). */
 interface PlaybackMetadataResponse {
@@ -23,34 +22,46 @@ function inferPlaybackType(url: string): PlaybackType | undefined {
   return undefined;
 }
 
-function buildWorkerStreamUrl(streamKey: string): string {
+function getCloudflareStreamSubdomain(): string | null {
+  const raw = process.env.NEXT_PUBLIC_CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN;
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+}
+
+function looksLikeCloudflareStreamUid(value: string): boolean {
+  const trimmed = value.trim();
+  return /^[A-Za-z0-9_-]{8,}$/.test(trimmed) && !trimmed.includes("/");
+}
+
+function buildPlaybackUrl(streamKey: string): string {
   const trimmed = streamKey.trim();
   if (!trimmed) return trimmed;
-  const workerBaseUrl = getR2WorkerBaseUrl();
+  const cloudflareSubdomain = getCloudflareStreamSubdomain();
+
   if (/^https?:\/\//i.test(trimmed)) {
-    if (!workerBaseUrl) return trimmed;
-    try {
-      const absolute = new URL(trimmed);
-      if (absolute.hostname.endsWith(".r2.dev")) {
-        const rebased = new URL(workerBaseUrl);
-        rebased.pathname = absolute.pathname;
-        rebased.search = absolute.search;
-        return rebased.toString();
-      }
-    } catch {
-      return trimmed;
-    }
     return trimmed;
   }
-  if (!workerBaseUrl) {
-    throw new ApiError("R2 worker base URL is not configured", 500);
+
+  if (looksLikeCloudflareStreamUid(trimmed)) {
+    if (!cloudflareSubdomain) {
+      throw new ApiError(
+        "Cloudflare Stream subdomain is not configured",
+        500,
+      );
+    }
+    return `https://${cloudflareSubdomain}/${trimmed}/manifest/video.m3u8`;
   }
-  return `${workerBaseUrl}/${trimmed.replace(/^\/+/, "")}`;
+
+  throw new ApiError(
+    "Playback URL is not configured for this stream key",
+    500,
+  );
 }
 
 /**
  * Streaming service. Real API: requests playback metadata from GET /episodes/:id/play.
- * The client builds the Worker URL for HLS/MP4 playback.
+ * The client resolves Cloudflare Stream playback URLs from direct URLs or Stream UIDs.
  * Mock: returns test HLS stream.
  */
 export const streamingService = {
@@ -98,7 +109,7 @@ export const streamingService = {
     if (!res?.streamKey || typeof res.streamKey !== "string") {
       throw new ApiError("Playback stream key is missing", 500, res ?? null);
     }
-    const url = buildWorkerStreamUrl(res.streamKey);
+    const url = buildPlaybackUrl(res.streamKey);
     return {
       episodeId,
       type:

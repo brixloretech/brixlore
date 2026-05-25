@@ -11,7 +11,7 @@ This project uses [Prisma](https://www.prisma.io/) with PostgreSQL. Migrations a
   DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public"
   ```
 
-## Commands
+## Commandss
 
 | Command                  | Description                                                                                                                |
 | ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |

@@ -14,7 +14,6 @@ import {
 import { getApiErrorUserMessage } from "@/lib/api-client";
 import {
   DEFAULT_VIDEO_UPLOAD_STRATEGY,
-  ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE,
   type VideoUploadStrategy,
   uploadVideoFileWithStrategy,
 } from "@/lib/multipart-upload";
@@ -91,8 +90,6 @@ export default function AdminUploadPage() {
   const [trailerVideoFile, setTrailerVideoFile] = useState<File | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [posterFile, setPosterFile] = useState<File | null>(null);
-  const [legacyVideoUploadEnabled, setLegacyVideoUploadEnabled] =
-    useState<boolean>(DEFAULT_VIDEO_UPLOAD_STRATEGY === "legacy-single-put");
   const [primaryVideoProgress, setPrimaryVideoProgress] = useState<{
     uploadedBytes: number;
     totalBytes: number;
@@ -115,10 +112,7 @@ export default function AdminUploadPage() {
   const canUploadEpisodeOnCreate = isEpisodic && !requiresTrailer;
   const canUploadPrimaryVideo = !requiresTrailer;
   const showTrailerControls = requiresTrailer;
-  const videoUploadStrategy: VideoUploadStrategy =
-    ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE && legacyVideoUploadEnabled
-      ? "legacy-single-put"
-      : "multipart";
+  const videoUploadStrategy: VideoUploadStrategy = DEFAULT_VIDEO_UPLOAD_STRATEGY;
 
   useEffect(() => {
     let active = true;
@@ -391,6 +385,10 @@ export default function AdminUploadPage() {
           !isEpisodic && canUploadPrimaryVideo
             ? (uploadedVideo?.key ?? undefined)
             : undefined,
+        hlsKey:
+          !isEpisodic && canUploadPrimaryVideo && uploadedVideo?.cloudflareStream
+            ? uploadedVideo.key
+            : undefined,
       });
 
       if (canUploadEpisodeOnCreate && uploadedVideo) {
@@ -408,6 +406,7 @@ export default function AdminUploadPage() {
           title: episodeTitle.trim(),
           duration: episodeDuration.trim(),
           videoKey: uploadedVideo.key,
+          hlsKey: uploadedVideo.cloudflareStream ? uploadedVideo.key : undefined,
         });
       }
 
@@ -421,6 +420,9 @@ export default function AdminUploadPage() {
           ageRating: ageRating.trim(),
           duration: trailerDuration.trim(),
           videoKey: uploadedTrailerVideo.key,
+          hlsKey: uploadedTrailerVideo.cloudflareStream
+            ? uploadedTrailerVideo.key
+            : undefined,
         });
       }
 
@@ -451,7 +453,7 @@ export default function AdminUploadPage() {
             err.message === "Network request failed"));
       setError(
         isNetwork
-          ? "Network error. Check that the backend is running and NEXT_PUBLIC_API_BASE_URL points to it (e.g. http://localhost:5000). If the backend responded but upload failed, configure CORS on your storage (R2/S3) to allow PUT from this site."
+          ? "Network error. Check that the backend is running and NEXT_PUBLIC_API_BASE_URL points to it (e.g. http://localhost:5000). If the backend responded but upload failed, verify Cloudflare Stream direct upload is configured and available."
           : message,
       );
     } finally {
@@ -529,19 +531,6 @@ export default function AdminUploadPage() {
               >
                 {error}
               </p>
-            )}
-            {ENABLE_LEGACY_VIDEO_UPLOAD_TOGGLE && (
-              <label className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-                <input
-                  type="checkbox"
-                  checked={legacyVideoUploadEnabled}
-                  onChange={(e) =>
-                    setLegacyVideoUploadEnabled(e.target.checked)
-                  }
-                  disabled={submitting}
-                />
-                Use legacy single-request video upload (rollout fallback)
-              </label>
             )}
             <p className="text-xs text-neutral-400">
               Video upload mode:{" "}

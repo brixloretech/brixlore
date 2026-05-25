@@ -101,6 +101,17 @@ export type {
   AdminSystemLogDto,
 };
 
+export interface CloudflareStreamStatusDto {
+  configured: boolean;
+  accountId: string | null;
+  customerSubdomain: string | null;
+}
+
+export interface CloudflareDirectUploadResponseDto {
+  uploadUrl: string;
+  uid: string;
+}
+
 function authHeaders(): Record<string, string> {
   const auth = getStoredAuth();
   if (!auth?.accessToken) return {};
@@ -367,6 +378,22 @@ export const adminService = {
       post<{ success: true }>("admin/uploads/multipart/abort", body, {
         headers,
       }),
+    );
+  },
+
+  async getCloudflareStreamStatus(): Promise<CloudflareStreamStatusDto> {
+    return withAuthRetry((headers) =>
+      get<CloudflareStreamStatusDto>("streaming/cloudflare/status", { headers }),
+    );
+  },
+
+  async createCloudflareDirectUpload(): Promise<CloudflareDirectUploadResponseDto> {
+    return withAuthRetry((headers) =>
+      post<CloudflareDirectUploadResponseDto>(
+        "streaming/cloudflare/direct-upload",
+        {},
+        { headers },
+      ),
     );
   },
 

@@ -1,7 +1,24 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  ForbiddenException,
+  NotFoundException,
+  InternalServerErrorException,
+} from '@nestjs/common';
+import axios from 'axios';
 import { PrismaService } from '../prisma/prisma.service';
 import { R2Service } from '../storage/r2.service';
 import type { ContinueWatchingItemDto } from './dto/continue-watching-item.dto';
+
+type CloudflareStreamConfig = {
+  accountId: string;
+  customerSubdomain: string;
+  apiToken: string;
+};
+
+type CloudflareDirectUploadResult = {
+  uploadURL: string;
+  uid: string;
+};
 
 function inferPlaybackType(
   hlsUrl: string | null | undefined,
@@ -21,6 +38,60 @@ export class StreamingService {
     private readonly prisma: PrismaService,
     private readonly r2Service: R2Service,
   ) {}
+
+  getCloudflareStreamStatus(): {
+    configured: boolean;
+    accountId: string | null;
+    customerSubdomain: string | null;
+  } {
+    const accountId = process.env.CLOUDFLARE_STREAM_ACCOUNT_ID?.trim() || null;
+    const customerSubdomain =
+      process.env.CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN?.trim() || null;
+    const apiToken = process.env.CLOUDFLARE_STREAM_API_TOKEN?.trim() || null;
+
+    return {
+      configured: Boolean(accountId && customerSubdomain && apiToken),
+      accountId,
+      customerSubdomain,
+    };
+  }
+
+  async createCloudflareDirectUploadUrl(createdByUserId?: string): Promise<{
+    uploadUrl: string;
+    uid: string;
+  }> {
+    const config = this.getCloudflareStreamConfig();
+
+    const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream/direct_upload`;
+    const payload = {
+      maxDurationSeconds: 60 * 60,
+      requireSignedURLs: false,
+      meta: {
+        source: 'brixlore',
+        ...(createdByUserId ? { createdByUserId } : {}),
+      },
+    };
+
+    const response = await axios.post(endpoint, payload, {
+      headers: {
+        Authorization: `Bearer ${config.apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 15_000,
+    });
+
+    const result = response.data?.result as CloudflareDirectUploadResult | undefined;
+    if (!result?.uploadURL || !result?.uid) {
+      throw new InternalServerErrorException(
+        'Cloudflare Stream direct upload response is missing required fields',
+      );
+    }
+
+    return {
+      uploadUrl: result.uploadURL,
+      uid: result.uid,
+    };
+  }
 
   /** Create or refresh view history when user starts an episode (upsert by user+episode). */
   async recordEpisodeView(userId: string, episodeId: string): Promise<void> {
@@ -85,12 +156,47 @@ export class StreamingService {
       throw new ForbiddenException('Content is not yet published');
     }
 
-    const streamKey = episode.hlsUrl?.trim() || episode.videoUrl?.trim();
+    const rawStreamKey = episode.hlsUrl?.trim() || episode.videoUrl?.trim();
+    const streamKey = this.resolveStreamPlaybackUrl(rawStreamKey);
     if (!streamKey) {
       throw new NotFoundException('Episode is not available for streaming');
     }
     const type = inferPlaybackType(episode.hlsUrl, episode.videoUrl);
-    return { streamKey, type };
+    const normalizedType = type ?? (this.isUrl(rawStreamKey) ? undefined : 'hls');
+    return { streamKey, type: normalizedType };
+  }
+
+  private resolveStreamPlaybackUrl(streamKey: string | null | undefined): string | null {
+    if (!streamKey) return null;
+    if (this.isUrl(streamKey)) return streamKey;
+
+    const status = this.getCloudflareStreamStatus();
+    if (!status.customerSubdomain) {
+      return streamKey;
+    }
+
+    const uid = streamKey.trim();
+    if (!uid) return null;
+    return `https://${status.customerSubdomain}/${uid}/manifest/video.m3u8`;
+  }
+
+  private isUrl(value: string | null | undefined): boolean {
+    if (!value) return false;
+    return /^https?:\/\//i.test(value.trim());
+  }
+
+  private getCloudflareStreamConfig(): CloudflareStreamConfig {
+    const accountId = process.env.CLOUDFLARE_STREAM_ACCOUNT_ID?.trim();
+    const customerSubdomain = process.env.CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN?.trim();
+    const apiToken = process.env.CLOUDFLARE_STREAM_API_TOKEN?.trim();
+
+    if (!accountId || !customerSubdomain || !apiToken) {
+      throw new InternalServerErrorException(
+        'Cloudflare Stream is not configured. Set CLOUDFLARE_STREAM_ACCOUNT_ID, CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN, and CLOUDFLARE_STREAM_API_TOKEN.',
+      );
+    }
+
+    return { accountId, customerSubdomain, apiToken };
   }
 
   /** Update watch progress for an episode (called by client on pause/interval). */
