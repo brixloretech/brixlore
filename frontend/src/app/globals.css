@@ -58,16 +58,82 @@ body {
   visibility: visible;
 }
 
+/* Quality selector — popup menu identical to vjs-playback-rate-value pattern */
 .video-js .vjs-quality-selector-control {
-  flex: 0 0 auto;
-  margin-left: auto;
-  margin-right: 0.35rem;
+  position: relative;
+  min-width: 4em;
+  cursor: pointer;
 }
 
-.video-js .vjs-quality-selector-control select {
-  min-width: 4.25rem;
-  line-height: 1.1;
+.video-js .vjs-quality-selector-value {
+  font-size: 1.1em;
+  line-height: 3;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  text-align: center;
+  pointer-events: none;
+  font-weight: 600;
+  color: #fff;
 }
+
+/* Show the popup on hover (JS adds .vjs-hover; also support CSS :hover and keyboard-active) */
+.video-js .vjs-quality-selector-control:hover .vjs-menu,
+.video-js .vjs-quality-selector-control.vjs-hover .vjs-menu,
+.video-js .vjs-quality-selector-control.vjs-menu-button-active .vjs-menu {
+  display: block;
+}
+
+/* Time display — current / duration on the right side */
+.video-js .vjs-brixlore-time-display {
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+  padding: 0 0.5em;
+}
+
+.video-js .vjs-brixlore-time-text {
+  line-height: 3em;
+  font-size: 1.1em;
+}
+
+/* ── Mobile responsiveness ─────────────────────────────────────────────── */
+/* On narrow viewports hide PiP (rarely useful on phones) and compact other controls */
+@media (max-width: 480px) {
+  .video-js .vjs-picture-in-picture-control {
+    display: none !important;
+  }
+
+  .video-js .vjs-quality-selector-control {
+    min-width: 3em;
+  }
+
+  .video-js .vjs-quality-selector-value {
+    font-size: 0.95em;
+  }
+
+  .video-js .vjs-brixlore-time-text {
+    font-size: 0.9em;
+  }
+
+  .video-js .vjs-brixlore-time-display {
+    padding: 0 0.25em;
+  }
+}
+
+/* On very small players (Video.js dynamic class) hide quality + speed to protect progress bar */
+.video-js.vjs-layout-x-small .vjs-quality-selector-control,
+.video-js.vjs-layout-x-small .vjs-playback-rate,
+.video-js.vjs-layout-x-small .vjs-picture-in-picture-control {
+  display: none !important;
+}
+
+.video-js.vjs-layout-x-small .vjs-brixlore-time-display {
+  padding: 0 0.15em;
+}
+/* ─────────────────────────────────────────────────────────────────────── */
 
 .video-js .vjs-big-play-button {
   z-index: 2;

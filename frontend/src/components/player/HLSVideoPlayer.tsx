@@ -86,9 +86,6 @@ const VIDEO_JS_OPTIONS = {
   playbackRates: [0.5, 1, 1.25, 1.5, 2],
   controlBar: {
     remainingTimeDisplay: false,
-    currentTimeDisplay: true,
-    timeDivider: true,
-    durationDisplay: true,
   },
   userActions: {
     doubleClick: false,
@@ -148,6 +145,16 @@ function getQualityRank(label: string): number {
     label as (typeof PREFERRED_QUALITY_ORDER)[number],
   );
   return idx === -1 ? 999 : idx;
+}
+
+function formatSeconds(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds < 0) return "0:00";
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.floor(totalSeconds % 60);
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
 }
 
 function parseTimestampToSeconds(value: string): number | null {
@@ -236,8 +243,11 @@ export function HLSVideoPlayer({
   const activeAdOverlayRef = useRef<ActiveAdOverlay | null>(null);
   const adOverlayHideTimerRef = useRef<number | null>(null);
   const qualityOptionsRef = useRef<QualityOption[]>([]);
+  const selectedQualityRef = useRef<string>("auto");
   const qualityControlContainerRef = useRef<HTMLDivElement | null>(null);
-  const qualityControlSelectRef = useRef<HTMLSelectElement | null>(null);
+  const qualityControlValueRef = useRef<HTMLDivElement | null>(null);
+  const qualityMenuListRef = useRef<HTMLUListElement | null>(null);
+  const timeLabelRef = useRef<HTMLSpanElement | null>(null);
 
   const emitAdEventUI = (
     name: AdEventName,
@@ -315,6 +325,10 @@ export function HLSVideoPlayer({
   useEffect(() => {
     qualityOptionsRef.current = qualityOptions;
   }, [qualityOptions]);
+
+  useEffect(() => {
+    selectedQualityRef.current = selectedQuality;
+  }, [selectedQuality]);
 
   useEffect(() => {
     activeAdOverlayRef.current = activeAdOverlay;
@@ -501,20 +515,84 @@ export function HLSVideoPlayer({
       const controlBarEl = controlBar?.el();
 
       if (controlBar && controlBarEl) {
+        // ── time display: current / duration on the right side of the bar ──
+        const timeDisplay = document.createElement("div");
+        timeDisplay.className =
+          "vjs-brixlore-time-display vjs-time-control vjs-control";
+
+        const timeText = document.createElement("span");
+        timeText.className = "vjs-brixlore-time-text";
+        timeText.textContent = "0:00 / 0:00";
+        timeDisplay.appendChild(timeText);
+        timeLabelRef.current = timeText;
+
+        // ── quality selector: popup menu identical to vjs-playback-rate pattern ──
         const qualityContainer = document.createElement("div");
         qualityContainer.className =
-          "vjs-quality-selector-control vjs-control flex items-center";
+          "vjs-quality-selector-control vjs-menu-button vjs-menu-button-popup vjs-control vjs-button";
         qualityContainer.style.display = "none";
 
-        const qualitySelect = document.createElement("select");
-        qualitySelect.className =
-          "h-7 rounded border border-white/20 bg-black/70 px-2 text-xs text-white outline-none";
-        qualitySelect.setAttribute("aria-label", "Video quality");
-        qualitySelect.addEventListener("change", (event) => {
-          applyQuality((event.target as HTMLSelectElement).value);
+        const qualityValue = document.createElement("div");
+        qualityValue.className = "vjs-quality-selector-value";
+        qualityValue.textContent = "Auto";
+
+        const qualityInnerBtn = document.createElement("button");
+        qualityInnerBtn.type = "button";
+        qualityInnerBtn.className =
+          "vjs-quality-selector-button vjs-menu-button vjs-menu-button-popup vjs-button";
+        qualityInnerBtn.setAttribute("aria-disabled", "false");
+        qualityInnerBtn.setAttribute("title", "Video Quality");
+        qualityInnerBtn.setAttribute("aria-haspopup", "true");
+        qualityInnerBtn.setAttribute("aria-expanded", "false");
+
+        const iconSpan = document.createElement("span");
+        iconSpan.className = "vjs-icon-placeholder";
+        iconSpan.setAttribute("aria-hidden", "true");
+        const ctrlText = document.createElement("span");
+        ctrlText.className = "vjs-control-text";
+        ctrlText.setAttribute("aria-live", "polite");
+        ctrlText.textContent = "Video Quality";
+
+        qualityInnerBtn.appendChild(iconSpan);
+        qualityInnerBtn.appendChild(ctrlText);
+
+        // Menu structure — identical to vjs-playback-rate
+        const qualityMenu = document.createElement("div");
+        qualityMenu.className = "vjs-menu";
+        const qualityMenuList = document.createElement("ul");
+        qualityMenuList.className = "vjs-menu-content";
+        qualityMenuList.setAttribute("role", "menu");
+        qualityMenu.appendChild(qualityMenuList);
+
+        qualityContainer.appendChild(qualityValue);
+        qualityContainer.appendChild(qualityInnerBtn);
+        qualityContainer.appendChild(qualityMenu);
+
+        // Hover: show/hide menu via JS (reliable regardless of vjs-workinghover)
+        qualityContainer.addEventListener("mouseenter", () => {
+          qualityContainer.classList.add("vjs-hover");
+        });
+        qualityContainer.addEventListener("mouseleave", () => {
+          qualityContainer.classList.remove("vjs-hover");
         });
 
-        qualityContainer.appendChild(qualitySelect);
+        // Click-to-toggle for touch/keyboard
+        qualityInnerBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const isActive = qualityContainer.classList.toggle("vjs-menu-button-active");
+          qualityInnerBtn.setAttribute("aria-expanded", isActive ? "true" : "false");
+          if (isActive) {
+            // One-shot outside-click listener so the menu closes on blur
+            const closeOnOutside = (outsideEvent: Event) => {
+              if (!qualityContainer.contains(outsideEvent.target as Node)) {
+                qualityContainer.classList.remove("vjs-menu-button-active");
+                qualityInnerBtn.setAttribute("aria-expanded", "false");
+                document.removeEventListener("click", closeOnOutside, true);
+              }
+            };
+            document.addEventListener("click", closeOnOutside, true);
+          }
+        });
 
         const beforeControl =
           controlBar.getChild("PlaybackRateMenuButton")?.el() ??
@@ -522,9 +600,24 @@ export function HLSVideoPlayer({
           controlBar.getChild("FullscreenToggle")?.el() ??
           null;
 
+        // Both inserted in order before playback rate: [time] [quality]
+        controlBarEl.insertBefore(timeDisplay, beforeControl);
         controlBarEl.insertBefore(qualityContainer, beforeControl);
         qualityControlContainerRef.current = qualityContainer;
-        qualityControlSelectRef.current = qualitySelect;
+        qualityControlValueRef.current = qualityValue;
+        qualityMenuListRef.current = qualityMenuList;
+
+        // Live time updates
+        const updateTimeDisplay = () => {
+          const label = timeLabelRef.current;
+          if (!label) return;
+          const cur = player.currentTime() ?? 0;
+          const dur = player.duration() ?? 0;
+          label.textContent = `${formatSeconds(cur)} / ${formatSeconds(dur)}`;
+        };
+        player.on("timeupdate", updateTimeDisplay);
+        player.on("loadedmetadata", updateTimeDisplay);
+        player.on("durationchange", updateTimeDisplay);
       }
 
       const onDoubleClick = (event: MouseEvent) => {
@@ -568,7 +661,9 @@ export function HLSVideoPlayer({
       cleanupGestureListeners = () => {
         playerElement.removeEventListener("dblclick", onDoubleClick, true);
         playerElement.removeEventListener("touchend", onTouchEnd);
-        qualityControlSelectRef.current = null;
+        qualityControlValueRef.current = null;
+        qualityMenuListRef.current = null;
+        timeLabelRef.current = null;
         qualityControlContainerRef.current = null;
       };
 
@@ -729,34 +824,62 @@ export function HLSVideoPlayer({
 
   useEffect(() => {
     const container = qualityControlContainerRef.current;
-    const select = qualityControlSelectRef.current;
-    if (!container || !select) return;
+    const valueEl = qualityControlValueRef.current;
+    const menuList = qualityMenuListRef.current;
+    if (!container) return;
 
-    container.style.display = showQualityControl ? "flex" : "none";
-    if (!showQualityControl) {
-      select.replaceChildren();
-      return;
+    container.style.display = showQualityControl ? "block" : "none";
+    if (!valueEl || !menuList) return;
+
+    // Update value overlay label
+    const activeOption = qualityOptions.find((o) => o.id === selectedQuality);
+    valueEl.textContent = activeOption?.label ?? "Auto";
+
+    // Rebuild menu items so selection state and available qualities stay in sync
+    menuList.replaceChildren();
+
+    const makeMenuItem = (value: string, label: string) => {
+      const isSelected = selectedQuality === value;
+      const li = document.createElement("li");
+      li.className = isSelected
+        ? "vjs-menu-item vjs-selected"
+        : "vjs-menu-item";
+      li.setAttribute("tabindex", "-1");
+      li.setAttribute("role", "menuitemradio");
+      li.setAttribute("aria-disabled", "false");
+      li.setAttribute("aria-checked", isSelected ? "true" : "false");
+
+      const textSpan = document.createElement("span");
+      textSpan.className = "vjs-menu-item-text";
+      textSpan.textContent = label;
+
+      const ctrlSpan = document.createElement("span");
+      ctrlSpan.className = "vjs-control-text";
+      ctrlSpan.setAttribute("aria-live", "polite");
+      ctrlSpan.textContent = isSelected ? ", selected" : "";
+
+      li.appendChild(textSpan);
+      li.appendChild(ctrlSpan);
+
+      li.addEventListener("click", (e) => {
+        e.stopPropagation();
+        applyQuality(value);
+        // Close menu
+        container.classList.remove("vjs-menu-button-active");
+        const btn =
+          container.querySelector<HTMLButtonElement>("[aria-haspopup]");
+        btn?.setAttribute("aria-expanded", "false");
+      });
+
+      return li;
+    };
+
+    // "Auto" always first, then remaining options highest→lowest
+    menuList.appendChild(makeMenuItem("auto", "Auto"));
+    for (const opt of qualityOptions) {
+      menuList.appendChild(makeMenuItem(opt.id, opt.label));
     }
-
-    const previousValue = select.value;
-    select.replaceChildren();
-
-    const autoOption = document.createElement("option");
-    autoOption.value = "auto";
-    autoOption.textContent = "Auto";
-    select.appendChild(autoOption);
-
-    for (const option of qualityOptions) {
-      const item = document.createElement("option");
-      item.value = option.id;
-      item.textContent = option.label;
-      select.appendChild(item);
-    }
-
-    const nextValue = qualityOptions.some((option) => option.id === selectedQuality)
-      ? selectedQuality
-      : "auto";
-    select.value = previousValue === nextValue ? previousValue : nextValue;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyQuality uses refs internally; stable across renders
   }, [qualityOptions, selectedQuality, showQualityControl]);
 
   function applyQuality(value: string): void {
@@ -772,7 +895,8 @@ export function HLSVideoPlayer({
       return;
     }
 
-    const option = qualityOptions.find((item) => item.id === value);
+    // Use the ref to avoid stale closure — qualityOptions from initial render would always be []
+    const option = qualityOptionsRef.current.find((item) => item.id === value);
     if (!option) {
       reps.forEach((rep) => rep.enabled(true));
       setSelectedQuality("auto");

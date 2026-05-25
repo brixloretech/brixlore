@@ -46,7 +46,7 @@ type PlayableEpisode = {
 const GUEST_LIMIT_STORAGE_KEY = "guest-watch-limits-v1";
 const FREE_LIMIT_STORAGE_KEY = "free-watch-limits-v1";
 const MAX_UNIQUE_VIDEOS = 3;
-const GUEST_MAX_PLAYBACK_SECONDS = 30;
+const GUEST_MAX_PLAYBACK_SECONDS = 120;
 const FREE_MAX_PLAYBACK_SECONDS = 120;
 
 type AccessTier = "guest" | "free" | "paid";
