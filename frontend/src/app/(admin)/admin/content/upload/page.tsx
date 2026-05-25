@@ -453,7 +453,7 @@ export default function AdminUploadPage() {
             err.message === "Network request failed"));
       setError(
         isNetwork
-          ? "Network error. Check that the backend is running and NEXT_PUBLIC_API_BASE_URL points to it (e.g. http://localhost:5000). If the backend responded but upload failed, verify Cloudflare Stream direct upload is configured and available."
+          ? "Network error. Check that the backend API base URL is configured for this environment. If the backend responded but upload failed, verify Cloudflare Stream direct upload is configured and available."
           : message,
       );
     } finally {

@@ -21,12 +21,16 @@ export function getAppUrl(): string {
 
 /** Base URL for backend API (no trailing slash). Used by api-client. Nest backend has no global /api prefix. */
 export function getApiBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    (typeof window !== "undefined"
-      ? `${window.location.origin}/api`
-      : "http://localhost:5000")
-  );
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (configuredBaseUrl && configuredBaseUrl.trim()) {
+    return configuredBaseUrl.trim().replace(/\/$/, "");
+  }
+
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/api`;
+  }
+
+  return "";
 }
 
 /** Whether to use mock APIs (auth, content, analytics). Default true. */
