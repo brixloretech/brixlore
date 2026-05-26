@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useSearchParams } from "next/navigation";
 import { HLSVideoPlayerLazy } from "@/components/player";
 import { SubscriptionPrompt } from "@/components/content";
@@ -875,10 +876,13 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
                           <div className="flex flex-col">
                             <div className="relative aspect-video w-full overflow-hidden bg-neutral-200 dark:bg-neutral-800">
                               {episode.thumbnailUrl ? (
-                                <img
+                                <Image
                                   src={episode.thumbnailUrl}
                                   alt={`${episode.title} thumbnail`}
-                                  className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                  className="object-cover transition-transform group-hover:scale-105"
+                                  fill
+                                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                  unoptimized
                                 />
                               ) : (
                                 <div className="flex h-full w-full items-center justify-center text-neutral-400">
@@ -940,10 +944,13 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
                       <div className="flex flex-col">
                         <div className="relative aspect-video w-full overflow-hidden bg-neutral-200 dark:bg-neutral-800">
                           {episode.thumbnailUrl ? (
-                            <img
+                            <Image
                               src={episode.thumbnailUrl}
                               alt={`${episode.title} thumbnail`}
-                              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                              className="object-cover transition-transform group-hover:scale-105"
+                              fill
+                              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                              unoptimized
                             />
                           ) : (
                             <div className="flex h-full w-full items-center justify-center text-neutral-400">

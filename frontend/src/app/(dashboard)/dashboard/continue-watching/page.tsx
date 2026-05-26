@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Loader } from "@/components/ui";
 import { useAuth } from "@/contexts";
 import { streamingService } from "@/lib/services";
@@ -124,10 +125,13 @@ export default function ContinueWatchingPage() {
                           href={watchUrl}
                           className="relative block h-20 w-36 shrink-0 overflow-hidden rounded-lg bg-neutral-800"
                         >
-                          <img
+                          <Image
                             src={item.thumbnailUrl}
                             alt=""
-                            className="h-full w-full object-cover"
+                            className="object-cover"
+                            fill
+                            sizes="144px"
+                            unoptimized
                           />
                         </Link>
                       ) : null}

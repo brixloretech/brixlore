@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect, useCallback } from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { AddToMyListButton } from "./AddToMyListButton";
 
@@ -98,13 +99,14 @@ export function NewlyUploadedBannerCarousel({
                     />
                   )}
                   {showThumbnail ? (
-                    <img
+                    <Image
                       src={item.thumbnailUrl!}
                       alt=""
-                      className="absolute inset-0 z-0 h-full w-full object-cover object-center"
-                      loading={index === 0 ? "eager" : "lazy"}
-                      decoding="async"
-                      fetchPriority={index === 0 ? "high" : "auto"}
+                      className="object-cover object-center"
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 960px"
+                      unoptimized
+                      priority={index === 0}
                       onLoad={() =>
                         setImgLoaded((p) => ({ ...p, [index]: true }))
                       }

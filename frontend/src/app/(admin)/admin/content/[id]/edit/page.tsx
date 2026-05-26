@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Button,
   Card,
@@ -781,10 +782,13 @@ export default function AdminEditVideoPage() {
                   </p>
                   {episodeThumbnailPreview && (
                     <div className="mt-3">
-                      <img
+                      <Image
                         src={episodeThumbnailPreview}
                         alt="Episode thumbnail preview"
                         className="max-h-32 rounded-lg border border-neutral-300 dark:border-neutral-700"
+                        width={228}
+                        height={128}
+                        unoptimized
                       />
                     </div>
                   )}

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Button, Input } from "@/components/ui";
 import { contentService } from "@/lib/services";
 import type { ContentSummaryDto } from "@/types/api";
@@ -175,11 +176,13 @@ export default function ExplorePage() {
                 />
                 <div className="relative h-24 overflow-hidden rounded-lg bg-gradient-to-br from-neutral-800/80 via-neutral-900 to-neutral-800/60">
                   {item.thumbnailUrl ? (
-                    <img
+                    <Image
                       src={item.thumbnailUrl}
                       alt={item.title}
-                      className="h-full w-full object-cover"
-                      loading="lazy"
+                      className="object-cover"
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                      unoptimized
                     />
                   ) : null}
                 </div>
@@ -232,11 +235,13 @@ export default function ExplorePage() {
                 <Link href={`/watch/${item.id}`} className="block">
                   <div className="relative h-32 overflow-hidden rounded-lg bg-gradient-to-br from-neutral-800/80 via-neutral-900 to-neutral-800/60">
                     {item.thumbnailUrl ? (
-                      <img
+                      <Image
                         src={item.thumbnailUrl}
                         alt={item.title}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
+                        className="object-cover"
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                        unoptimized
                       />
                     ) : null}
                   </div>

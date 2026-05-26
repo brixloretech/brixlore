@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Button, Loader } from "@/components/ui";
 import { contentService } from "@/lib/services";
 import type { ContentSummaryDto } from "@/types/api";
@@ -63,11 +64,13 @@ export default function LibraryPage() {
             >
               <div className="relative h-28 overflow-hidden rounded-lg bg-gradient-to-br from-neutral-800/70 via-neutral-900 to-neutral-800/50">
                 {item.thumbnailUrl ? (
-                  <img
+                  <Image
                     src={item.thumbnailUrl}
                     alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
+                    className="object-cover"
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    unoptimized
                   />
                 ) : null}
               </div>

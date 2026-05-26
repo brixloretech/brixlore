@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { AddToMyListButton } from "./AddToMyListButton";
 
@@ -54,13 +55,14 @@ export function BrowsePosterCard({
         {/* Thumbnail: same as explore page — show img when URL exists, gradient behind; never hide on error/timeout */}
         <div className="absolute inset-0 z-0 h-full w-full bg-gradient-to-br from-neutral-800/80 via-neutral-900 to-neutral-800/60">
           {hasThumbnail ? (
-            <img
+            <Image
               src={item.thumbnailUrl!}
               alt=""
-              className="h-full w-full object-cover object-center"
-              loading="lazy"
-              decoding="async"
-              fetchPriority={index < 6 ? "high" : "auto"}
+              className="object-cover object-center"
+              fill
+              sizes="(max-width: 640px) 288px, 320px"
+              unoptimized
+              priority={index < 6}
             />
           ) : null}
         </div>

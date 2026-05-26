@@ -29,6 +29,8 @@ const PREFERRED_QUALITY_ORDER = ["2160p", "1080p", "720p", "480p"] as const;
 const PROGRESS_REPORT_INTERVAL_SEC = 10;
 const GESTURE_SEEK_SECONDS = 10;
 const DOUBLE_TAP_WINDOW_MS = 300;
+const SEEK_FEEDBACK_VISIBLE_MS = 700;
+const SEEK_FEEDBACK_ACCUMULATION_MS = 900;
 
 type AdSlot = "pre-roll" | "mid-roll" | "post-roll";
 
@@ -51,6 +53,11 @@ type ActiveAdOverlay = {
   slot: AdSlot;
   startedAtMs: number;
   skipAfterSeconds: number;
+};
+
+type SeekFeedbackOverlay = {
+  side: "left" | "right";
+  seconds: number;
 };
 
 export type HLSVideoPlayerProps = {
@@ -239,9 +246,15 @@ export function HLSVideoPlayer({
     null,
   );
   const [adOverlayNow, setAdOverlayNow] = useState<number>(() => Date.now());
+  const [seekFeedbackOverlay, setSeekFeedbackOverlay] =
+    useState<SeekFeedbackOverlay | null>(null);
 
   const activeAdOverlayRef = useRef<ActiveAdOverlay | null>(null);
   const adOverlayHideTimerRef = useRef<number | null>(null);
+  const seekFeedbackHideTimerRef = useRef<number | null>(null);
+  const seekFeedbackLastSideRef = useRef<"left" | "right" | null>(null);
+  const seekFeedbackLastAtRef = useRef<number>(0);
+  const seekFeedbackAccumRef = useRef<number>(0);
   const qualityOptionsRef = useRef<QualityOption[]>([]);
   const selectedQualityRef = useRef<string>("auto");
   const qualityControlContainerRef = useRef<HTMLDivElement | null>(null);
@@ -298,6 +311,38 @@ export function HLSVideoPlayer({
     activeAdOverlayRef.current = overlay;
   };
 
+  const showSeekFeedbackUI = (deltaSeconds: number) => {
+    const side: "left" | "right" = deltaSeconds < 0 ? "left" : "right";
+    const now = Date.now();
+    const amount = Math.max(1, Math.abs(deltaSeconds));
+
+    const shouldAccumulate =
+      seekFeedbackLastSideRef.current === side &&
+      now - seekFeedbackLastAtRef.current <= SEEK_FEEDBACK_ACCUMULATION_MS;
+
+    const nextAmount = shouldAccumulate
+      ? seekFeedbackAccumRef.current + amount
+      : amount;
+
+    seekFeedbackAccumRef.current = nextAmount;
+    seekFeedbackLastSideRef.current = side;
+    seekFeedbackLastAtRef.current = now;
+
+    setSeekFeedbackOverlay({ side, seconds: nextAmount });
+
+    if (seekFeedbackHideTimerRef.current !== null) {
+      window.clearTimeout(seekFeedbackHideTimerRef.current);
+    }
+
+    seekFeedbackHideTimerRef.current = window.setTimeout(() => {
+      setSeekFeedbackOverlay(null);
+      seekFeedbackHideTimerRef.current = null;
+      seekFeedbackAccumRef.current = 0;
+      seekFeedbackLastSideRef.current = null;
+      seekFeedbackLastAtRef.current = 0;
+    }, SEEK_FEEDBACK_VISIBLE_MS);
+  };
+
   useEffect(() => {
     onProgressRef.current = onProgress;
   }, [onProgress]);
@@ -344,6 +389,9 @@ export function HLSVideoPlayer({
     return () => {
       if (adOverlayHideTimerRef.current !== null) {
         window.clearTimeout(adOverlayHideTimerRef.current);
+      }
+      if (seekFeedbackHideTimerRef.current !== null) {
+        window.clearTimeout(seekFeedbackHideTimerRef.current);
       }
     };
   }, []);
@@ -498,6 +546,9 @@ export function HLSVideoPlayer({
       };
 
       const playerElement = player.el() as HTMLElement;
+      if (!playerElement.hasAttribute("tabindex")) {
+        playerElement.setAttribute("tabindex", "0");
+      }
       let preRollTriggered = false;
       let postRollTriggered = false;
       let midRollCount = 0;
@@ -513,6 +564,7 @@ export function HLSVideoPlayer({
         }
       ).controlBar;
       const controlBarEl = controlBar?.el();
+      let disposeOutsideMenuListener: (() => void) | null = null;
 
       if (controlBar && controlBarEl) {
         // ── time display: current / duration on the right side of the bar ──
@@ -588,9 +640,15 @@ export function HLSVideoPlayer({
                 qualityContainer.classList.remove("vjs-menu-button-active");
                 qualityInnerBtn.setAttribute("aria-expanded", "false");
                 document.removeEventListener("click", closeOnOutside, true);
+                disposeOutsideMenuListener = null;
               }
             };
+            disposeOutsideMenuListener?.();
             document.addEventListener("click", closeOnOutside, true);
+            disposeOutsideMenuListener = () => {
+              document.removeEventListener("click", closeOnOutside, true);
+              disposeOutsideMenuListener = null;
+            };
           }
         });
 
@@ -626,7 +684,10 @@ export function HLSVideoPlayer({
         event.stopPropagation();
         event.stopImmediatePropagation();
         const side = getTapSide(event.clientX);
-        seekBy(side === "left" ? -GESTURE_SEEK_SECONDS : GESTURE_SEEK_SECONDS);
+        const delta =
+          side === "left" ? -GESTURE_SEEK_SECONDS : GESTURE_SEEK_SECONDS;
+        seekBy(delta);
+        showSeekFeedbackUI(delta);
       };
 
       const onTouchEnd = (event: TouchEvent) => {
@@ -642,11 +703,13 @@ export function HLSVideoPlayer({
 
         if (isDoubleTapSameSide) {
           event.preventDefault();
-          seekBy(
-            side === "left" ? -GESTURE_SEEK_SECONDS : GESTURE_SEEK_SECONDS,
-          );
-          lastTapAtRef.current = 0;
-          lastTapSideRef.current = null;
+          const delta =
+            side === "left" ? -GESTURE_SEEK_SECONDS : GESTURE_SEEK_SECONDS;
+          seekBy(delta);
+          showSeekFeedbackUI(delta);
+          // Keep chain alive so repeated taps on the same side can accumulate (+20, +30...)
+          lastTapAtRef.current = now;
+          lastTapSideRef.current = side;
           return;
         }
 
@@ -654,13 +717,62 @@ export function HLSVideoPlayer({
         lastTapSideRef.current = side;
       };
 
+      const onKeyDown = (event: KeyboardEvent) => {
+        // Avoid hijacking keyboard interactions inside sliders/menus.
+        if (
+          event.target instanceof Element &&
+          event.target.closest(
+            ".vjs-slider, .vjs-menu, .vjs-volume-panel, input, textarea, select",
+          )
+        ) {
+          return;
+        }
+
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          event.stopPropagation();
+          seekBy(-GESTURE_SEEK_SECONDS);
+          showSeekFeedbackUI(-GESTURE_SEEK_SECONDS);
+          return;
+        }
+
+        if (event.key === "ArrowRight") {
+          event.preventDefault();
+          event.stopPropagation();
+          seekBy(GESTURE_SEEK_SECONDS);
+          showSeekFeedbackUI(GESTURE_SEEK_SECONDS);
+          return;
+        }
+
+        if (event.key === " " || event.code === "Space") {
+          event.preventDefault();
+          event.stopPropagation();
+          if (player.paused()) {
+            void player.play();
+          } else {
+            player.pause();
+          }
+        }
+      };
+
       playerElement.addEventListener("dblclick", onDoubleClick, true);
       playerElement.addEventListener("touchend", onTouchEnd, {
         passive: false,
       });
+      playerElement.addEventListener("keydown", onKeyDown, true);
       cleanupGestureListeners = () => {
         playerElement.removeEventListener("dblclick", onDoubleClick, true);
         playerElement.removeEventListener("touchend", onTouchEnd);
+        playerElement.removeEventListener("keydown", onKeyDown, true);
+        disposeOutsideMenuListener?.();
+        if (seekFeedbackHideTimerRef.current !== null) {
+          window.clearTimeout(seekFeedbackHideTimerRef.current);
+          seekFeedbackHideTimerRef.current = null;
+        }
+        seekFeedbackAccumRef.current = 0;
+        seekFeedbackLastSideRef.current = null;
+        seekFeedbackLastAtRef.current = 0;
+        setSeekFeedbackOverlay(null);
         qualityControlValueRef.current = null;
         qualityMenuListRef.current = null;
         timeLabelRef.current = null;
@@ -917,6 +1029,38 @@ export function HLSVideoPlayer({
       data-vjs-player
       title={title}
     >
+      {seekFeedbackOverlay ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-between px-4 sm:px-8">
+          <div
+            className={cn(
+              "flex h-8 min-w-14 items-center justify-center rounded-md bg-black/35 px-2.5 text-base font-semibold text-white backdrop-blur-[0.5px] sm:h-9 sm:min-w-16 sm:text-lg",
+              seekFeedbackOverlay.side === "left"
+                ? "opacity-100"
+                : "opacity-0",
+            )}
+            aria-hidden={seekFeedbackOverlay.side !== "left"}
+          >
+            <span className="leading-none">&#8249;</span>
+            <span className="ml-1 text-lg leading-none sm:text-xl">
+              -{seekFeedbackOverlay.seconds}
+            </span>
+          </div>
+          <div
+            className={cn(
+              "flex h-8 min-w-14 items-center justify-center rounded-md bg-black/35 px-2.5 text-base font-semibold text-white backdrop-blur-[0.5px] sm:h-9 sm:min-w-16 sm:text-lg",
+              seekFeedbackOverlay.side === "right"
+                ? "opacity-100"
+                : "opacity-0",
+            )}
+            aria-hidden={seekFeedbackOverlay.side !== "right"}
+          >
+            <span className="text-lg leading-none sm:text-xl">
+              +{seekFeedbackOverlay.seconds}
+            </span>
+            <span className="ml-1 leading-none">&#8250;</span>
+          </div>
+        </div>
+      ) : null}
       {activeAdOverlay ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-end p-3 sm:p-4">
           <div className="pointer-events-auto rounded-md border border-white/20 bg-black/70 px-3 py-2 text-xs text-white shadow-lg backdrop-blur-sm">
