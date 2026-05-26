@@ -28,6 +28,8 @@ server/tmp/
 Thumbs.db
 
 # md files new
+ADBUTLER_SETUP_GUIDE.md
+MATOMO_EVENTS.md
 
 requirements.txt
 # knowledgebase files

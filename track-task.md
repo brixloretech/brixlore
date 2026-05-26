@@ -6,9 +6,9 @@
 - Scope: Cloudflare Stream + Video.js + AdButler + Matomo.
 
 ## Status
-- Current phase: Phase C + Phase E completed, Phase D pending
+- Current phase: Phase C + Phase D + Phase E completed
 - Branch: New-Features-(Videojs-Cloudflare-Stream-AdButler-Matomo)
-- Last updated: 2026-05-25
+- Last updated: 2026-05-26
 - Video pipeline: Cloudflare Stream only
 - Image pipeline: R2 retained for thumbnails/posters
 
@@ -38,10 +38,11 @@
 - [ ] Banner tag
 
 ### 5) Matomo Setup
-- [ ] Matomo base URL
-- [ ] Site ID
-- [ ] Confirm event list for first release
-- Events: play, pause, complete, ad_impression, ad_click, card_click
+- [x] Matomo base URL — https://brixloretv.matomo.cloud
+- [x] Site ID — 1
+- [x] Confirm event list for first release
+- Events implemented: play, resume, pause, complete, ad_impression, card_click
+- Events deferred: ad_click (requires click-through URL support in AdConfig)
 
 ### 6) Video Behavior Rules
 - [ ] Autoplay: on/off
@@ -92,8 +93,20 @@
   See ADBUTLER_IMPLEMENTATION.md for full detail and migration steps.
 
 ### Phase D: Matomo Event Tracking
-- [ ] Complete
-- Notes: TBD
+- [x] Complete
+- Notes: Matomo Cloud integration implemented without any npm package.
+  - `NEXT_PUBLIC_MATOMO_URL` and `NEXT_PUBLIC_MATOMO_SITE_ID` env vars added to env.ts (following existing pattern).
+  - `window._paq` type declared in `frontend/global.d.ts`.
+  - `useMatomo` hook created at `frontend/src/hooks/useMatomo.ts` — provides stable `trackEvent` and `trackPageView` wrappers with SSR guards.
+  - Matomo init script injected in `frontend/src/app/layout.tsx` via `next/script` with `strategy="afterInteractive"` (only renders when env vars are set).
+  - Player events wired in `WatchPageClient.tsx` via Video.js `onReady` listeners:
+    - `play` → first play tracked as "play", subsequent as "resume"
+    - `pause` → tracked only when video has not ended
+    - `ended` → tracked as "complete"
+  - `ad_impression` tracked via `onAdEvent` callback on `HLSVideoPlayerLazy`.
+  - `card_click` tracked on both episode grid Link elements (season grid + fallback grid).
+  - `ad_click` deferred: requires click-through URL support in AdConfig (not yet implemented).
+  - Build validated: 54/54 pages, no type errors.
 
 ### Phase E: Admin Controls for Player + Ad Slots (merged into Phase C)
 - [x] Complete — all ad settings are admin-panel controlled via /admin/settings/ads
@@ -116,5 +129,6 @@
   WatchPageClient and ad slot request hooks in HLSVideoPlayer for pre-roll, mid-roll
   (interval/fixed timestamps), and post-roll with timeout, retry-once behavior, and geo/age
   suppression checks. Skip-button overlay remains pending.
-- 2026-05-25: Completed Phase C wiring by adding the player skip-button overlay layer and
-  slot-aware skip timing UI. Phase C is now complete; Phase D (Matomo) remains pending.
+- 2026-05-26: Completed Phase D (Matomo). Added useMatomo hook, Matomo Cloud init script in layout,
+  and wired play/resume/pause/complete/ad_impression/card_click events in WatchPageClient.
+  ad_click deferred pending click-through URL support. Build validated clean.

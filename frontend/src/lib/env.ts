@@ -50,3 +50,17 @@ export function getR2WorkerBaseUrl(): string | null {
   const trimmed = raw.trim().replace(/\/$/, "");
   return trimmed ? trimmed : null;
 }
+
+/** Matomo tracking URL (no trailing slash). Empty string if not configured. */
+export function getMatomoUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_MATOMO_URL;
+  if (!raw?.trim()) return "";
+  return raw.trim().replace(/\/$/, "");
+}
+
+/** Matomo site ID. Empty string if not configured. */
+export function getMatomoSiteId(): string {
+  const raw = process.env.NEXT_PUBLIC_MATOMO_SITE_ID;
+  if (!raw?.trim()) return "";
+  return raw.trim();
+}

@@ -28,6 +28,7 @@ import {
 import { getApiErrorMessage } from "@/lib/api-client";
 import { authService, subscriptionService } from "@/lib/services";
 import { useAuth } from "@/contexts";
+import { useMatomo } from "@/hooks/useMatomo";
 import type { PublicPlanDto } from "@/types/api";
 
 const stripePublishableKey =
@@ -41,6 +42,7 @@ function SignupFormInner() {
   const elements = useElements();
 
   const {} = useAuth();
+  const { trackEvent } = useMatomo();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [name, setName] = useState("");
@@ -158,6 +160,7 @@ function SignupFormInner() {
       if (!requiresPayment) {
         const response = await authService.register({ name, email, password });
         setSuccessMessage(response.message);
+        trackEvent("Auth", "signup", "free");
         setIsSuccess(true);
         return;
       }
@@ -239,6 +242,8 @@ function SignupFormInner() {
         customerId: intent.customerId,
       });
       setSuccessMessage(response.message);
+      trackEvent("Auth", "signup", "paid");
+      trackEvent("Subscription", "purchase", plan.name, plan.price);
       setIsSuccess(true);
     } catch (err) {
       setSubmitError(getApiErrorMessage(err));

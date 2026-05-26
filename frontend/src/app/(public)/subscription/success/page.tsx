@@ -6,12 +6,20 @@ import Link from "next/link";
 import { useAuth } from "@/contexts";
 import { Loader, Button } from "@/components/ui";
 import { subscriptionService } from "@/lib/services";
+import { useMatomo } from "@/hooks/useMatomo";
 
 function SubscriptionSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { refreshUser, isSubscribed } = useAuth();
+  const { trackEvent } = useMatomo();
   const [refreshing, setRefreshing] = useState(true);
+
+  // Track purchase once on mount — landing on this page confirms a completed payment.
+  useEffect(() => {
+    trackEvent("Subscription", "purchase");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

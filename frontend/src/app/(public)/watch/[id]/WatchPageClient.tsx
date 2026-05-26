@@ -23,6 +23,7 @@ import {
   ModalFooter,
   Button,
 } from "@/components/ui";
+import { useMatomo } from "@/hooks/useMatomo";
 
 type WatchPageClientProps = {
   params: { id: string };
@@ -160,6 +161,16 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
       ? "free"
       : "paid"
     : "guest";
+
+  const { trackEvent } = useMatomo();
+  // Stable ref so Video.js event listeners always get the latest trackEvent
+  // without capturing a stale closure from the initial onReady call.
+  const trackEventRef = useRef(trackEvent);
+  useEffect(() => {
+    trackEventRef.current = trackEvent;
+  }, [trackEvent]);
+  // Holds the current video title for use inside stable Video.js listeners.
+  const videoTitleRef = useRef<string>("");
   const [content, setContent] = useState<ContentDetailDto | null>(null);
   const [primaryEpisode, setPrimaryEpisode] = useState<PlayableEpisode | null>(
     null,
@@ -476,6 +487,7 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
 
   const displayContent = content ? toDisplayContent(content) : null;
   const title = displayContent?.title ?? `Content ${id}`;
+  videoTitleRef.current = title;
   const longForm = displayContent ? isLongForm(displayContent) : false;
   const returnUrl = pathname ?? `/watch/${id}`;
   const limitModalOpen = !!limitModalReason;
@@ -678,8 +690,35 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
                     }
                     player.on("error", () => {});
                     player.on("loadedmetadata", () => {});
+                    // Matomo: player lifecycle events
+                    let hasTrackedPlay = false;
+                    player.on("play", () => {
+                      const videoTitle = videoTitleRef.current;
+                      if (!hasTrackedPlay) {
+                        hasTrackedPlay = true;
+                        trackEventRef.current("Video", "play", videoTitle);
+                      } else {
+                        trackEventRef.current("Video", "resume", videoTitle);
+                      }
+                    });
+                    player.on("pause", () => {
+                      if (!player.ended()) {
+                        trackEventRef.current("Video", "pause", videoTitleRef.current);
+                      }
+                    });
+                    player.on("ended", () => {
+                      trackEventRef.current("Video", "complete", videoTitleRef.current);
+                    });
                   }}
                   onTimeUpdate={handlePlaybackTick}
+                  onAdEvent={(event) => {
+                    if (event.name === "ad_impression") {
+                      trackEventRef.current("Ad", "ad_impression", event.slot);
+                    }
+                    if (event.name === "ad_click") {
+                      trackEventRef.current("Ad", "ad_click", event.slot);
+                    }
+                  }}
                 />
               )}
             </div>
@@ -867,6 +906,13 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
                         <Link
                           key={episode.id}
                           href={`/watch/${content.id}?episodeId=${episode.id}`}
+                          onClick={() =>
+                            trackEventRef.current(
+                              "Video",
+                              "card_click",
+                              episode.title,
+                            )
+                          }
                           className={`group relative overflow-hidden rounded-lg border transition-colors ${
                             isActive
                               ? "border-accent bg-accent/10 dark:bg-accent/20"
@@ -935,6 +981,13 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
                     <Link
                       key={episode.id}
                       href={`/watch/${content.id}?episodeId=${episode.id}`}
+                      onClick={() =>
+                        trackEventRef.current(
+                          "Video",
+                          "card_click",
+                          episode.title,
+                        )
+                      }
                       className={`group relative overflow-hidden rounded-lg border transition-colors ${
                         isActive
                           ? "border-accent bg-accent/10 dark:bg-accent/20"

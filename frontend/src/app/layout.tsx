@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import Script from "next/script";
 import "./globals.css";
 import "video.js/dist/video-js.css";
 import { Providers } from "@/components/Providers";
 import { SITE_NAME, SITE_DESCRIPTION, SITE_TAGLINE } from "@/lib/seo";
-import { getAppUrl } from "@/lib/env";
+import { getAppUrl, getMatomoUrl, getMatomoSiteId } from "@/lib/env";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -18,6 +19,8 @@ const geistMono = localFont({
 });
 
 const baseUrl = getAppUrl();
+const matomoUrl = getMatomoUrl();
+const matomoSiteId = getMatomoSiteId();
 
 export const viewport = {
   width: "device-width",
@@ -70,6 +73,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} min-w-0 overflow-x-hidden antialiased`}
       >
+        {matomoUrl && matomoSiteId && (
+          <Script
+            id="matomo-init"
+            strategy="afterInteractive"
+          >{`var _paq=window._paq=window._paq||[];_paq.push(['trackPageView']);_paq.push(['enableLinkTracking']);(function(){var u="${matomoUrl}/";_paq.push(['setTrackerUrl',u+'matomo.php']);_paq.push(['setSiteId','${matomoSiteId}']);var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];g.async=true;g.src=u+'matomo.js';s.parentNode.insertBefore(g,s);})();`}</Script>
+        )}
         <Providers>{children}</Providers>
       </body>
     </html>

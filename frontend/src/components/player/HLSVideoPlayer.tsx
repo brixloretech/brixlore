@@ -39,6 +39,7 @@ type AdEventName =
   | "ad_request_start"
   | "ad_request_retry"
   | "ad_impression"
+  | "ad_click"
   | "ad_failed"
   | "ad_skipped";
 
@@ -1063,7 +1064,21 @@ export function HLSVideoPlayer({
       ) : null}
       {activeAdOverlay ? (
         <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-end p-3 sm:p-4">
-          <div className="pointer-events-auto rounded-md border border-white/20 bg-black/70 px-3 py-2 text-xs text-white shadow-lg backdrop-blur-sm">
+          <div
+            className="pointer-events-auto rounded-md border border-white/20 bg-black/70 px-3 py-2 text-xs text-white shadow-lg backdrop-blur-sm"
+            onClick={(e) => {
+              // Only emit ad_click when user clicks the badge itself, not the skip button.
+              if ((e.target as HTMLElement).closest("button")) return;
+              const overlay = activeAdOverlayRef.current;
+              if (!overlay) return;
+              const player = playerRef.current;
+              const t =
+                player && !player.isDisposed()
+                  ? (player.currentTime() ?? 0)
+                  : 0;
+              emitAdEventUI("ad_click", overlay.slot, t);
+            }}
+          >
             <p className="mb-1 font-medium uppercase tracking-wide text-white/90">
               {activeAdOverlay.slot.replace("-", " ")}
             </p>
