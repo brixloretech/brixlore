@@ -54,6 +54,10 @@ type ActiveAdOverlay = {
   slot: AdSlot;
   startedAtMs: number;
   skipAfterSeconds: number;
+  skippable: boolean;
+  mediaUrl: string;
+  clickThroughUrl: string | null;
+  clickTrackingUrls: string[];
 };
 
 type SeekFeedbackOverlay = {
@@ -247,11 +251,15 @@ export function HLSVideoPlayer({
     null,
   );
   const [adOverlayNow, setAdOverlayNow] = useState<number>(() => Date.now());
+  const [adMuted, setAdMuted] = useState<boolean>(false);
+  const [adPaused, setAdPaused] = useState<boolean>(false);
   const [seekFeedbackOverlay, setSeekFeedbackOverlay] =
     useState<SeekFeedbackOverlay | null>(null);
 
   const activeAdOverlayRef = useRef<ActiveAdOverlay | null>(null);
   const adOverlayHideTimerRef = useRef<number | null>(null);
+  const adDoneResolveRef = useRef<(() => void) | null>(null);
+  const adVideoRef = useRef<HTMLVideoElement | null>(null);
   const seekFeedbackHideTimerRef = useRef<number | null>(null);
   const seekFeedbackLastSideRef = useRef<"left" | "right" | null>(null);
   const seekFeedbackLastAtRef = useRef<number>(0);
@@ -272,35 +280,35 @@ export function HLSVideoPlayer({
     onAdEventRef.current?.({ name, slot, currentTime, details });
   };
 
-  const clearAdOverlayUI = (minVisibleMs = 0) => {
-    const overlay = activeAdOverlayRef.current;
-    if (!overlay) return;
-
-    const elapsed = Date.now() - overlay.startedAtMs;
-    const remaining = Math.max(0, minVisibleMs - elapsed);
-
+  const clearAdOverlayUI = () => {
     if (adOverlayHideTimerRef.current !== null) {
       window.clearTimeout(adOverlayHideTimerRef.current);
-    }
-
-    if (remaining === 0) {
-      setActiveAdOverlay(null);
-      activeAdOverlayRef.current = null;
-      return;
-    }
-
-    adOverlayHideTimerRef.current = window.setTimeout(() => {
-      setActiveAdOverlay(null);
-      activeAdOverlayRef.current = null;
       adOverlayHideTimerRef.current = null;
-    }, remaining);
+    }
+    setActiveAdOverlay(null);
+    activeAdOverlayRef.current = null;
+    // Signal tryRunAdSlot to resume content playback
+    adDoneResolveRef.current?.();
+    adDoneResolveRef.current = null;
   };
 
-  const activateAdOverlayUI = (slot: AdSlot, skipAfterSeconds: number) => {
+  const activateAdOverlayUI = (
+    slot: AdSlot,
+    skipAfterSeconds: number,
+    skippable: boolean,
+    mediaUrl: string,
+    clickThroughUrl: string | null,
+    clickTrackingUrls: string[],
+  ) => {
+    setAdPaused(false);
     const overlay: ActiveAdOverlay = {
       slot,
       skipAfterSeconds: Math.max(1, skipAfterSeconds),
       startedAtMs: Date.now(),
+      skippable,
+      mediaUrl,
+      clickThroughUrl,
+      clickTrackingUrls,
     };
 
     if (adOverlayHideTimerRef.current !== null) {
@@ -381,10 +389,10 @@ export function HLSVideoPlayer({
   }, [activeAdOverlay]);
 
   useEffect(() => {
-    if (!activeAdOverlay) return;
+    if (!activeAdOverlay || adPaused) return;
     const tick = window.setInterval(() => setAdOverlayNow(Date.now()), 250);
     return () => window.clearInterval(tick);
-  }, [activeAdOverlay]);
+  }, [activeAdOverlay, adPaused]);
 
   useEffect(() => {
     return () => {
@@ -425,19 +433,52 @@ export function HLSVideoPlayer({
         onAdEventRef.current?.({ name, slot, currentTime, details });
       };
 
-      const fetchAdTag = async (tagUrl: string, timeoutSeconds: number) => {
+      type VastMediaInfo = {
+        mediaUrl: string;
+        impressionUrls: string[];
+        clickThroughUrl: string | null;
+        clickTrackingUrls: string[];
+      };
+
+      const fetchVastMediaInfo = async (
+        tagUrl: string,
+        timeoutSeconds: number,
+      ): Promise<VastMediaInfo | null> => {
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), timeoutSeconds * 1000);
         try {
-          await fetch(tagUrl, {
-            method: "GET",
-            mode: "no-cors",
-            cache: "no-store",
-            signal: controller.signal,
-          });
-          return true;
+          const res = await fetch(tagUrl, { cache: "no-store", signal: controller.signal });
+          const text = await res.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(text, "text/xml");
+
+          // Prefer MP4 media files; fall back to any media file
+          const mediaFiles = Array.from(doc.querySelectorAll("MediaFile"));
+          let mediaUrl: string | null = null;
+          for (const mf of mediaFiles) {
+            const mfType = (mf.getAttribute("type") ?? "").toLowerCase();
+            if (mfType.includes("mp4")) {
+              mediaUrl = mf.textContent?.trim() ?? null;
+              if (mediaUrl) break;
+            }
+          }
+          if (!mediaUrl && mediaFiles.length > 0) {
+            mediaUrl = mediaFiles[0].textContent?.trim() ?? null;
+          }
+          if (!mediaUrl) return null;
+
+          const impressionUrls = Array.from(doc.querySelectorAll("Impression"))
+            .map((el) => el.textContent?.trim())
+            .filter((u): u is string => Boolean(u));
+          const clickThroughUrl =
+            doc.querySelector("ClickThrough")?.textContent?.trim() ?? null;
+          const clickTrackingUrls = Array.from(doc.querySelectorAll("ClickTracking"))
+            .map((el) => el.textContent?.trim())
+            .filter((u): u is string => Boolean(u));
+
+          return { mediaUrl, impressionUrls, clickThroughUrl, clickTrackingUrls };
         } catch {
-          return false;
+          return null;
         } finally {
           window.clearTimeout(timeoutId);
         }
@@ -495,28 +536,44 @@ export function HLSVideoPlayer({
 
         const timeoutSec = clampTimeoutSeconds(config.adLoadTimeoutSeconds);
         emitAdEvent("ad_request_start", slot, currentTime);
-        if (slotConfig.skippable) {
-          activateAdOverlayUI(slot, slotConfig.skipAfter);
-        } else {
-          clearAdOverlayUI();
-        }
 
-        let ok = await fetchAdTag(slotConfig.tagUrl.trim(), timeoutSec);
+        // Pause content while the ad loads and plays
+        if (!player.isDisposed()) player.pause();
 
-        if (!ok && config.adFailureBehavior === "RETRY_ONCE") {
+        let vastInfo = await fetchVastMediaInfo(slotConfig.tagUrl.trim(), timeoutSec);
+
+        if (!vastInfo && config.adFailureBehavior === "RETRY_ONCE") {
           emitAdEvent("ad_request_retry", slot, currentTime);
-          ok = await fetchAdTag(slotConfig.tagUrl.trim(), timeoutSec);
+          vastInfo = await fetchVastMediaInfo(slotConfig.tagUrl.trim(), timeoutSec);
         }
 
-        if (ok) {
-          emitAdEvent("ad_impression", slot, currentTime);
-          // Keep a brief visible ad-state cue without blocking playback.
-          clearAdOverlayUI(1200);
+        if (!vastInfo) {
+          emitAdEvent("ad_failed", slot, currentTime, config.adFailureBehavior);
+          if (!player.isDisposed()) void player.play();
           return;
         }
 
-        emitAdEvent("ad_failed", slot, currentTime, config.adFailureBehavior);
-        clearAdOverlayUI(1200);
+        // Fire VAST impression tracking pixels
+        for (const url of vastInfo.impressionUrls) {
+          try { navigator.sendBeacon(url); } catch { /* ignore */ }
+        }
+        emitAdEvent("ad_impression", slot, currentTime);
+
+        // Show ad video overlay; wait until it ends or is skipped
+        await new Promise<void>((resolve) => {
+          adDoneResolveRef.current = resolve;
+          activateAdOverlayUI(
+            slot,
+            slotConfig.skipAfter,
+            slotConfig.skippable,
+            vastInfo!.mediaUrl,
+            vastInfo!.clickThroughUrl,
+            vastInfo!.clickTrackingUrls,
+          );
+        });
+
+        // Resume content after ad completes or is skipped
+        if (!player.isDisposed()) void player.play();
       };
 
       const seekBy = (deltaSeconds: number) => {
@@ -1063,60 +1120,168 @@ export function HLSVideoPlayer({
         </div>
       ) : null}
       {activeAdOverlay ? (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-end p-3 sm:p-4">
-          <div
-            className="pointer-events-auto rounded-md border border-white/20 bg-black/70 px-3 py-2 text-xs text-white shadow-lg backdrop-blur-sm"
-            onClick={(e) => {
-              // Only emit ad_click when user clicks the badge itself, not the skip button.
-              if ((e.target as HTMLElement).closest("button")) return;
-              const overlay = activeAdOverlayRef.current;
-              if (!overlay) return;
-              const player = playerRef.current;
-              const t =
-                player && !player.isDisposed()
-                  ? (player.currentTime() ?? 0)
-                  : 0;
-              emitAdEventUI("ad_click", overlay.slot, t);
-            }}
-          >
-            <p className="mb-1 font-medium uppercase tracking-wide text-white/90">
-              {activeAdOverlay.slot.replace("-", " ")}
-            </p>
-            {(() => {
-              const elapsedSeconds = Math.max(
-                0,
-                Math.floor((adOverlayNow - activeAdOverlay.startedAtMs) / 1000),
-              );
-              const remaining = Math.max(
-                0,
-                activeAdOverlay.skipAfterSeconds - elapsedSeconds,
-              );
-              const canSkip = remaining === 0;
+        <div className="absolute inset-0 z-30 bg-black">
+          {/* Ad video */}
+          <video
+            ref={adVideoRef}
+            src={activeAdOverlay.mediaUrl}
+            className="h-full w-full object-contain"
+            autoPlay
+            playsInline
+            muted={adMuted}
+            onEnded={clearAdOverlayUI}
+            onError={clearAdOverlayUI}
+            onPause={() => setAdPaused(true)}
+            onPlay={() => setAdPaused(false)}
+          />
 
-              return canSkip ? (
-                <button
-                  type="button"
-                  className="rounded border border-white/30 bg-white/10 px-2 py-1 text-[11px] font-medium text-white hover:bg-white/20"
-                  onClick={() => {
-                    const overlay = activeAdOverlayRef.current;
-                    if (!overlay) return;
-                    const player = playerRef.current;
-                    const t =
-                      player && !player.isDisposed()
-                        ? (player.currentTime() ?? 0)
-                        : 0;
-                    emitAdEventUI("ad_skipped", overlay.slot, t, "viewer skip");
-                    clearAdOverlayUI();
-                  }}
-                >
-                  Skip ad
-                </button>
-              ) : (
-                <p className="text-[11px] text-white/80">
-                  Skip in {remaining}s
-                </p>
+          {/* "Advertisement" badge – top-left */}
+          <div className="pointer-events-none absolute left-3 top-3 z-10 rounded bg-black/60 px-2 py-1 text-[10px] uppercase tracking-widest text-white/60 backdrop-blur-sm">
+            Advertisement
+          </div>
+
+          {/* Bottom control bar */}
+          <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-8 sm:px-4 sm:pb-4">
+
+            {/* Non-seekable progress bar */}
+            {(() => {
+              const dur = adVideoRef.current?.duration ?? 0;
+              const cur = adVideoRef.current?.currentTime ?? 0;
+              const pct = dur > 0 ? Math.min(100, (cur / dur) * 100) : 0;
+              return (
+                <div className="mb-2 h-[3px] w-full overflow-hidden rounded-full bg-white/25 sm:mb-3">
+                  <div
+                    className="h-full rounded-full bg-yellow-400"
+                    style={{ width: `${pct}%`, transition: "width 0.25s linear" }}
+                  />
+                </div>
               );
             })()}
+
+            {/* Controls row */}
+            <div className="flex items-center justify-between gap-2">
+
+              {/* Left side: play/pause + mute toggle + time remaining */}
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {/* Play / Pause */}
+                <button
+                  type="button"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-white/80 hover:text-white sm:h-8 sm:w-8"
+                  onClick={() => {
+                    const video = adVideoRef.current;
+                    if (!video) return;
+                    if (video.paused) { void video.play(); } else { video.pause(); }
+                  }}
+                  aria-label={adPaused ? "Resume ad" : "Pause ad"}
+                >
+                  {adPaused ? (
+                    /* Play icon */
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true">
+                      <path d="M8 5V19L19 12L8 5Z" />
+                    </svg>
+                  ) : (
+                    /* Pause icon */
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true">
+                      <path d="M6 19H10V5H6V19ZM14 5V19H18V5H14Z" />
+                    </svg>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-white/80 hover:text-white sm:h-8 sm:w-8"
+                  onClick={() => setAdMuted((m) => !m)}
+                  aria-label={adMuted ? "Unmute ad" : "Mute ad"}
+                >
+                  {adMuted ? (
+                    /* Speaker muted */
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true">
+                      <path d="M16.5 12A4.5 4.5 0 0 0 14 7.97V10.18L16.45 12.63C16.48 12.43 16.5 12.22 16.5 12ZM19 12C19 12.94 18.8 13.82 18.46 14.64L19.97 16.15C20.63 14.91 21 13.5 21 12C21 7.72 18.01 4.14 14 3.23V5.29C16.89 6.15 19 8.83 19 12ZM4.27 3L3 4.27L7.73 9H3V15H7L12 20V13.27L16.25 17.52C15.58 18.04 14.83 18.45 14 18.7V20.76C15.38 20.45 16.63 19.82 17.68 18.96L19.73 21L21 19.73L12 10.73L4.27 3ZM12 4L9.91 6.09L12 8.18V4Z" />
+                    </svg>
+                  ) : (
+                    /* Speaker on */
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true">
+                      <path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 7.97V16.02C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z" />
+                    </svg>
+                  )}
+                </button>
+
+                {/* Time remaining */}
+                {(() => {
+                  const dur = adVideoRef.current?.duration ?? 0;
+                  const cur = adVideoRef.current?.currentTime ?? 0;
+                  const remSec = Math.max(0, Math.ceil(dur - cur));
+                  if (!dur) return null;
+                  const fmt = (s: number) =>
+                    `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+                  return (
+                    <span className="text-[11px] tabular-nums text-white/70 sm:text-xs">
+                      {fmt(remSec)}
+                    </span>
+                  );
+                })()}
+              </div>
+
+              {/* Right side: Learn More + Skip */}
+              <div className="flex items-center gap-2">
+                {activeAdOverlay.clickThroughUrl ? (
+                  <button
+                    type="button"
+                    className="rounded border border-white/30 bg-black/60 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur-sm hover:bg-black/80 sm:px-3 sm:text-xs"
+                    onClick={() => {
+                      const overlay = activeAdOverlayRef.current;
+                      if (!overlay?.clickThroughUrl) return;
+                      for (const url of overlay.clickTrackingUrls) {
+                        try { navigator.sendBeacon(url); } catch { /* ignore */ }
+                      }
+                      window.open(overlay.clickThroughUrl, "_blank", "noopener,noreferrer");
+                      const player = playerRef.current;
+                      const t =
+                        player && !player.isDisposed()
+                          ? (player.currentTime() ?? 0)
+                          : 0;
+                      emitAdEventUI("ad_click", overlay.slot, t);
+                    }}
+                  >
+                    Learn More
+                  </button>
+                ) : null}
+
+                {activeAdOverlay.skippable ? (() => {
+                  // Use actual video time so pausing freezes the countdown correctly
+                  const videoCurrent = adVideoRef.current?.currentTime ?? 0;
+                  const remaining = Math.max(
+                    0,
+                    Math.ceil(activeAdOverlay.skipAfterSeconds - videoCurrent),
+                  );
+                  const canSkip = remaining === 0;
+
+                  return canSkip ? (
+                    <button
+                      type="button"
+                      className="rounded border border-white/40 bg-black/70 px-2.5 py-1 text-[11px] font-semibold text-white backdrop-blur-sm hover:bg-black/90 sm:px-3 sm:text-xs"
+                      onClick={() => {
+                        const overlay = activeAdOverlayRef.current;
+                        if (!overlay) return;
+                        const player = playerRef.current;
+                        const t =
+                          player && !player.isDisposed()
+                            ? (player.currentTime() ?? 0)
+                            : 0;
+                        emitAdEventUI("ad_skipped", overlay.slot, t, "viewer skip");
+                        clearAdOverlayUI();
+                      }}
+                    >
+                      Skip Ad →
+                    </button>
+                  ) : (
+                    <span className="rounded bg-black/60 px-2 py-1 text-[11px] text-white/70 backdrop-blur-sm sm:text-xs">
+                      Skip in {remaining}s
+                    </span>
+                  );
+                })() : null}
+              </div>
+            </div>
           </div>
         </div>
       ) : null}

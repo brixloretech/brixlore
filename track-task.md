@@ -118,6 +118,14 @@
 
 ## Change Log
 - 2026-05-23: Tracker initialized and structured for execution.
+- 2026-05-31: VAST pre-roll ad playback fully implemented.
+  - Replaced stub `fetchAdTag` (no-cors ping, no video) with `fetchVastMediaInfo` that fetches and parses VAST XML, extracts `<MediaFile>` URL, and fires `<Impression>` tracking pixels via `sendBeacon`.
+  - Content player now pauses before ad and resumes after ad ends or is skipped.
+  - Ad plays in a full-screen overlay `<video>` element covering the Video.js player.
+  - Added YouTube-style ad control bar (bottom of overlay): non-seekable progress bar, mute toggle, time remaining, "Learn More" click-through button (conditional on VAST ClickThrough), skip countdown / Skip Ad button.
+  - All controls responsive via Tailwind `sm:` breakpoints.
+  - `adVideoRef` and `adMuted` state added; `adDoneResolveRef` resolves the await in `tryRunAdSlot` when ad ends or is skipped.
+  - `sib-api-v3-sdk` installed in `server/` (was in package.json but missing from node_modules).
 - 2026-05-23: Confirmed Option A for playback field and Option A for upload flow; Phase B baseline marked complete.
 - 2026-05-23: Completed Phase A baseline on watch page with Cloudflare-aware playback URL resolution and safer configuration errors.
 - 2026-05-23: Removed R2 from video upload/playback while keeping R2 for thumbnails and posters.
