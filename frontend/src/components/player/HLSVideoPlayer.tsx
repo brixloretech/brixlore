@@ -1248,8 +1248,12 @@ export function HLSVideoPlayer({
                 ) : null}
 
                 {activeAdOverlay.skippable ? (() => {
-                  // Use actual video time so pausing freezes the countdown correctly
-                  const videoCurrent = adVideoRef.current?.currentTime ?? 0;
+                  // Use actual video time so pausing freezes the countdown correctly.
+                  // Fall back to wall-clock elapsed (adOverlayNow) before the video element
+                  // is available — this also keeps the re-render ticker in use so ESLint
+                  // doesn't flag adOverlayNow as unused.
+                  const wallElapsed = Math.max(0, (adOverlayNow - activeAdOverlay.startedAtMs) / 1000);
+                  const videoCurrent = adVideoRef.current?.currentTime ?? wallElapsed;
                   const remaining = Math.max(
                     0,
                     Math.ceil(activeAdOverlay.skipAfterSeconds - videoCurrent),
