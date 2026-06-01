@@ -39,7 +39,7 @@ function getHlsLabel(status: "ready" | "processing" | "missing"): string {
     case "ready":
       return "HLS ready";
     case "processing":
-      return "Converting";
+      return "Processing";
     default:
       return "No HLS yet";
   }
@@ -227,10 +227,14 @@ export default function AdminContentPage() {
                         <div className="flex flex-col gap-1">
                           <span
                             className={cn(
-                              "inline-flex w-fit rounded-full px-2.5 py-0.5 text-xs font-medium",
+                              "inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
                               getHlsBadgeClasses(item.hlsStatus),
+                              item.hlsStatus === "processing" && "animate-pulse",
                             )}
                           >
+                            {item.hlsStatus === "processing" ? (
+                              <span className="h-1.5 w-1.5 rounded-full bg-amber-300" aria-hidden />
+                            ) : null}
                             {getHlsLabel(item.hlsStatus)}
                           </span>
                           <span className="text-xs text-neutral-500">
@@ -238,6 +242,11 @@ export default function AdminContentPage() {
                               ? `${item.hlsReadyCount}/${item.hlsTotalCount} video${item.hlsTotalCount === 1 ? "" : "s"} ready`
                               : "No video uploaded"}
                           </span>
+                          {item.hlsStatus === "processing" ? (
+                            <span className="text-xs text-amber-300">
+                              Cloudflare Stream is still preparing this upload.
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">

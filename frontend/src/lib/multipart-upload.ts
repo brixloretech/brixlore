@@ -17,6 +17,35 @@ type UploadedVideoAsset = {
   cloudflareStream: boolean;
 };
 
+export async function waitForCloudflareStreamReady(
+  uid: string,
+  options?: {
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+  },
+): Promise<void> {
+  const trimmed = uid.trim();
+  if (!trimmed) {
+    throw new Error("Cloudflare Stream uid is required");
+  }
+
+  const timeoutMs = options?.timeoutMs ?? 180_000;
+  const pollIntervalMs = options?.pollIntervalMs ?? 5_000;
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const status = await adminService.getCloudflareVideoStatus(trimmed);
+    if (status.readyToStream || status.status === "ready") {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  throw new Error(
+    "Cloudflare Stream video is still processing. Please try again in a moment.",
+  );
+}
+
 export async function uploadVideoFileWithStrategy({
   file,
   strategy,
@@ -28,17 +57,34 @@ export async function uploadVideoFileWithStrategy({
 
   onProgress?.(0, file.size);
   const directUpload = await adminService.createCloudflareDirectUpload();
-  const formData = new FormData();
-  formData.append("file", file, file.name);
-  const response = await fetch(directUpload.uploadUrl, {
-    method: "POST",
-    body: formData,
-  });
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", directUpload.uploadUrl);
 
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Cloudflare Stream upload failed");
-  }
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress?.(event.loaded, event.total || file.size);
+        return;
+      }
+      onProgress?.(Math.min(file.size, event.loaded), file.size);
+    };
+
+    xhr.onerror = () => {
+      reject(new Error("Cloudflare Stream upload failed"));
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+        return;
+      }
+      reject(new Error(xhr.responseText || "Cloudflare Stream upload failed"));
+    };
+
+    const formData = new FormData();
+    formData.append("file", file, file.name);
+    xhr.send(formData);
+  });
 
   onProgress?.(file.size, file.size);
   return {

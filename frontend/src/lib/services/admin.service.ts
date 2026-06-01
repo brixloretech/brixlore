@@ -387,6 +387,22 @@ export const adminService = {
     );
   },
 
+  async getCloudflareVideoStatus(uid: string): Promise<{
+    uid: string;
+    status: string;
+    readyToStream: boolean;
+  }> {
+    return withAuthRetry((headers) =>
+      get<{
+        uid: string;
+        status: string;
+        readyToStream: boolean;
+      }>(`streaming/cloudflare/video-status/${encodeURIComponent(uid)}`, {
+        headers,
+      }),
+    );
+  },
+
   async createCloudflareDirectUpload(): Promise<CloudflareDirectUploadResponseDto> {
     return withAuthRetry((headers) =>
       post<CloudflareDirectUploadResponseDto>(

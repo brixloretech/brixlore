@@ -15,6 +15,7 @@ import { getApiErrorUserMessage } from "@/lib/api-client";
 import {
   DEFAULT_VIDEO_UPLOAD_STRATEGY,
   type VideoUploadStrategy,
+  waitForCloudflareStreamReady,
   uploadVideoFileWithStrategy,
 } from "@/lib/multipart-upload";
 import { adminService } from "@/lib/services";
@@ -99,6 +100,8 @@ export default function AdminUploadPage() {
     uploadedBytes: number;
     totalBytes: number;
   } | null>(null);
+  const [primaryVideoProcessing, setPrimaryVideoProcessing] = useState(false);
+  const [trailerVideoProcessing, setTrailerVideoProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -284,6 +287,8 @@ export default function AdminUploadPage() {
     setSubmitting(true);
     setPrimaryVideoProgress(null);
     setTrailerVideoProgress(null);
+    setPrimaryVideoProcessing(false);
+    setTrailerVideoProcessing(false);
     try {
       const activeVideoFile = canUploadEpisodeOnCreate
         ? (episodeVideoFile ?? videoFile)
@@ -313,6 +318,13 @@ export default function AdminUploadPage() {
           })
         : null;
 
+      if (uploadedVideo?.cloudflareStream) {
+        setPrimaryVideoProgress(null);
+        setPrimaryVideoProcessing(true);
+        await waitForCloudflareStreamReady(uploadedVideo.key);
+        setPrimaryVideoProcessing(false);
+      }
+
       const uploadedTrailerVideo =
         showTrailerControls && trailerVideoFile
           ? await uploadVideoFileWithStrategy({
@@ -322,6 +334,13 @@ export default function AdminUploadPage() {
                 setTrailerVideoProgress({ uploadedBytes, totalBytes }),
             })
           : null;
+
+      if (uploadedTrailerVideo?.cloudflareStream) {
+        setTrailerVideoProgress(null);
+        setTrailerVideoProcessing(true);
+        await waitForCloudflareStreamReady(uploadedTrailerVideo.key);
+        setTrailerVideoProcessing(false);
+      }
 
       const thumbnailPresign = await adminService.presignUpload({
         kind: "thumbnail",
@@ -460,6 +479,8 @@ export default function AdminUploadPage() {
           : message,
       );
     } finally {
+      setPrimaryVideoProcessing(false);
+      setTrailerVideoProcessing(false);
       setSubmitting(false);
     }
   }
@@ -617,6 +638,36 @@ export default function AdminUploadPage() {
                   {formatBytes(trailerVideoProgress.uploadedBytes)} /{" "}
                   {formatBytes(trailerVideoProgress.totalBytes)} via{" "}
                   {videoUploadStrategy}
+                </p>
+              </div>
+            )}
+            {submitting && primaryVideoProcessing && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                <div className="mb-1 flex items-center justify-between">
+                  <span>
+                    {canUploadEpisodeOnCreate ? "Episode video" : "Video"} processing
+                  </span>
+                  <span>Cloudflare Stream</span>
+                </div>
+                <div className="h-1.5 w-full rounded bg-neutral-800">
+                  <div className="h-1.5 w-full animate-pulse rounded bg-amber-400" />
+                </div>
+                <p className="mt-1 text-[11px] text-amber-200/90">
+                  Upload complete. Preparing playback files...
+                </p>
+              </div>
+            )}
+            {submitting && trailerVideoProcessing && (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                <div className="mb-1 flex items-center justify-between">
+                  <span>Trailer processing</span>
+                  <span>Cloudflare Stream</span>
+                </div>
+                <div className="h-1.5 w-full rounded bg-neutral-800">
+                  <div className="h-1.5 w-full animate-pulse rounded bg-amber-400" />
+                </div>
+                <p className="mt-1 text-[11px] text-amber-200/90">
+                  Upload complete. Preparing playback files...
                 </p>
               </div>
             )}

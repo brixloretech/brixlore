@@ -17,6 +17,7 @@ import { adminService } from "@/lib/services";
 import { useAuth } from "@/contexts";
 import {
   DEFAULT_VIDEO_UPLOAD_STRATEGY,
+  waitForCloudflareStreamReady,
   uploadVideoFileWithStrategy,
 } from "@/lib/multipart-upload";
 import type { AdminCategoryDto, ContentType } from "@/types/api";
@@ -306,6 +307,10 @@ export default function AdminEditVideoPage() {
         onProgress: (uploadedBytes, totalBytes) =>
           setEpisodeVideoProgress({ uploadedBytes, totalBytes }),
       });
+
+      if (uploadedVideo.cloudflareStream) {
+        await waitForCloudflareStreamReady(uploadedVideo.key);
+      }
 
       let thumbnailKey: string | undefined;
       if (episodeThumbnailFile) {
