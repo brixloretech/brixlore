@@ -27,6 +27,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useDownload } from "../hooks/useDownload";
+import { useMatomo } from "../hooks/useMatomo";
 import { colors } from "../src/theme/colors";
 import { spacing, typography, borderRadius } from "../constants/theme";
 
@@ -49,6 +50,7 @@ export function DownloadButton({
 }: DownloadButtonProps) {
   const { isChecking, isDownloaded, progress, download, remove } =
     useDownload(contentId);
+  const { trackEvent } = useMatomo();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const isDownloading =
@@ -72,6 +74,7 @@ export function DownloadButton({
 
   const handleDownload = async () => {
     try {
+      trackEvent('Download', 'download_start', title);
       await download(hlsUrl, title, thumbnailUrl);
     } catch (err: any) {
       Alert.alert("Download failed", err?.message ?? "Unknown error");

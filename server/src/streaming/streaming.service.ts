@@ -172,12 +172,40 @@ export class StreamingService {
 
     const status = this.getCloudflareStreamStatus();
     if (!status.customerSubdomain) {
-      return streamKey;
+      throw new InternalServerErrorException(
+        'Cloudflare Stream customer subdomain is not configured. Set CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN.',
+      );
     }
 
     const uid = streamKey.trim();
     if (!uid) return null;
     return `https://${status.customerSubdomain}/${uid}/manifest/video.m3u8`;
+  }
+
+  /** Check Cloudflare Stream processing status for a given UID. */
+  async getCloudflareVideoStatus(
+    uid: string,
+  ): Promise<{ uid: string; status: string; readyToStream: boolean }> {
+    const config = this.getCloudflareStreamConfig();
+    const trimmedUid = uid.trim();
+    if (!trimmedUid) {
+      throw new InternalServerErrorException('UID is required');
+    }
+
+    const response = await axios.get(
+      `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream/${trimmedUid}`,
+      {
+        headers: { Authorization: `Bearer ${config.apiToken}` },
+        timeout: 10_000,
+      },
+    );
+
+    const result = response.data?.result;
+    return {
+      uid: trimmedUid,
+      status: result?.status?.state ?? 'unknown',
+      readyToStream: result?.readyToStream === true,
+    };
   }
 
   private isUrl(value: string | null | undefined): boolean {

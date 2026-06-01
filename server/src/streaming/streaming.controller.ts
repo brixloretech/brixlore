@@ -51,6 +51,18 @@ export class StreamingController {
     return this.streamingService.createCloudflareDirectUploadUrl(user.id);
   }
 
+  /** Authenticated (admin): check Cloudflare Stream processing status for a UID. */
+  @Get('cloudflare/video-status/:uid')
+  async getCloudflareVideoStatus(
+    @CurrentUser() user: User,
+    @Param('uid') uid: string,
+  ): Promise<{ uid: string; status: string; readyToStream: boolean }> {
+    ensureAdminUploadAccess(user);
+    const trimmed = uid?.trim();
+    if (!trimmed) throw new BadRequestException('uid is required');
+    return this.streamingService.getCloudflareVideoStatus(trimmed);
+  }
+
   /** Authenticated: get playback metadata. */
   @Get('play-url')
   async getPlayUrl(

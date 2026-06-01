@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,16 +7,14 @@ import {
   ActivityIndicator,
   Dimensions,
   StatusBar,
-  Platform,
+  Animated,
+  PanResponder,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import {
-  Video,
-  ResizeMode,
-  VideoFullscreenUpdate,
-  type AVPlaybackStatus,
-} from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useEvent, useEventListener } from "expo";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../src/theme/colors";
@@ -26,7 +24,9 @@ import { useAuthStore } from "../store/useAuthStore";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const CONTROLS_HIDE_DELAY = 3000;
-const PROGRESS_SAVE_INTERVAL = 5000;
+const PROGRESS_SAVE_INTERVAL = 5; // seconds
+const DOUBLE_TAP_WINDOW_MS = 320;
+const TAP_ACCUMULATION_RESET_MS = 900;
 
 type VideoPlayerScreenParams = {
   videoUrl: string;
@@ -43,81 +43,188 @@ type VideoPlayerScreenParams = {
 export default function VideoPlayerScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<VideoPlayerScreenParams>();
-  const videoRef = useRef<Video>(null);
+  const videoViewRef = useRef<VideoView>(null);
   const { user } = useAuthStore();
-
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isBuffering, setIsBuffering] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showControls, setShowControls] = useState(true);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
-
-  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const lastSavedTimeRef = useRef(0);
-  const savedStartTimeRef = useRef(0);
-  const hasAppliedStartTimeRef = useRef(false);
 
   const videoUrl = params.videoUrl || "";
   const videoId = params.videoId || "default";
   const title = params.title || "Video";
   const isOffline = params.isOffline === "1";
-  const hlsUrl = params.hlsUrl || "";
-  const thumbnailUrl = params.thumbnailUrl || "";
 
-  // Require login to watch downloads
+  // Saved progress refs
+  const savedStartTimeRef = useRef(0);
+  const hasAppliedStartTimeRef = useRef(false);
+  const lastSavedTimeRef = useRef(0);
+  // Keep refs in sync so the unmount cleanup can read the latest values
+  const currentTimeRef = useRef(0);
+  const durationRef = useRef(0);
+
+  // UI state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showControls, setShowControls] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [duration, setDuration] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  // Progress bar drag
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragDisplay, setDragDisplay] = useState(0); // 0–100, mirrors actual % while dragging
+  const [progressBarWidth, setProgressBarWidth] = useState(0);
+  // Double-tap accumulation feedback
+  const [showDoubleTapFeedback, setShowDoubleTapFeedback] = useState<{
+    side: "left" | "right";
+    amount: number;
+  } | null>(null);
+  const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Controls fade animation
+  const controlsOpacity = useRef(new Animated.Value(1)).current;
+  // PanResponder drag refs (read inside stable callbacks)
+  const dragProgressRef = useRef(0);
+  const progressBarWidthRef = useRef(0);
+  // Double-tap tracking refs
+  const lastTapTimeRef = useRef(0);
+  const lastTapSideRef = useRef<"left" | "right" | null>(null);
+  const accumulatedSkipRef = useRef<{
+    side: "left" | "right";
+    amount: number;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>({ side: "right", amount: 0, timer: null });
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep showControls readable inside stable callbacks
+  const showControlsRef = useRef(true);
+
+  // expo-video player
+  const player = useVideoPlayer(videoUrl ? { uri: videoUrl } : null, (p) => {
+    p.play();
+  });
+
+  // Track player status for loading / error states
+  const { status } = useEvent(player, "statusChange", {
+    status: player.status,
+  });
+
+  // Track playing state
+  const { isPlaying } = useEvent(player, "playingChange", {
+    isPlaying: player.playing,
+  });
+
+  // Track current time (fires ~every 250 ms while playing)
+  const { currentTime } = useEvent(player, "timeUpdate", {
+    currentTime: player.currentTime,
+    bufferedPosition: player.bufferedPosition,
+    currentLiveTimestamp: null,
+    currentOffsetFromLive: null,
+  });
+
+  const isLoading = status === "idle" || status === "loading";
+  const progress = duration > 0 ? Math.min((currentTime / duration) * 100, 100) : 0;
+
+  // Keep current-time and duration refs up to date
+  useEffect(() => { currentTimeRef.current = currentTime; }, [currentTime]);
+  useEffect(() => { durationRef.current = duration; }, [duration]);
+
+  // Capture duration once the player is ready
   useEffect(() => {
-    if (isOffline && !user) {
-      router.replace("/login");
+    if (status === "readyToPlay") {
+      setError(null);
+      const d = player.duration;
+      if (d && d > 0) setDuration(d);
     }
-  }, [isOffline, user]);
+    if (status === "error") {
+      setError("Failed to load video. Please try again.");
+    }
+  }, [status, player]);
+
+  // Seek to saved progress once ready
+  useEffect(() => {
+    if (
+      status === "readyToPlay" &&
+      !hasAppliedStartTimeRef.current &&
+      savedStartTimeRef.current > 0
+    ) {
+      hasAppliedStartTimeRef.current = true;
+      const delta = savedStartTimeRef.current - player.currentTime;
+      if (delta > 0.5) player.seekBy(delta);
+    }
+  }, [status, player]);
+
+  // Sync muted state to player
+  useEffect(() => { player.muted = isMuted; }, [player, isMuted]);
+
+  // Sync playback rate to player
+  useEffect(() => { player.playbackRate = playbackRate; }, [player, playbackRate]);
+
+  // Handle play-to-end
+  useEventListener(player, "playToEnd", useCallback(() => {
+    setShowControls(true);
+    const t = currentTimeRef.current;
+    const d = durationRef.current;
+    if (d > 0) void saveProgress(t, d);
+  }, []));
+
+  // Require login for offline content
+  useEffect(() => {
+    if (isOffline && !user) router.replace("/login");
+  }, [isOffline, user, router]);
 
   // Load saved progress on mount
   useEffect(() => {
-    loadSavedProgress();
+    void loadSavedProgress();
   }, [videoId]);
 
-  // Auto-hide controls
+  // Keep refs current for stable callbacks
+  useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
+  useEffect(() => { progressBarWidthRef.current = progressBarWidth; }, [progressBarWidth]);
+
+  // Auto-hide controls while playing — fade out after delay
   useEffect(() => {
     if (showControls && isPlaying) {
       controlsTimeoutRef.current = setTimeout(() => {
-        setShowControls(false);
+        Animated.timing(controlsOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }).start(() => setShowControls(false));
       }, CONTROLS_HIDE_DELAY);
     }
-
     return () => {
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
-      }
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
-  }, [showControls, isPlaying]);
+  }, [showControls, isPlaying, controlsOpacity]);
 
-  // Save progress periodically
+  // Periodically save progress
   useEffect(() => {
     if (currentTime > 0 && duration > 0) {
       const timeSinceLastSave = currentTime - lastSavedTimeRef.current;
-      if (timeSinceLastSave >= PROGRESS_SAVE_INTERVAL / 1000) {
-        saveProgress(currentTime, duration);
+      if (timeSinceLastSave >= PROGRESS_SAVE_INTERVAL) {
+        void saveProgress(currentTime, duration);
         lastSavedTimeRef.current = currentTime;
       }
     }
-  }, [currentTime, duration, videoId]);
+  }, [currentTime, duration]);
 
+  // Save on unmount
+  useEffect(() => {
+    return () => {
+      if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+      if (accumulatedSkipRef.current.timer) clearTimeout(accumulatedSkipRef.current.timer);
+      const t = currentTimeRef.current;
+      const d = durationRef.current;
+      if (t > 0 && d > 0) void saveProgress(t, d);
+    };
+  }, []);
+
+  // Persistence helpers
   const loadSavedProgress = async () => {
     try {
-      const savedData = await AsyncStorage.getItem(`video_progress_${videoId}`);
-      if (savedData) {
-        const { time, totalDuration } = JSON.parse(savedData);
-        // Only resume if less than 90% watched
+      const raw = await AsyncStorage.getItem(`video_progress_${videoId}`);
+      if (raw) {
+        const { time, totalDuration } = JSON.parse(raw) as {
+          time: number;
+          totalDuration: number;
+        };
         if (time > 0 && totalDuration > 0 && time / totalDuration < 0.9) {
           savedStartTimeRef.current = time;
-          setCurrentTime(time);
-          setProgress((time / totalDuration) * 100);
         }
       }
     } catch (err) {
@@ -136,59 +243,22 @@ export default function VideoPlayerScreen() {
     }
   };
 
-  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) {
-      if (status.error) {
-        console.error("Video error:", status.error);
-        setError("Failed to load video. Please try again.");
-        setIsLoading(false);
-        setIsBuffering(false);
-      }
-      return;
-    }
-    setIsLoading(false);
-    setError(null);
-    if (!hasAppliedStartTimeRef.current && savedStartTimeRef.current > 0) {
-      hasAppliedStartTimeRef.current = true;
-      videoRef.current?.setPositionAsync?.(
-        Math.floor(savedStartTimeRef.current * 1000),
-      );
-    }
-    const nextDuration = status.durationMillis
-      ? status.durationMillis / 1000
-      : 0;
-    const nextPosition = status.positionMillis
-      ? status.positionMillis / 1000
-      : 0;
-    setDuration(nextDuration);
-    setCurrentTime(nextPosition);
-    if (nextDuration > 0) {
-      setProgress((nextPosition / nextDuration) * 100);
-    }
-    setIsBuffering(Boolean(status.isBuffering));
-    if (status.didJustFinish) {
-      setIsPlaying(false);
-      setShowControls(true);
-    }
-  }, []);
-
+  // Controls
   const togglePlayPause = useCallback(() => {
-    setIsPlaying((prev) => !prev);
+    if (player.playing) { player.pause(); } else { player.play(); }
     setShowControls(true);
-  }, []);
+  }, [player]);
 
   const toggleFullscreen = useCallback(() => {
     setShowControls(true);
     if (isFullscreen) {
-      videoRef.current?.dismissFullscreenPlayer?.();
+      videoViewRef.current?.exitFullscreen();
     } else {
-      videoRef.current?.presentFullscreenPlayer?.();
+      videoViewRef.current?.enterFullscreen();
     }
   }, [isFullscreen]);
 
-  const toggleMute = useCallback(() => {
-    setIsMuted((prev) => !prev);
-  }, []);
+  const toggleMute = useCallback(() => setIsMuted((prev) => !prev), []);
 
   const cyclePlaybackRate = useCallback(() => {
     const rates = [0.5, 1, 1.25, 1.5, 2];
@@ -200,67 +270,152 @@ export default function VideoPlayerScreen() {
 
   const handleSeek = useCallback(
     (seekTime: number) => {
-      videoRef.current?.setPositionAsync?.(Math.floor(seekTime * 1000));
-      setCurrentTime(seekTime);
-      if (duration > 0) {
-        setProgress((seekTime / duration) * 100);
-      }
+      const clamped = Math.max(0, Math.min(seekTime, duration));
+      player.seekBy(clamped - player.currentTime);
     },
-    [duration],
+    [player, duration],
   );
 
   const handleSkip = useCallback(
-    (deltaSeconds: number) => {
-      const nextTime = Math.max(
-        0,
-        Math.min(
-          currentTime + deltaSeconds,
-          duration || currentTime + deltaSeconds,
-        ),
-      );
-      videoRef.current?.setPositionAsync?.(Math.floor(nextTime * 1000));
-      setCurrentTime(nextTime);
-      if (duration > 0) {
-        setProgress((nextTime / duration) * 100);
-      }
-    },
-    [currentTime, duration],
+    (deltaSeconds: number) => { player.seekBy(deltaSeconds); },
+    [player],
   );
 
   const formatTime = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-
+    const s = Math.max(0, seconds);
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = Math.floor(s % 60);
     if (hrs > 0) {
       return `${hrs}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     }
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handleScreenPress = useCallback(() => {
-    // Only reveal controls on background tap; avoid toggling off while user
-    // is interacting with controls (e.g., seek bar), which can swallow taps.
-    setShowControls((prev) => (prev ? prev : true));
-  }, []);
+  // handleScreenPress kept for reference; touch is now handled via gesture zones
 
   const handleBack = useCallback(() => {
-    // Save progress before leaving
-    if (currentTime > 0 && duration > 0) {
-      saveProgress(currentTime, duration);
-    }
+    const t = currentTimeRef.current;
+    const d = durationRef.current;
+    if (t > 0 && d > 0) void saveProgress(t, d);
     router.back();
-  }, [currentTime, duration, router]);
+  }, [router]);
 
+  // ── Controls animation helpers ────────────────────────────────────────────
+
+  const showControlsAnimated = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    Animated.timing(controlsOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [controlsOpacity]);
+
+  const hideControlsAnimated = useCallback(() => {
+    Animated.timing(controlsOpacity, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setShowControls(false));
+  }, [controlsOpacity]);
+
+  // ── Double-tap seek with YouTube-style accumulation ───────────────────────
+
+  const handleDoubleTap = useCallback(
+    (side: "left" | "right") => {
+      const now = Date.now();
+      const acc = accumulatedSkipRef.current;
+
+      if (now - lastTapTimeRef.current < DOUBLE_TAP_WINDOW_MS && lastTapSideRef.current === side) {
+        // Double-tap detected — accumulate
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
+        if (acc.timer) clearTimeout(acc.timer);
+        const newAmount = acc.side === side && acc.amount > 0 ? acc.amount + 10 : 10;
+        const timer = setTimeout(() => {
+          accumulatedSkipRef.current = { side, amount: 0, timer: null };
+          setShowDoubleTapFeedback(null);
+        }, TAP_ACCUMULATION_RESET_MS);
+        accumulatedSkipRef.current = { side, amount: newAmount, timer };
+
+        handleSkip(side === "right" ? 10 : -10);
+        setShowDoubleTapFeedback({ side, amount: newAmount });
+        lastTapTimeRef.current = 0;
+        lastTapSideRef.current = null;
+      } else {
+        // First tap — start tracking. If no second tap arrives, treat as single tap and show controls.
+        lastTapTimeRef.current = now;
+        lastTapSideRef.current = side;
+        if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = setTimeout(() => {
+          if (lastTapSideRef.current === side) {
+            showControlsAnimated();
+          }
+        }, DOUBLE_TAP_WINDOW_MS + 20);
+      }
+    },
+    [handleSkip, showControlsAnimated],
+  );
+
+  const handleCenterTap = useCallback(() => {
+    if (showControlsRef.current) {
+      hideControlsAnimated();
+    } else {
+      showControlsAnimated();
+    }
+  }, [hideControlsAnimated, showControlsAnimated]);
+
+  // ── Seek PanResponder — drag the progress bar thumb ──────────────────────
+
+  const seekPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2,
+      onPanResponderGrant: (e) => {
+        showControlsAnimated();
+        setIsDragging(true);
+        const pct = Math.max(
+          0,
+          Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
+        );
+        dragProgressRef.current = pct;
+        setDragDisplay(pct * 100);
+      },
+      onPanResponderMove: (e) => {
+        const pct = Math.max(
+          0,
+          Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
+        );
+        dragProgressRef.current = pct;
+        setDragDisplay(pct * 100);
+      },
+      onPanResponderRelease: () => {
+        const seekTo = dragProgressRef.current * durationRef.current;
+        const clamped = Math.max(0, Math.min(seekTo, durationRef.current));
+        player.seekBy(clamped - player.currentTime);
+        setIsDragging(false);
+        if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+        controlsTimeoutRef.current = setTimeout(() => {
+          hideControlsAnimated();
+        }, CONTROLS_HIDE_DELAY);
+      },
+      onPanResponderTerminate: () => {
+        setIsDragging(false);
+      },
+    }),
+  ).current;
+
+  // Render
   if (!videoUrl) {
     return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
         <View style={styles.errorContainer}>
-          <Ionicons
-            name="alert-circle-outline"
-            size={48}
-            color={themeColors.error}
-          />
+          <Ionicons name="alert-circle-outline" size={48} color={themeColors.error} />
           <Text style={styles.errorText}>No video URL provided</Text>
           <Pressable style={styles.backButton} onPress={handleBack}>
             <Text style={styles.backButtonText}>Go Back</Text>
@@ -277,30 +432,20 @@ export default function VideoPlayerScreen() {
     >
       <StatusBar hidden={isFullscreen} barStyle="light-content" />
 
-      <Pressable style={styles.videoContainer} onPress={handleScreenPress}>
-        <Video
-          ref={videoRef}
-          source={{ uri: videoUrl }}
+      {/* Video container — plain View so gesture zones control touch handling */}
+      <View style={styles.videoContainer}>
+        <VideoView
+          ref={videoViewRef}
+          player={player}
           style={[styles.video, isFullscreen && styles.fullscreenVideo]}
-          shouldPlay={isPlaying}
-          isMuted={isMuted}
-          rate={playbackRate}
-          shouldCorrectPitch
-          resizeMode={ResizeMode.CONTAIN}
-          useNativeControls={false}
-          onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-          progressUpdateIntervalMillis={1000}
-          onFullscreenUpdate={({ fullscreenUpdate }) => {
-            if (fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_PRESENT) {
-              setIsFullscreen(true);
-            }
-            if (fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS) {
-              setIsFullscreen(false);
-            }
-          }}
+          contentFit="contain"
+          nativeControls={false}
+          allowsFullscreen
+          onFullscreenEnter={() => setIsFullscreen(true)}
+          onFullscreenExit={() => setIsFullscreen(false)}
         />
 
-        {/* Loading Indicator */}
+        {/* Loading indicator */}
         {isLoading && !error && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={themeColors.accent} />
@@ -308,55 +453,57 @@ export default function VideoPlayerScreen() {
           </View>
         )}
 
-        {/* Error Message */}
+        {/* Error overlay */}
         {error && (
           <View style={styles.errorOverlay}>
-            <Ionicons
-              name="alert-circle-outline"
-              size={48}
-              color={themeColors.error}
-            />
+            <Ionicons name="alert-circle-outline" size={48} color={themeColors.error} />
             <Text style={styles.errorText}>{error}</Text>
             <Pressable
               style={styles.retryButton}
-              onPress={() => setError(null)}
+              onPress={() => {
+                setError(null);
+                player.replace({ uri: videoUrl });
+              }}
             >
               <Text style={styles.retryButtonText}>Retry</Text>
             </Pressable>
           </View>
         )}
 
-        {/* Controls Overlay */}
-        {showControls && !isLoading && !error && (
-          <View style={styles.controlsOverlay}>
-            {/* Top Controls */}
+        {/* Controls overlay — always mounted, fades in/out with animation */}
+        {!isLoading && !error && (
+          <Animated.View
+            style={[styles.controlsOverlay, { opacity: controlsOpacity }]}
+            pointerEvents={showControls ? "box-none" : "none"}
+          >
+            {/* Top gradient band */}
+            <LinearGradient
+              colors={["rgba(0,0,0,0.82)", "transparent"]}
+              style={styles.topGradientBand}
+              pointerEvents="none"
+            />
+            {/* Bottom gradient band */}
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.88)"]}
+              style={styles.bottomGradientBand}
+              pointerEvents="none"
+            />
+
+            {/* Top Controls: back · title · fullscreen */}
             <View style={styles.topControls}>
               <Pressable style={styles.controlButton} onPress={handleBack}>
-                <Ionicons
-                  name="arrow-back"
-                  size={24}
-                  color={themeColors.textPrimary}
-                />
+                <Ionicons name="arrow-back" size={24} color={themeColors.textPrimary} />
               </Pressable>
               <View style={styles.titleContainer}>
-                <Text style={styles.title} numberOfLines={1}>
-                  {title}
-                </Text>
+                <Text style={styles.title} numberOfLines={1}>{title}</Text>
                 {isOffline && (
                   <View style={styles.offlineBadge}>
-                    <Ionicons
-                      name="cloud-offline-outline"
-                      size={11}
-                      color={themeColors.success}
-                    />
+                    <Ionicons name="cloud-offline-outline" size={11} color={themeColors.success} />
                     <Text style={styles.offlineBadgeText}>Offline</Text>
                   </View>
                 )}
               </View>
-              <Pressable
-                style={styles.controlButton}
-                onPress={toggleFullscreen}
-              >
+              <Pressable style={styles.controlButton} onPress={toggleFullscreen}>
                 <Ionicons
                   name={isFullscreen ? "contract" : "expand"}
                   size={24}
@@ -365,11 +512,8 @@ export default function VideoPlayerScreen() {
               </Pressable>
             </View>
 
-            {/* Center Play/Pause Button */}
-            <Pressable
-              style={styles.centerPlayButton}
-              onPress={togglePlayPause}
-            >
+            {/* Center Play/Pause */}
+            <Pressable style={styles.centerPlayButton} onPress={togglePlayPause}>
               <Ionicons
                 name={isPlaying ? "pause" : "play"}
                 size={56}
@@ -377,17 +521,10 @@ export default function VideoPlayerScreen() {
               />
             </Pressable>
 
-            {/* Transport Controls */}
+            {/* Transport control pills */}
             <View style={styles.transportControls}>
-              <Pressable
-                style={styles.controlPill}
-                onPress={() => handleSkip(-10)}
-              >
-                <Ionicons
-                  name="play-back"
-                  size={20}
-                  color={themeColors.textPrimary}
-                />
+              <Pressable style={styles.controlPill} onPress={() => handleSkip(-10)}>
+                <Ionicons name="play-back" size={20} color={themeColors.textPrimary} />
                 <Text style={styles.controlPillText}>10s</Text>
               </Pressable>
               <Pressable style={styles.controlPill} onPress={toggleMute}>
@@ -396,57 +533,98 @@ export default function VideoPlayerScreen() {
                   size={20}
                   color={themeColors.textPrimary}
                 />
-                <Text style={styles.controlPillText}>
-                  {isMuted ? "Muted" : "Sound"}
-                </Text>
+                <Text style={styles.controlPillText}>{isMuted ? "Muted" : "Sound"}</Text>
               </Pressable>
               <Pressable style={styles.controlPill} onPress={cyclePlaybackRate}>
-                <Ionicons
-                  name="speedometer"
-                  size={20}
-                  color={themeColors.textPrimary}
-                />
+                <Ionicons name="speedometer" size={20} color={themeColors.textPrimary} />
                 <Text style={styles.controlPillText}>{playbackRate}x</Text>
               </Pressable>
-              <Pressable
-                style={styles.controlPill}
-                onPress={() => handleSkip(10)}
-              >
-                <Ionicons
-                  name="play-forward"
-                  size={20}
-                  color={themeColors.textPrimary}
-                />
+              <Pressable style={styles.controlPill} onPress={() => handleSkip(10)}>
+                <Ionicons name="play-forward" size={20} color={themeColors.textPrimary} />
                 <Text style={styles.controlPillText}>10s</Text>
               </Pressable>
             </View>
 
-            {/* Bottom Controls */}
+            {/* Bottom: time · draggable seek bar · duration */}
             <View style={styles.bottomControls}>
               <Text style={styles.timeText}>{formatTime(currentTime)}</Text>
-
-              {/* Progress Bar */}
-              <Pressable
+              {/* Draggable progress bar */}
+              <View
                 style={styles.progressBarContainer}
-                onPress={(e) => {
-                  const { locationX } = e.nativeEvent;
-                  const containerWidth = SCREEN_WIDTH - (spacing.md * 2 + 100); // Account for time texts
-                  const seekTime = (locationX / containerWidth) * duration;
-                  handleSeek(Math.max(0, Math.min(seekTime, duration)));
-                }}
+                onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+                {...seekPanResponder.panHandlers}
               >
                 <View style={styles.progressBar}>
                   <View
-                    style={[styles.progressFill, { width: `${progress}%` }]}
+                    style={[
+                      styles.progressFill,
+                      { width: `${isDragging ? dragDisplay : progress}%` },
+                    ]}
                   />
+                  {/* Seek thumb dot */}
+                  {progressBarWidth > 0 && (
+                    <View
+                      style={[
+                        styles.seekThumb,
+                        {
+                          left:
+                            ((isDragging ? dragDisplay : progress) / 100) *
+                              progressBarWidth -
+                            7,
+                        },
+                      ]}
+                    />
+                  )}
                 </View>
-              </Pressable>
-
+              </View>
               <Text style={styles.timeText}>{formatTime(duration)}</Text>
             </View>
+          </Animated.View>
+        )}
+
+        {/* Gesture zones — active only when controls are hidden */}
+        <View
+          style={styles.gestureContainer}
+          pointerEvents={showControls ? "none" : "box-none"}
+        >
+          <Pressable
+            style={styles.gestureZoneLeft}
+            onPress={() => handleDoubleTap("left")}
+          />
+          <Pressable
+            style={styles.gestureZoneCenter}
+            onPress={handleCenterTap}
+          />
+          <Pressable
+            style={styles.gestureZoneRight}
+            onPress={() => handleDoubleTap("right")}
+          />
+        </View>
+
+        {/* Double-tap seek feedback */}
+        {showDoubleTapFeedback && (
+          <View
+            style={[
+              styles.doubleTapFeedback,
+              showDoubleTapFeedback.side === "left"
+                ? styles.doubleTapLeft
+                : styles.doubleTapRight,
+            ]}
+          >
+            <Ionicons
+              name={
+                showDoubleTapFeedback.side === "left" ? "play-back" : "play-forward"
+              }
+              size={36}
+              color={themeColors.textPrimary}
+            />
+            <Text style={styles.doubleTapText}>
+              {showDoubleTapFeedback.side === "left" ? "-" : "+"}
+              {showDoubleTapFeedback.amount}s
+            </Text>
           </View>
         )}
-      </Pressable>
+      </View>
     </SafeAreaView>
   );
 }
@@ -472,26 +650,11 @@ const styles = StyleSheet.create({
   },
   video: {
     width: SCREEN_WIDTH,
-    height: (SCREEN_WIDTH * 9) / 16, // 16:9 aspect ratio
+    height: (SCREEN_WIDTH * 9) / 16,
   },
   fullscreenVideo: {
     width: SCREEN_WIDTH,
     height: SCREEN_HEIGHT,
-  },
-  bufferingContainer: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-  },
-  bufferingText: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    marginTop: spacing.md,
   },
   loadingContainer: {
     position: "absolute",
@@ -544,13 +707,62 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   controlsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "space-between",
+    zIndex: 2,
+  },
+  topGradientBand: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
+    height: 110,
+    zIndex: 0,
+  },
+  bottomGradientBand: {
+    position: "absolute",
     bottom: 0,
-    justifyContent: "space-between",
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    left: 0,
+    right: 0,
+    height: 140,
+    zIndex: 0,
+  },
+  gestureContainer: {
+    ...StyleSheet.absoluteFillObject,
+    flexDirection: "row",
+    zIndex: 10,
+  },
+  gestureZoneLeft: { flex: 1, height: "100%", backgroundColor: "transparent" },
+  gestureZoneCenter: { flex: 1, height: "100%", backgroundColor: "transparent" },
+  gestureZoneRight: { flex: 1, height: "100%", backgroundColor: "transparent" },
+  doubleTapFeedback: {
+    position: "absolute",
+    top: "50%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 48,
+    width: 96,
+    height: 96,
+    zIndex: 20,
+    transform: [{ translateY: -48 }],
+  },
+  doubleTapLeft: { left: spacing.xl },
+  doubleTapRight: { right: spacing.xl },
+  doubleTapText: {
+    color: themeColors.textPrimary,
+    fontSize: 13,
+    fontWeight: "700",
+    marginTop: 2,
+  },
+  seekThumb: {
+    position: "absolute",
+    top: "50%",
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: themeColors.accent,
+    transform: [{ translateY: -7 }],
   },
   topControls: {
     flexDirection: "row",
@@ -636,6 +848,7 @@ const styles = StyleSheet.create({
     height: 4,
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     borderRadius: 2,
+    overflow: "visible",
   },
   progressFill: {
     height: "100%",

@@ -1,77 +1,48 @@
-import { Audio } from "expo-av";
+import { AudioPlayer, createAudioPlayer, setAudioModeAsync } from "expo-audio";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
-let backgroundAudioPlayer: Audio.Sound | null = null;
+let backgroundAudioPlayer: AudioPlayer | null = null;
 let currentNotificationId: string | null = null;
 let currentMediaTitle = "";
 let currentMediaUrl = "";
 let audioModeReady = false;
-let audioLoadPromise: Promise<void> | null = null;
 
 async function ensureAudioMode(): Promise<void> {
   if (audioModeReady) return;
-  await Audio.setAudioModeAsync({
-    playsInSilentModeIOS: true,
-    staysActiveInBackground: true,
-    shouldDuckAndroid: true,
+  await setAudioModeAsync({
+    playsInSilentMode: true,
+    interruptionMode: "duckOthers",
   });
   audioModeReady = true;
 }
 
-async function getOrCreatePlayer(url: string): Promise<Audio.Sound> {
+function getOrCreatePlayer(url: string): AudioPlayer {
   if (backgroundAudioPlayer && currentMediaUrl === url) {
     return backgroundAudioPlayer;
   }
 
   if (backgroundAudioPlayer) {
     try {
-      await backgroundAudioPlayer.unloadAsync();
+      backgroundAudioPlayer.remove();
     } catch {
-      // Ignore unload errors
+      // Ignore cleanup errors
     }
   }
 
-  const player = new Audio.Sound();
-  audioLoadPromise = player.loadAsync({ uri: url }).then(() => {
-    audioLoadPromise = null;
-  });
-  await audioLoadPromise;
+  const player = createAudioPlayer({ uri: url });
   backgroundAudioPlayer = player;
   currentMediaUrl = url;
   return player;
 }
 
-async function ensurePlayerLoaded(
-  player: Audio.Sound,
-  url: string,
-): Promise<void> {
-  if (audioLoadPromise) {
-    await audioLoadPromise;
-  }
-
-  const status = await player.getStatusAsync();
-  if (status.isLoaded) return;
-
-  audioLoadPromise = player.loadAsync({ uri: url }).then(() => {
-    audioLoadPromise = null;
-  });
-  await audioLoadPromise;
-}
-
 async function safeSetPosition(
-  player: Audio.Sound,
-  url: string,
+  player: AudioPlayer,
   positionSeconds?: number,
 ): Promise<void> {
   if (!positionSeconds || positionSeconds <= 0) return;
-  await ensurePlayerLoaded(player, url);
-
-  const status = await player.getStatusAsync();
-  if (!status.isLoaded) return;
-
   try {
-    await player.setPositionAsync(positionSeconds * 1000);
+    await player.seekTo(positionSeconds);
   } catch {
     // Ignore seek errors
   }
@@ -83,9 +54,8 @@ export async function preloadAudioFromUrl(options: {
   title?: string;
 }): Promise<void> {
   await ensureAudioMode();
-  const player = await getOrCreatePlayer(options.url);
-  await safeSetPosition(player, options.url, options.positionSeconds);
-
+  const player = getOrCreatePlayer(options.url);
+  await safeSetPosition(player, options.positionSeconds);
   currentMediaTitle = options.title || currentMediaTitle || "Playing Audio";
 }
 
@@ -93,16 +63,15 @@ export async function playAudioFromUrl(options: {
   url: string;
   positionSeconds?: number;
   title?: string;
-}): Promise<Audio.Sound> {
+}): Promise<AudioPlayer> {
   await ensureAudioMode();
-  const player = await getOrCreatePlayer(options.url);
-  await safeSetPosition(player, options.url, options.positionSeconds);
+  const player = getOrCreatePlayer(options.url);
+  await safeSetPosition(player, options.positionSeconds);
 
   try {
-    await player.playAsync();
+    player.play();
   } catch {
-    await ensurePlayerLoaded(player, options.url);
-    await player.playAsync();
+    // Ignore play errors
   }
   currentMediaTitle = options.title || "Playing Audio";
 
@@ -115,9 +84,8 @@ export async function playAudioFromUrl(options: {
 export async function getAudioPosition(): Promise<number> {
   if (!backgroundAudioPlayer) return 0;
   try {
-    const status = await backgroundAudioPlayer.getStatusAsync();
-    return status.isLoaded && status.positionMillis
-      ? status.positionMillis / 1000
+    return backgroundAudioPlayer.isLoaded
+      ? backgroundAudioPlayer.currentTime
       : 0;
   } catch {
     return 0;
@@ -127,16 +95,13 @@ export async function getAudioPosition(): Promise<number> {
 export async function stopAudio(): Promise<void> {
   if (backgroundAudioPlayer) {
     try {
-      await backgroundAudioPlayer.pauseAsync();
-      await backgroundAudioPlayer.unloadAsync();
-      backgroundAudioPlayer = null;
+      backgroundAudioPlayer.pause();
+      backgroundAudioPlayer.remove();
     } catch {
       // Ignore errors
-      backgroundAudioPlayer = null;
     }
+    backgroundAudioPlayer = null;
   }
-
-  audioLoadPromise = null;
 
   currentMediaUrl = "";
   currentMediaTitle = "";
@@ -151,7 +116,7 @@ export async function stopAudio(): Promise<void> {
 export async function pauseAudio(): Promise<void> {
   if (!backgroundAudioPlayer) return;
   try {
-    await backgroundAudioPlayer.pauseAsync();
+    backgroundAudioPlayer.pause();
     await updateMediaNotification("paused");
   } catch {
     // Ignore errors
@@ -161,7 +126,7 @@ export async function pauseAudio(): Promise<void> {
 export async function resumeAudio(): Promise<void> {
   if (!backgroundAudioPlayer) return;
   try {
-    await backgroundAudioPlayer.playAsync();
+    backgroundAudioPlayer.play();
     await updateMediaNotification("playing");
   } catch {
     // Ignore errors

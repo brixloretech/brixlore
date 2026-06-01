@@ -24,7 +24,8 @@
           "color": "#E50914",
           "sounds": []
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "ios": {
       "supportsTablet": true,

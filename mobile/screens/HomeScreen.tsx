@@ -28,6 +28,7 @@ import {
   type VideoCardItem,
 } from "../components/LargeVideoCard";
 import { SmallVideoCard } from "../components/SmallVideoCard";
+import { useMatomo } from "../hooks/useMatomo";
 import { useContinueWatching } from "../hooks";
 import {
   contentService,
@@ -61,13 +62,13 @@ function toVideoCardItem(item: ContentSummaryDto): VideoCardItem {
     id: item.id,
     title: item.title,
     subtitle: formatSubtitle(item),
-    posterUri: item.posterUrl ?? undefined,
-    thumbnailUri: item.thumbnailUrl ?? undefined,
+    thumbnailUri: item.posterUrl ?? item.thumbnailUrl ?? undefined,
   };
 }
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { trackEvent } = useMatomo();
   const { user, isAuthenticated } = useAuthStore();
   const { subscription, fetchSubscription } = useSubscriptionStore();
   const { items: continueWatching, refresh: refreshContinueWatching } =
@@ -166,11 +167,12 @@ export default function HomeScreen() {
   }, [loadContent, refreshContinueWatching]);
 
   const handleItemPress = useCallback(
-    (id: string, episodeId?: string) => {
+    (id: string, episodeId?: string, title?: string) => {
+      trackEvent('Video', 'card_click', title);
       const params = episodeId ? `?episodeId=${episodeId}` : "";
       router.push(`/video/${id}${params}`);
     },
-    [router],
+    [router, trackEvent],
   );
 
   const userName = useMemo(() => {
@@ -208,7 +210,7 @@ export default function HomeScreen() {
           renderItem={({ item }) => (
             <SmallVideoCard
               item={item}
-              onPress={() => handleItemPress(item.id)}
+              onPress={() => handleItemPress(item.id, undefined, item.title)}
             />
           )}
           contentContainerStyle={styles.horizontalList}
@@ -311,7 +313,7 @@ export default function HomeScreen() {
                 <View style={styles.heroItemContainer}>
                   <Pressable
                     style={styles.heroCard}
-                    onPress={() => handleItemPress(item.id)}
+                    onPress={() => handleItemPress(item.id, undefined, item.title)}
                   >
                     {item.thumbnailUri ? (
                       <Image
@@ -383,7 +385,7 @@ export default function HomeScreen() {
                     progressPercent: item.progressPercent,
                   }}
                   onPress={() =>
-                    handleItemPress(item.contentId, item.episodeId)
+                    handleItemPress(item.contentId, item.episodeId, item.title)
                   }
                 />
               )}

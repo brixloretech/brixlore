@@ -565,7 +565,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Video, ResizeMode, type AVPlaybackStatus } from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useEventListener } from "expo";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuthStore } from "../store/useAuthStore";
 
@@ -574,8 +575,11 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("screen");
 export default function WelcomeScreen() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuthStore();
-  const videoRef = useRef<Video | null>(null);
-  const lastResumeAttemptRef = useRef(0);
+  const player = useVideoPlayer(require("../assets/LandingPageBanner.mp4"), (p) => {
+    p.loop = true;
+    p.muted = true;
+    p.play();
+  });
 
   useEffect(() => {
     if (!isLoading && isAuthenticated) {
@@ -583,34 +587,21 @@ export default function WelcomeScreen() {
     }
   }, [isAuthenticated, isLoading, router]);
 
-  const handlePlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) return;
-    const stalled =
-      status.shouldPlay && !status.isPlaying && !status.isBuffering;
-    if (!stalled) return;
-    const now = Date.now();
-    if (now - lastResumeAttemptRef.current < 1500) return;
-    lastResumeAttemptRef.current = now;
-    videoRef.current?.playAsync().catch(() => {});
-  }, []);
+  useEventListener(player, "statusChange", ({ status }) => {
+    if (status === "readyToPlay" && !player.playing) {
+      player.play();
+    }
+  });
 
   return (
     // Outer View — plain, no safe area, fills entire screen including notch/home bar
     <View style={styles.root}>
       {/* VIDEO — absolutely positioned, true full screen */}
-      <Video
-        ref={(ref) => {
-          videoRef.current = ref;
-        }}
-        source={require("../assets/LandingPageBanner.mp4")}
+      <VideoView
+        player={player}
         style={styles.video}
-        shouldPlay
-        isLooping
-        isMuted
-        resizeMode={ResizeMode.COVER}
-        progressUpdateIntervalMillis={1000}
-        onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-        videoStyle={{ height: "100%" }}
+        contentFit="cover"
+        nativeControls={false}
       />
 
       {/* GRADIENT OVERLAY */}

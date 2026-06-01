@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -390,11 +391,18 @@ export class DownloadsService {
       throw new ForbiddenException('Content is not yet available');
     }
 
-    if (/^https?:\/\//i.test(episode.videoUrl)) {
-      return { downloadUrl: episode.videoUrl };
+    const rawUrl = episode.videoUrl.trim();
+    if (/^https?:\/\//i.test(rawUrl)) {
+      return { downloadUrl: rawUrl };
     }
-    const signed = await this.r2Service.getSignedGetUrl(episode.videoUrl);
-    return { downloadUrl: signed };
+    // Non-URL value is a Cloudflare Stream UID — resolve to HLS manifest URL.
+    const customerSubdomain = process.env.CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN?.trim();
+    if (!customerSubdomain) {
+      throw new InternalServerErrorException(
+        'Cloudflare Stream customer subdomain is not configured. Set CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN.',
+      );
+    }
+    return { downloadUrl: `https://${customerSubdomain}/${rawUrl}/manifest/video.m3u8` };
   }
 
   private async attachSignedThumbnails(rows: any[]) {

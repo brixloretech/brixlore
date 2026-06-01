@@ -18,6 +18,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { colors as themeColors } from "../../src/theme/colors";
 import { spacing, typography, borderRadius } from "../../constants/theme";
 import { BrowseCard, type BrowseItem } from "../../components/BrowseCard";
+import { useMatomo } from "../../hooks/useMatomo";
 import {
   contentService,
   type ContentSummaryDto,
@@ -130,7 +131,7 @@ function BrowseRowSection({
   onItemPress,
 }: {
   row: BrowseRow;
-  onItemPress: (id: string) => void;
+  onItemPress: (id: string, title?: string) => void;
 }) {
   return (
     <View style={styles.rowSection}>
@@ -154,7 +155,7 @@ function BrowseRowSection({
           <BrowseCard
             item={item}
             index={index}
-            onPress={() => onItemPress(item.id)}
+            onPress={() => onItemPress(item.id, item.title)}
           />
         )}
         contentContainerStyle={styles.rowContent}
@@ -165,6 +166,7 @@ function BrowseRowSection({
 
 export default function ExploreScreen() {
   const router = useRouter();
+  const { trackEvent } = useMatomo();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [categories, setCategories] = useState<string[]>(["All"]);
@@ -199,10 +201,11 @@ export default function ExploreScreen() {
   }, [loadContent]);
 
   const handleItemPress = useCallback(
-    (id: string) => {
+    (id: string, title?: string) => {
+      trackEvent('Video', 'card_click', title);
       router.push(`/video/${id}`);
     },
-    [router],
+    [router, trackEvent],
   );
 
   const handleCategoryPress = useCallback((category: string) => {
@@ -352,7 +355,7 @@ export default function ExploreScreen() {
                       key={item.id}
                       item={item}
                       index={index}
-                      onPress={() => handleItemPress(item.id)}
+                      onPress={() => handleItemPress(item.id, item.title)}
                     />
                   ))}
                 </ScrollView>

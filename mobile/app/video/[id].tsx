@@ -12,15 +12,13 @@ import {
   AppState,
   type AppStateStatus,
   Modal,
+  Animated,
+  PanResponder,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import {
-  Video,
-  ResizeMode,
-  VideoFullscreenUpdate,
-  type AVPlaybackStatus,
-} from "expo-av";
+import { VideoView, useVideoPlayer } from "expo-video";
+import { useEventListener } from "expo";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -42,9 +40,14 @@ import {
   playAudioFromUrl,
   stopAudio,
 } from "../../src/services/playbackService";
+import { useAdPlayer } from "../../hooks/useAdPlayer";
+import { AdOverlay } from "../../components/AdOverlay";
+import { useMatomo } from "../../hooks/useMatomo";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PROGRESS_REPORT_INTERVAL_SEC = 10;
+const DOUBLE_TAP_WINDOW_MS = 320;
+const TAP_ACCUMULATION_RESET_MS = 900;
 
 // Report progress every 10 seconds
 type ContentDetailDto = {
@@ -94,6 +97,7 @@ function durationToSeconds(duration?: string): number {
   return 0;
 }
 export default function WatchScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string; episodeId?: string }>();
   const contentId = params.id;
@@ -133,7 +137,7 @@ export default function WatchScreen() {
   const setFreeUnlockedVideoId = useLimitedAccessStore(
     (state) => state.setFreeUnlockedVideoId,
   );
-  const videoRef = useRef<Video>(null);
+  const videoViewRef = useRef<VideoView>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasPlayingRef = useRef(false);
   const backgroundAudioActiveRef = useRef(false);
@@ -148,7 +152,65 @@ export default function WatchScreen() {
   const initialCumulativeTimeRef = useRef<number>(0);
   const watchedEpisodeIdRef = useRef<string | null>(null);
   const [savedProgress, setSavedProgress] = useState<number>(0);
-  const [videoKey, setVideoKey] = useState<string>("");
+  // expo-video player — source is loaded imperatively via player.replace()
+  const player = useVideoPlayer(null, () => {});
+  const playerMountedRef = useRef(true);
+  // savedProgress ref so event listener callbacks always read the current value
+  const savedProgressRef = useRef(0);
+
+  const safePlayerCall = useCallback((action: () => void, label: string) => {
+    if (!playerMountedRef.current) return;
+    try {
+      action();
+    } catch (error) {
+      console.warn(`[Watch] Skipping player ${label} on released instance`, error);
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      playerMountedRef.current = false;
+    };
+  }, []);
+
+  // Always-current isPlaying ref (readable inside stable callbacks).
+  const isPlayingRef = useRef(true);
+
+  // Tracks whether content was playing immediately before an ad slot started.
+  // Used by resumeContent to decide whether to restart playback.
+  const wasPlayingBeforeAdRef = useRef(false);
+
+  // ── Matomo analytics tracking refs ──────────────────────────────────────────
+  // hasTrackedFirstPlayRef: true after the first 'play' event fires for the
+  //   current source — distinguishes 'play' (first start) from 'resume'.
+  const hasTrackedFirstPlayRef = useRef(false);
+  // contentEndedRef: set true in playToEnd so the matching playingChange
+  //   (nowPlaying=false) is not mistaken for a user-initiated pause.
+  const contentEndedRef = useRef(false);
+  // adJustResumedRef: set true in resumeContent when the ad system restarts
+  //   the content player, so the resulting playingChange is not tracked as
+  //   a user resume.
+  const adJustResumedRef = useRef(false);
+  // videoTitleRef: current "Show Title \u2014 Episode Title" string for event name.
+  const videoTitleRef = useRef('');
+
+  // Ad system — manages pre-roll / mid-roll / post-roll lifecycle.
+  const adSystem = useAdPlayer({
+    pauseContent: useCallback(() => {
+      wasPlayingBeforeAdRef.current = isPlayingRef.current;
+      safePlayerCall(() => player.pause(), "pauseContent");
+    }, [player, safePlayerCall]),
+    resumeContent: useCallback(() => {
+      if (wasPlayingBeforeAdRef.current) {
+        wasPlayingBeforeAdRef.current = false;
+        // Signal that the next playingChange(nowPlaying=true) is ad-driven.
+        adJustResumedRef.current = true;
+        safePlayerCall(() => player.play(), "resumeContent");
+      }
+    }, [player, safePlayerCall]),
+  });
+
+  const { trackEvent } = useMatomo();
   const [content, setContent] = useState<ContentDetailDto | null>(null);
   const [primaryEpisode, setPrimaryEpisode] = useState<PlayableEpisode | null>(
     null,
@@ -164,7 +226,6 @@ export default function WatchScreen() {
   const [isBuffering, setIsBuffering] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showLimitedAccessLoginModal, setShowLimitedAccessLoginModal] =
     useState(false);
@@ -176,14 +237,49 @@ export default function WatchScreen() {
   const isGuest = !isAuthenticated;
   const showUpgradeModal2SecRef = useRef(false);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Controls animation helpers (GAP 9) ────────────────────────────────────
+
+  const showControlsAnimated = useCallback(() => {
+    setShowControls(true);
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    Animated.timing(controlsOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+  }, [controlsOpacity]);
+
+  const hideControlsAnimated = useCallback(() => {
+    Animated.timing(controlsOpacity, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => setShowControls(false));
+  }, [controlsOpacity]);
+
   const resetControlsTimeout = useCallback(() => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 4000);
-  }, []);
+    controlsTimeoutRef.current = setTimeout(() => {
+      Animated.timing(controlsOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => setShowControls(false));
+    }, 4000);
+  }, [controlsOpacity]);
+
+  // Keep showControlsRef current for stable callbacks
+  useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
+  // Keep progressBarWidthRef current
+  useEffect(() => { progressBarWidthRef.current = progressBarWidth; }, [progressBarWidth]);
+
   useEffect(() => {
     if (showControls) resetControlsTimeout();
     return () => {
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+      if (accumulatedSkipRef.current.timer) clearTimeout(accumulatedSkipRef.current.timer);
     };
   }, [showControls, resetControlsTimeout]);
 
@@ -200,9 +296,7 @@ export default function WatchScreen() {
   useEffect(() => {
     return () => {
       // When user navigates away (back button), pause video and stop audio
-      videoRef.current?.pauseAsync?.().catch(() => {
-        // Ignore pause errors
-      });
+      safePlayerCall(() => player.pause(), "unmountCleanupPause");
       stopAudio().catch(() => {
         // Ignore stop errors
       });
@@ -225,7 +319,7 @@ export default function WatchScreen() {
         }
       }
     };
-  }, [isFreeTier, updateEpisodeCumulativeTime, saveLimitedAccessToStorage]);
+  }, [isFreeTier, updateEpisodeCumulativeTime, saveLimitedAccessToStorage, player, safePlayerCall]);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -253,17 +347,50 @@ export default function WatchScreen() {
   // New gesture-based controls state
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
-  const [showDoubleTapFeedback, setShowDoubleTapFeedback] = useState<
-    "left" | "right" | null
-  >(null);
+  // Double-tap accumulation: stores side + accumulated skip amount
+  const [showDoubleTapFeedback, setShowDoubleTapFeedback] = useState<{
+    side: "left" | "right";
+    amount: number;
+  } | null>(null);
+  // Quality selector (GAP 8: wired settings modal + GAP 1: URL rebuild)
+  const [qualityLevel, setQualityLevel] = useState<"auto" | "1080p" | "720p" | "480p">("auto");
+  // Drag seek state
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragDisplay, setDragDisplay] = useState(0); // 0–100
   const lastTapTimeRef = useRef<number>(0);
   const lastTapSideRef = useRef<"left" | "right" | null>(null);
   const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const normalPlaybackRateRef = useRef<number>(1);
+  // Controls fade animation (GAP 9)
+  const controlsOpacity = useRef(new Animated.Value(1)).current;
+  const showControlsRef = useRef(true);
+  // Accumulated double-tap skip ref
+  const accumulatedSkipRef = useRef<{
+    side: "left" | "right";
+    amount: number;
+    timer: ReturnType<typeof setTimeout> | null;
+  }>({ side: "right", amount: 0, timer: null });
+  const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Progress bar drag refs
+  const dragProgressRef = useRef(0);
+  const progressBarWidthRef = useRef(0);
+  // Quality change guard — skip effect on first render
+  const isFirstQualityRender = useRef(true);
 
   useEffect(() => {
     primaryEpisodeRef.current = primaryEpisode;
   }, [primaryEpisode]);
+
+  // Keep videoTitleRef current for analytics event names.
+  useEffect(() => {
+    if (!content) {
+      videoTitleRef.current = '';
+      return;
+    }
+    videoTitleRef.current = primaryEpisode?.title
+      ? `${content.title} — ${primaryEpisode.title}`
+      : content.title;
+  }, [content, primaryEpisode]);
 
   // Fetch subscription status for free tier check
   useEffect(() => {
@@ -399,9 +526,6 @@ export default function WatchScreen() {
               setShowLimitedAccessLoginModal(true);
               setLimitedAccessModalReason("free-tier-limit");
               setIsPlaying(false);
-              if (videoRef.current) {
-                videoRef.current.pauseAsync().catch(() => { });
-              }
               if (watchTimeTrackerRef.current) {
                 clearInterval(watchTimeTrackerRef.current);
                 watchTimeTrackerRef.current = null;
@@ -418,9 +542,6 @@ export default function WatchScreen() {
               setShowLimitedAccessLoginModal(true);
               setLimitedAccessModalReason("guest-limit");
               setIsPlaying(false);
-              if (videoRef.current) {
-                videoRef.current.pauseAsync().catch(() => { });
-              }
               if (watchTimeTrackerRef.current) {
                 clearInterval(watchTimeTrackerRef.current);
                 watchTimeTrackerRef.current = null;
@@ -626,7 +747,6 @@ export default function WatchScreen() {
         }
         console.log("[Watch] Loaded playback info successfully");
         setPlaybackInfo(playbackRes);
-        setVideoKey(playbackRes.url);
 
         // Mark video as watched for limited access tracking (only if Guest)
         // Track by EPISODE ID, not content ID, so each episode counts separately
@@ -687,54 +807,189 @@ export default function WatchScreen() {
     fetchSimilarVideos();
   }, [content, contentId]);
 
-  const handlePlaybackStatusUpdate = useCallback(
-    (status: AVPlaybackStatus) => {
-      if (!status.isLoaded) {
-        if (status.error) {
-          console.error("[Watch] Video playback error:", status.error);
-          setPlaybackError("unavailable");
-          setLoading(false);
-        }
+  // Keep savedProgress ref in sync so event listeners always see the current value
+  useEffect(() => {
+    savedProgressRef.current = savedProgress;
+  }, [savedProgress]);
+
+  // Load new source into player when playback URL becomes available.
+  // Pre-roll runs before content starts; player.play() fires after it resolves.
+  useEffect(() => {
+    const url = playbackInfo?.url;
+    if (!url) return;
+    let cancelled = false;
+    hasSeekedToSavedProgressRef.current = false;
+    // Reset per-source analytics state.
+    hasTrackedFirstPlayRef.current = false;
+    contentEndedRef.current = false;
+    adJustResumedRef.current = false;
+
+    // Pause any in-flight playback before pre-roll begins so content never flashes first.
+    safePlayerCall(() => player.pause(), "prePrerollPause");
+    void adSystem.triggerPreRoll().then(() => {
+      if (cancelled) return;
+      safePlayerCall(() => player.replace({ uri: url }), "sourceReplace");
+      safePlayerCall(() => player.play(), "postPrerollPlay");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [playbackInfo?.url, player, safePlayerCall]);
+
+  // GAP 1: Quality selector URL rebuild (`?quality=720p`) and keep playback position.
+  useEffect(() => {
+    if (!playbackInfo?.url) return;
+    if (isFirstQualityRender.current) {
+      isFirstQualityRender.current = false;
+      return;
+    }
+
+    const base = playbackInfo.url.split("?")[0];
+    const newUrl = qualityLevel === "auto" ? base : `${base}?quality=${qualityLevel}`;
+    const currentPos = player.currentTime;
+
+    safePlayerCall(() => player.replace({ uri: newUrl }), "qualityReplace");
+    const seekTimer = setTimeout(() => {
+      try {
+        safePlayerCall(() => player.seekBy(currentPos - player.currentTime), "qualitySeekRestore");
+        if (isPlayingRef.current) safePlayerCall(() => player.play(), "qualityResumePlay");
+      } catch {
+        // Ignore seek/play errors after source replacement
+      }
+    }, 800);
+
+    return () => {
+      clearTimeout(seekTimer);
+    };
+  }, [qualityLevel, playbackInfo?.url, player, safePlayerCall]);
+
+  // Keep isPlayingRef current so stable ad callbacks can read playing state.
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  // Sync playback rate → player (replaces expo-av rate prop)
+  useEffect(() => {
+    safePlayerCall(() => {
+      player.playbackRate = playbackRate;
+    }, "syncPlaybackRate");
+  }, [playbackRate, player, safePlayerCall]);
+
+  // expo-video: Player status changes (loading → readyToPlay / error)
+  useEventListener(player, "statusChange", ({ status }: { status: string }) => {
+    setIsBuffering(status === "loading");
+    if (status === "readyToPlay") {
+      setLoading(false);
+      const d = player.duration;
+      if (d && d > 0) setDuration(d);
+      // Seek to saved progress on first load of each source
+      if (!hasSeekedToSavedProgressRef.current && savedProgressRef.current > 0) {
+        hasSeekedToSavedProgressRef.current = true;
+        safePlayerCall(
+          () => player.seekBy(savedProgressRef.current - player.currentTime),
+          "seekToSavedProgress",
+        );
+      }
+    } else if (status === "error") {
+      console.error("[Watch] Video playback error");
+      setPlaybackError("unavailable");
+      setLoading(false);
+    }
+  });
+
+  // expo-video: Playback time updates (~250 ms while playing)
+  useEventListener(player, "timeUpdate", ({ currentTime: ct }: { currentTime: number; bufferedPosition: number }) => {
+    setCurrentTime(ct);
+    adSystem.onTimeUpdate(ct);
+  });
+
+  // Fallback timer sync: keeps UI time moving even if a timeUpdate event is missed.
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      let t = 0;
+      try {
+        t = player.currentTime;
+      } catch {
         return;
       }
+      if (!Number.isFinite(t) || t < 0) return;
+      setCurrentTime((prev) => (Math.abs(prev - t) > 0.2 ? t : prev));
+    }, 500);
+    return () => clearInterval(interval);
+  }, [isPlaying, player]);
 
-      // Video is loaded successfully
-      setLoading(false);
+  // expo-video: Video reached end
+  useEventListener(player, "playToEnd", () => {
+    // Mark ended before setIsPlaying(false) so playingChange does not track
+    // the resulting state change as a user pause.
+    contentEndedRef.current = true;
+    trackEvent('Video', 'complete', videoTitleRef.current || undefined);
+    setIsPlaying(false);
+    const episode = primaryEpisodeRef.current;
+    if (episode && isAuthenticated) {
+      const durationSec = durationToSeconds(episode.duration);
+      streamingService.reportProgress(
+        episode.id,
+        lastPositionRef.current,
+        durationSec > 0 ? durationSec : undefined,
+      );
+    }
+    // Post-roll: fire after content ends (fire-and-forget — nothing resumes after).
+    void adSystem.triggerPostRoll();
+  });
 
-      // Seek to saved progress on first load
-      if (
-        !hasSeekedToSavedProgressRef.current &&
-        savedProgress > 0 &&
-        status.durationMillis &&
-        status.durationMillis > 0
-      ) {
-        hasSeekedToSavedProgressRef.current = true;
-        videoRef.current?.setPositionAsync(savedProgress * 1000);
+  // expo-video: Report progress when playback pauses; track play/pause/resume events.
+  useEventListener(player, "playingChange", ({ isPlaying: nowPlaying }: { isPlaying: boolean }) => {
+    setIsPlaying(nowPlaying);
+    if (!nowPlaying) {
+      const episode = primaryEpisodeRef.current;
+      if (episode && lastPositionRef.current > 0 && isAuthenticated) {
+        const durationSec = durationToSeconds(episode.duration);
+        lastReportedRef.current = lastPositionRef.current;
+        streamingService.reportProgress(
+          episode.id,
+          lastPositionRef.current,
+          durationSec > 0 ? durationSec : undefined,
+        );
       }
-
-      setDuration(status.durationMillis ? status.durationMillis / 1000 : 0);
-      setCurrentTime(status.positionMillis ? status.positionMillis / 1000 : 0);
-      setIsBuffering(Boolean(status.isBuffering));
-      if (status.didJustFinish) setIsPlaying(false);
-      if (!status.isPlaying && status.positionMillis && primaryEpisode) {
-        const progressSeconds = status.positionMillis / 1000;
-        const durationSec = durationToSeconds(primaryEpisode.duration);
-        lastReportedRef.current = progressSeconds;
-        if (isAuthenticated) {
-          streamingService.reportProgress(
-            primaryEpisode.id,
-            progressSeconds,
-            durationSec > 0 ? durationSec : undefined,
-          );
+      // Track pause — skip if the content ended naturally or an ad paused the player.
+      if (!adSystem.adActiveRef.current && !contentEndedRef.current) {
+        trackEvent('Video', 'pause', videoTitleRef.current || undefined);
+      }
+      // Consume the ended flag after the first playingChange(false) that follows.
+      contentEndedRef.current = false;
+    } else {
+      // Track play / resume — skip if the ad system triggered playback.
+      if (!adSystem.adActiveRef.current) {
+        if (!hasTrackedFirstPlayRef.current) {
+          // First play for this source.
+          hasTrackedFirstPlayRef.current = true;
+          adJustResumedRef.current = false; // clear suppression if set
+          trackEvent('Video', 'play', videoTitleRef.current || undefined);
+        } else if (adJustResumedRef.current) {
+          // Ad system resumed content — suppress this event.
+          adJustResumedRef.current = false;
+        } else {
+          trackEvent('Video', 'resume', videoTitleRef.current || undefined);
         }
       }
-    },
-    [isAuthenticated, primaryEpisode, savedProgress],
-  );
+    }
+  });
 
   useEffect(() => {
     lastPositionRef.current = currentTime;
   }, [currentTime]);
+
+  // Track Ad impression when adOverlay transitions from null → non-null.
+  const prevAdOverlayRef = useRef(adSystem.adOverlay);
+  useEffect(() => {
+    const prev = prevAdOverlayRef.current;
+    prevAdOverlayRef.current = adSystem.adOverlay;
+    if (!prev && adSystem.adOverlay) {
+      trackEvent('Ad', 'ad_impression', adSystem.adOverlay.slot);
+    }
+  }, [adSystem.adOverlay, trackEvent]);
 
   useEffect(() => {
     return () => {
@@ -784,15 +1039,8 @@ export default function WatchScreen() {
         backgroundAudioActiveRef.current = true;
         setIsPlaying(false);
 
-        let resumePosition = lastPositionRef.current;
-        try {
-          const status = await videoRef.current?.getStatusAsync?.();
-          if (status?.isLoaded && status.positionMillis) {
-            resumePosition = status.positionMillis / 1000;
-          }
-        } catch {
-          // Ignore status errors
-        }
+        // expo-video: read currentTime directly (synchronous property)
+        const resumePosition = player.currentTime > 0 ? player.currentTime : lastPositionRef.current;
 
         try {
           await stopAudio();
@@ -800,27 +1048,19 @@ export default function WatchScreen() {
           // Ignore stop errors
         }
 
+        safePlayerCall(() => player.pause(), "appBackgroundPause");
         if (wasPlayingRef.current) {
           const title = primaryEpisode
             ? `${content?.title} - ${primaryEpisode.title}`
             : content?.title || "Playing Audio";
           try {
-            await Promise.all([
-              videoRef.current?.pauseAsync?.(),
-              playAudioFromUrl({
-                url: playbackInfo.url,
-                positionSeconds: resumePosition,
-                title,
-              }),
-            ]);
+            await playAudioFromUrl({
+              url: playbackInfo.url,
+              positionSeconds: resumePosition,
+              title,
+            });
           } catch {
             // Ignore background handoff errors
-          }
-        } else {
-          try {
-            await videoRef.current?.pauseAsync?.();
-          } catch {
-            // Ignore pause errors
           }
         }
       }
@@ -838,7 +1078,10 @@ export default function WatchScreen() {
 
         if (resumePosition > 0) {
           try {
-            await videoRef.current?.setPositionAsync?.(resumePosition * 1000);
+            safePlayerCall(
+              () => player.seekBy(resumePosition - player.currentTime),
+              "appForegroundSeekRestore",
+            );
             setCurrentTime(resumePosition);
           } catch {
             // Ignore seek errors
@@ -847,11 +1090,6 @@ export default function WatchScreen() {
 
         if (wasPlayingRef.current) {
           setIsPlaying(true);
-          try {
-            await videoRef.current?.playAsync?.();
-          } catch {
-            // Ignore play errors
-          }
         }
 
         backgroundAudioActiveRef.current = false;
@@ -867,7 +1105,7 @@ export default function WatchScreen() {
       subscription.remove();
       stopAudio();
     };
-  }, [content?.thumbnailUrl, isPlaying, playbackInfo, primaryEpisode]);
+  }, [content?.thumbnailUrl, isPlaying, playbackInfo, primaryEpisode, player, safePlayerCall]);
 
   useEffect(() => {
     if (!isAuthenticated || !primaryEpisode) return;
@@ -890,16 +1128,16 @@ export default function WatchScreen() {
 
     return () => clearInterval(intervalId);
   }, [currentTime, isAuthenticated, primaryEpisode]);
-  const toggleMute = useCallback(() => {
-    setIsMuted((prev) => !prev);
-  }, []);
   const toggleFullscreen = useCallback(() => {
-    if (isFullscreen) {
-      videoRef.current?.dismissFullscreenPlayer?.();
+    const next = !isFullscreen;
+    setIsFullscreen(next);
+    if (next) {
+      void lockLandscape();
     } else {
-      videoRef.current?.presentFullscreenPlayer?.();
+      void lockPortrait();
     }
-  }, [isFullscreen]);
+    resetControlsTimeout();
+  }, [isFullscreen, lockLandscape, lockPortrait, resetControlsTimeout]);
   const lockLandscape = useCallback(async () => {
     try {
       await ScreenOrientation.lockAsync(
@@ -914,7 +1152,6 @@ export default function WatchScreen() {
       await ScreenOrientation.lockAsync(
         ScreenOrientation.OrientationLock.PORTRAIT_UP,
       );
-      await ScreenOrientation.unlockAsync();
     } catch (error) {
       console.warn("Failed to lock portrait orientation:", error);
     }
@@ -927,9 +1164,17 @@ export default function WatchScreen() {
     });
   }, []);
   const handleSeek = useCallback((seekTime: number) => {
-    videoRef.current?.setPositionAsync?.(Math.floor(seekTime * 1000));
+    safePlayerCall(() => player.seekBy(seekTime - player.currentTime), "handleSeek");
     setCurrentTime(seekTime);
-  }, []);
+  }, [player, safePlayerCall]);
+  const handlePlayPause = useCallback(() => {
+    if (player.playing) {
+      safePlayerCall(() => player.pause(), "handlePlayPausePause");
+    } else {
+      safePlayerCall(() => player.play(), "handlePlayPausePlay");
+    }
+    resetControlsTimeout();
+  }, [player, resetControlsTimeout, safePlayerCall]);
   const handleSkip = useCallback(
     (deltaSeconds: number) => {
       const nextTime = Math.max(
@@ -939,39 +1184,65 @@ export default function WatchScreen() {
           duration || currentTime + deltaSeconds,
         ),
       );
-      videoRef.current?.setPositionAsync?.(Math.floor(nextTime * 1000));
+      safePlayerCall(() => player.seekBy(nextTime - player.currentTime), "handleSkip");
       setCurrentTime(nextTime);
     },
-    [currentTime, duration],
+    [currentTime, duration, player, safePlayerCall],
   );
 
-  // Double tap handler for skip forward/backward
+  // Double tap handler with YouTube-style accumulation (+10, +20, +30...) 
   const handleDoubleTap = useCallback(
-    (side: "left" | "right", event: any) => {
+    (side: "left" | "right") => {
       const now = Date.now();
       const timeSinceLastTap = now - lastTapTimeRef.current;
+      const acc = accumulatedSkipRef.current;
 
-      // Double tap detected (within 300ms)
-      if (timeSinceLastTap < 300 && lastTapSideRef.current === side) {
-        // Skip 10 seconds forward or backward
-        const skipAmount = side === "right" ? 10 : -10;
-        handleSkip(skipAmount);
+      if (timeSinceLastTap < DOUBLE_TAP_WINDOW_MS && lastTapSideRef.current === side) {
+        if (singleTapTimerRef.current) {
+          clearTimeout(singleTapTimerRef.current);
+          singleTapTimerRef.current = null;
+        }
+        if (acc.timer) clearTimeout(acc.timer);
+        const newAmount = acc.side === side && acc.amount > 0 ? acc.amount + 10 : 10;
+        const timer = setTimeout(() => {
+          accumulatedSkipRef.current = { side, amount: 0, timer: null };
+          setShowDoubleTapFeedback(null);
+        }, TAP_ACCUMULATION_RESET_MS);
+        accumulatedSkipRef.current = { side, amount: newAmount, timer };
 
-        // Show visual feedback
-        setShowDoubleTapFeedback(side);
-        setTimeout(() => setShowDoubleTapFeedback(null), 500);
-
-        // Reset tap tracking
+        handleSkip(side === "right" ? 10 : -10);
+        setShowDoubleTapFeedback({ side, amount: newAmount });
         lastTapTimeRef.current = 0;
         lastTapSideRef.current = null;
       } else {
-        // First tap - start tracking
         lastTapTimeRef.current = now;
         lastTapSideRef.current = side;
+        if (singleTapTimerRef.current) clearTimeout(singleTapTimerRef.current);
+        singleTapTimerRef.current = setTimeout(() => {
+          if (lastTapSideRef.current === side) {
+            showControlsAnimated();
+          }
+        }, DOUBLE_TAP_WINDOW_MS + 20);
       }
     },
-    [handleSkip],
+    [handleSkip, showControlsAnimated],
   );
+
+  const handleCenterTap = useCallback(() => {
+    if (showControlsRef.current) {
+      hideControlsAnimated();
+    } else {
+      showControlsAnimated();
+    }
+  }, [hideControlsAnimated, showControlsAnimated]);
+
+  const handleSideTap = useCallback((side: "left" | "right") => {
+    if (showControlsRef.current) {
+      resetControlsTimeout();
+    } else {
+      handleDoubleTap(side);
+    }
+  }, [handleDoubleTap, resetControlsTimeout]);
 
   const handleProgressBarPress = useCallback(
     (event: any) => {
@@ -986,6 +1257,50 @@ export default function WatchScreen() {
     },
     [duration, progressBarWidth, handleSeek, resetControlsTimeout],
   );
+
+  // Draggable seek thumb (GAP 3)
+  const progressPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) =>
+        Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2,
+      onPanResponderGrant: (e) => {
+        if (duration <= 0 || progressBarWidthRef.current <= 0) return;
+        showControlsAnimated();
+        setIsDragging(true);
+        const pct = Math.max(
+          0,
+          Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
+        );
+        dragProgressRef.current = pct;
+        setDragDisplay(pct * 100);
+      },
+      onPanResponderMove: (e) => {
+        if (duration <= 0 || progressBarWidthRef.current <= 0) return;
+        const pct = Math.max(
+          0,
+          Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
+        );
+        dragProgressRef.current = pct;
+        setDragDisplay(pct * 100);
+      },
+      onPanResponderRelease: () => {
+        if (duration <= 0) {
+          setIsDragging(false);
+          return;
+        }
+        safePlayerCall(
+          () => player.seekBy(dragProgressRef.current * player.duration - player.currentTime),
+          "progressPanReleaseSeek",
+        );
+        setIsDragging(false);
+        resetControlsTimeout();
+      },
+      onPanResponderTerminate: () => {
+        setIsDragging(false);
+      },
+    }),
+  ).current;
 
   // Long press handler for 2x speed
   const handlePressIn = useCallback(() => {
@@ -1021,6 +1336,13 @@ export default function WatchScreen() {
       // Reset watch time tracking for new episode
       videoStartPositionRef.current = null;
       showUpgradeModal2SecRef.current = false;
+      // Reset ad tracking so all slots can fire again for the new episode.
+      adSystem.resetAdState();
+      // Reset analytics tracking state for the new episode.
+      hasTrackedFirstPlayRef.current = false;
+      contentEndedRef.current = false;
+      adJustResumedRef.current = false;
+      videoTitleRef.current = '';
       try {
         if (isAuthenticated) {
           // Fetch saved progress BEFORE loading video
@@ -1051,7 +1373,6 @@ export default function WatchScreen() {
         });
         if (playbackRes?.url) {
           setPlaybackInfo(playbackRes);
-          setVideoKey(playbackRes.url);
           const allEpisodes = [
             ...(content?.episodes ?? []),
             ...Object.values(seasonEpisodesById).flat(),
@@ -1353,226 +1674,263 @@ export default function WatchScreen() {
   );
   const hasEpisodes =
     (content.episodes?.length ?? 0) > 0 || (content.seasons?.length ?? 0) > 0;
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Video Player */}
-        <View style={styles.playerContainer}>
-          <View style={styles.videoWrapper}>
-            <Video
-              key={videoKey}
-              ref={videoRef}
-              source={{ uri: playbackInfo.url }}
-              style={styles.video}
-              shouldPlay={isPlaying}
-              isMuted={isMuted}
-              rate={playbackRate}
-              shouldCorrectPitch
-              resizeMode={ResizeMode.CONTAIN}
-              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-              progressUpdateIntervalMillis={1000}
-              useNativeControls={false}
-              onFullscreenUpdate={({ fullscreenUpdate }) => {
-                if (
-                  fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_PRESENT
-                ) {
-                  setIsFullscreen(true);
-                  lockLandscape();
-                }
-                if (
-                  fullscreenUpdate === VideoFullscreenUpdate.PLAYER_WILL_DISMISS
-                ) {
-                  lockPortrait();
-                }
-                if (
-                  fullscreenUpdate === VideoFullscreenUpdate.PLAYER_DID_DISMISS
-                ) {
-                  setIsFullscreen(false);
-                  lockPortrait();
-                  lockPortrait();
-                }
-              }}
+  const rightEdgeInset = Math.max(16, insets.right + 22);
+
+  const renderVideoPlayer = (fullscreen: boolean) => (
+    <View style={fullscreen ? styles.playerContainerFullscreen : styles.playerContainer}>
+      <View style={[styles.videoWrapper, fullscreen && styles.videoWrapperFullscreen]}>
+        <VideoView
+          ref={videoViewRef}
+          player={player}
+          style={styles.video}
+          contentFit="contain"
+          nativeControls={false}
+        />
+
+        {/* Controls Overlay — always mounted for fade animation */}
+        <Animated.View
+          style={[styles.controlsOverlay, { opacity: controlsOpacity }]}
+          pointerEvents={showControls ? "box-none" : "none"}
+        >
+          <LinearGradient
+            colors={["rgba(0,0,0,0.82)", "transparent"]}
+            style={styles.topGradientBand}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.88)"]}
+            style={styles.bottomGradientBand}
+            pointerEvents="none"
+          />
+
+          {/* Top controls: back + title + settings */}
+          <View
+            style={[
+              styles.topControls,
+              {
+                paddingTop: fullscreen ? insets.top + 4 : 0,
+                paddingRight: rightEdgeInset,
+              },
+            ]}
+          >
+            <Pressable style={styles.controlIcon} onPress={() => router.back()}>
+              <Ionicons
+                name="arrow-back"
+                size={24}
+                color={themeColors.textPrimary}
+              />
+            </Pressable>
+            <Text style={styles.overlayTitle} numberOfLines={1}>
+              {primaryEpisode?.title ?? content?.title ?? ""}
+            </Text>
+            <Pressable
+              style={styles.controlIcon}
+              onPress={() => setShowSettingsModal(true)}
+            >
+              <Ionicons
+                name="settings-outline"
+                size={24}
+                color={themeColors.textPrimary}
+              />
+            </Pressable>
+          </View>
+
+          {/* Center Play/Pause Button */}
+          <Pressable
+            style={styles.centerPlayButton}
+            onPress={handlePlayPause}
+          >
+            <Ionicons
+              name={isPlaying ? "pause" : "play"}
+              size={48}
+              color={themeColors.textPrimary}
             />
+          </Pressable>
 
-            {/* Controls Overlay */}
-            {showControls && (
-              <View style={styles.controlsOverlay}>
-                {/* Top Right Controls */}
-                <View style={styles.topRightControls}>
-                  <Pressable
-                    style={styles.controlIcon}
-                    onPress={() => setShowSettingsModal(true)}
-                  >
-                    <Ionicons
-                      name="settings-outline"
-                      size={24}
-                      color={themeColors.textPrimary}
-                    />
-                  </Pressable>
-                </View>
+          {/* Bottom Controls */}
+          <View
+            style={[
+              styles.bottomSection,
+              fullscreen && styles.bottomSectionFullscreen,
+              { paddingBottom: fullscreen ? Math.max(12, insets.bottom + 8) : 10 },
+            ]}
+          >
+            <View
+              style={[
+                styles.bottomControls,
+                fullscreen && styles.bottomControlsFullscreen,
+                { paddingRight: rightEdgeInset },
+              ]}
+            >
+              <Text style={styles.timeText}>
+                {formatTime(Math.floor(currentTime))} /{" "}
+                {formatTime(Math.floor(duration))}
+              </Text>
 
-                {/* Center Play/Pause Button */}
+              <View style={styles.bottomControlsRight}>
                 <Pressable
-                  style={styles.centerPlayButton}
-                  onPress={() => setIsPlaying((prev) => !prev)}
+                  style={styles.controlIcon}
+                  onPress={toggleFullscreen}
                 >
                   <Ionicons
-                    name={isPlaying ? "pause" : "play"}
-                    size={48}
+                    name={fullscreen ? "contract" : "expand"}
+                    size={24}
                     color={themeColors.textPrimary}
                   />
                 </Pressable>
+              </View>
+            </View>
 
-                {/* Bottom Controls */}
+            {/* YouTube-style Progress Bar */}
+            <View
+              style={[
+                styles.progressBarContainer,
+                fullscreen && styles.progressBarContainerFullscreen,
+              ]}
+            >
+              <View
+                style={[
+                  styles.progressBarTouchArea,
+                  fullscreen && styles.progressBarTouchAreaFullscreen,
+                ]}
+                onLayout={(event) => {
+                  setProgressBarWidth(event.nativeEvent.layout.width);
+                }}
+                {...progressPanResponder.panHandlers}
+              >
                 <View
                   style={[
-                    styles.bottomSection,
-                    isFullscreen && styles.bottomSectionFullscreen,
+                    styles.progressBar,
+                    fullscreen && styles.progressBarFullscreen,
                   ]}
                 >
                   <View
                     style={[
-                      styles.bottomControls,
-                      isFullscreen && styles.bottomControlsFullscreen,
+                      styles.progressFill,
+                      {
+                        width: `${
+                          isDragging
+                            ? dragDisplay
+                            : duration > 0
+                              ? (currentTime / duration) * 100
+                              : 0
+                        }%`,
+                      },
                     ]}
-                  >
-                    <Text style={styles.timeText}>
-                      {formatTime(Math.floor(currentTime))} /{" "}
-                      {formatTime(Math.floor(duration))}
-                    </Text>
-
-                    <Pressable
-                      style={styles.controlIcon}
-                      onPress={toggleFullscreen}
-                    >
-                      <Ionicons
-                        name={isFullscreen ? "contract" : "expand"}
-                        size={24}
-                        color={themeColors.textPrimary}
-                      />
-                    </Pressable>
-                  </View>
-
-                  {/* YouTube-style Progress Bar */}
-                  <View
-                    style={[
-                      styles.progressBarContainer,
-                      isFullscreen && styles.progressBarContainerFullscreen,
-                    ]}
-                  >
-                    <Pressable
+                  />
+                  {progressBarWidth > 0 && (
+                    <View
                       style={[
-                        styles.progressBarTouchArea,
-                        isFullscreen && styles.progressBarTouchAreaFullscreen,
+                        styles.seekThumb,
+                        {
+                          left:
+                            ((isDragging
+                              ? dragDisplay
+                              : duration > 0
+                                ? (currentTime / duration) * 100
+                                : 0) /
+                              100) *
+                              progressBarWidth -
+                            7,
+                        },
                       ]}
-                      onPress={handleProgressBarPress}
-                      onLayout={(event) => {
-                        setProgressBarWidth(event.nativeEvent.layout.width);
-                      }}
-                      hitSlop={
-                        isFullscreen
-                          ? { top: 12, bottom: 12, left: 0, right: 0 }
-                          : undefined
-                      }
-                    >
-                      <View
-                        style={[
-                          styles.progressBar,
-                          isFullscreen && styles.progressBarFullscreen,
-                        ]}
-                      >
-                        <View
-                          style={[
-                            styles.progressFill,
-                            {
-                              width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%`,
-                            },
-                          ]}
-                        />
-                      </View>
-                    </Pressable>
-                  </View>
+                    />
+                  )}
                 </View>
               </View>
-            )}
-
-            {/* Gesture Overlay - MUST BE LAST so it's on top and captures touches */}
-            <View
-              style={styles.gestureContainer}
-              pointerEvents={showControls ? "none" : "box-none"}
-            >
-              {/* Left zone - Double tap to rewind (only active when controls hidden) */}
-              <Pressable
-                style={styles.gestureZoneLeft}
-                onPress={() => {
-                  if (!showControls) {
-                    setShowControls(true);
-                    resetControlsTimeout();
-                  }
-                }}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-              />
-              {/* Center zone - Single tap to toggle controls (only active when controls hidden) */}
-              <Pressable
-                style={styles.gestureZoneCenter}
-                onPress={() => {
-                  if (!showControls) {
-                    setShowControls((prev) => !prev);
-                    resetControlsTimeout();
-                  }
-                }}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-              />
-              {/* Right zone - Double tap to forward (only active when controls hidden) */}
-              <Pressable
-                style={styles.gestureZoneRight}
-                onPress={() => {
-                  if (!showControls) {
-                    setShowControls(true);
-                    resetControlsTimeout();
-                  }
-                }}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-              />
             </View>
-
-            {/* Double Tap Feedback */}
-            {showDoubleTapFeedback && (
-              <View
-                style={[
-                  styles.doubleTapFeedback,
-                  showDoubleTapFeedback === "left"
-                    ? styles.doubleTapLeft
-                    : styles.doubleTapRight,
-                ]}
-              >
-                <Ionicons
-                  name={
-                    showDoubleTapFeedback === "left"
-                      ? "play-back"
-                      : "play-forward"
-                  }
-                  size={48}
-                  color={themeColors.textPrimary}
-                />
-                <Text style={styles.doubleTapText}>10s</Text>
-              </View>
-            )}
-
-            {/* 2x Speed Indicator */}
-            {isHolding && (
-              <View style={styles.speedIndicator}>
-                <Text style={styles.speedIndicatorText}>2x</Text>
-              </View>
-            )}
           </View>
+        </Animated.View>
+
+        {/* Gesture Overlay - MUST BE LAST so it's on top and captures touches */}
+        <View
+          style={styles.gestureContainer}
+          pointerEvents={showControls ? "none" : "box-none"}
+        >
+          <Pressable
+            style={styles.gestureZoneLeft}
+            onPress={() => handleSideTap("left")}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          />
+          <Pressable
+            style={styles.gestureZoneCenter}
+            onPress={handleCenterTap}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          />
+          <Pressable
+            style={styles.gestureZoneRight}
+            onPress={() => handleSideTap("right")}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          />
         </View>
+
+        {showDoubleTapFeedback && (
+          <View
+            style={[
+              styles.doubleTapFeedback,
+              showDoubleTapFeedback.side === "left"
+                ? styles.doubleTapLeft
+                : styles.doubleTapRight,
+            ]}
+          >
+            <Ionicons
+              name={
+                showDoubleTapFeedback.side === "left"
+                  ? "play-back"
+                  : "play-forward"
+              }
+              size={48}
+              color={themeColors.textPrimary}
+            />
+            <Text style={styles.doubleTapText}>
+              {showDoubleTapFeedback.side === "left" ? "-" : "+"}
+              {showDoubleTapFeedback.amount}s
+            </Text>
+          </View>
+        )}
+
+        {isHolding && (
+          <View style={styles.speedIndicator}>
+            <Text style={styles.speedIndicatorText}>2x</Text>
+          </View>
+        )}
+
+        {adSystem.adLoading && (
+          <View style={styles.adLoadingOverlay}>
+            <ActivityIndicator size="large" color="#ffffff" />
+          </View>
+        )}
+
+        {adSystem.adOverlay ? (
+          <AdOverlay
+            {...adSystem.adOverlay}
+            adVideoPlayer={adSystem.adVideoPlayer}
+            onDone={adSystem.onAdDone}
+            onProgress={adSystem.onAdProgress}
+            resumeFromSeconds={adSystem.adPlaybackPositionRef.current}
+            onToggleFullscreen={toggleFullscreen}
+            isFullscreen={fullscreen}
+            onLearnMoreClick={() =>
+              trackEvent('Ad', 'ad_click', adSystem.adOverlay?.slot)
+            }
+          />
+        ) : null}
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={isFullscreen ? [] : ["top"]}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        scrollEnabled={!isFullscreen}
+      >
+        {/* Video Player */}
+        {!isFullscreen && renderVideoPlayer(false)}
         {/* Content Info */}
         {content && (
           <View style={styles.contentInfo}>
@@ -1855,6 +2213,18 @@ export default function WatchScreen() {
         )}
       </ScrollView>
 
+      <Modal
+        visible={isFullscreen}
+        transparent={false}
+        animationType="fade"
+        onRequestClose={toggleFullscreen}
+        statusBarTranslucent
+      >
+        <View style={styles.fullscreenModalContainer}>
+          {renderVideoPlayer(true)}
+        </View>
+      </Modal>
+
       {/* Limited Access Login Modal */}
       <Modal
         visible={showLimitedAccessLoginModal}
@@ -2003,33 +2373,32 @@ export default function WatchScreen() {
               </View>
             </View>
 
-            {/* Quality (placeholder - assuming single quality for now) */}
+            {/* Quality */}
             <View style={styles.settingsSection}>
               <Text style={styles.settingsSectionTitle}>Quality</Text>
               <View style={styles.settingsOptions}>
-                <Pressable
-                  style={[styles.settingsOption, styles.settingsOptionActive]}
-                >
-                  <Text
+                {(["auto", "1080p", "720p", "480p"] as const).map((q) => (
+                  <Pressable
+                    key={q}
                     style={[
-                      styles.settingsOptionText,
-                      styles.settingsOptionTextActive,
+                      styles.settingsOption,
+                      qualityLevel === q && styles.settingsOptionActive,
                     ]}
+                    onPress={() => setQualityLevel(q)}
                   >
-                    Auto
-                  </Text>
-                </Pressable>
-                <Pressable style={styles.settingsOption}>
-                  <Text style={styles.settingsOptionText}>1080p</Text>
-                </Pressable>
-                <Pressable style={styles.settingsOption}>
-                  <Text style={styles.settingsOptionText}>720p</Text>
-                </Pressable>
-                <Pressable style={styles.settingsOption}>
-                  <Text style={styles.settingsOptionText}>480p</Text>
-                </Pressable>
+                    <Text
+                      style={[
+                        styles.settingsOptionText,
+                        qualityLevel === q && styles.settingsOptionTextActive,
+                      ]}
+                    >
+                      {q === "auto" ? "Auto" : q}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
             </View>
+
           </View>
         </View>
       </Modal>
@@ -2083,7 +2452,21 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     backgroundColor: "#000",
   },
+  playerContainerFullscreen: {
+    flex: 1,
+    zIndex: 1000,
+    elevation: 1000,
+    backgroundColor: "#000",
+  },
+  fullscreenModalContainer: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
   videoWrapper: { width: "100%", height: "100%", position: "relative" },
+  videoWrapperFullscreen: {
+    width: "100%",
+    height: "100%",
+  },
   video: { ...StyleSheet.absoluteFillObject },
 
   // Gesture overlay styles
@@ -2150,6 +2533,15 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
+  // Shown while VAST XML is being fetched (before ad overlay appears).
+  adLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.55)",
+    zIndex: 99,
+  },
+
   // Locked controls indicator
   lockedIndicator: {
     position: "absolute",
@@ -2205,15 +2597,41 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     justifyContent: "space-between",
-    alignItems: "flex-end",
+    alignItems: "stretch",
     backgroundColor: "transparent",
-    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 0,
     zIndex: 2,
+  },
+  topGradientBand: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    zIndex: 0,
+  },
+  bottomGradientBand: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 150,
+    zIndex: 0,
   },
   topControls: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    width: "100%",
+    marginTop: 0,
+  },
+  overlayTitle: {
+    flex: 1,
+    color: themeColors.textPrimary,
+    fontWeight: "600",
+    fontSize: 14,
+    marginHorizontal: spacing.sm,
   },
   topControlsLeft: {
     flexDirection: "row",
@@ -2245,8 +2663,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     width: "100%",
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    marginBottom: 0,
+  },
+  bottomControlsRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
   },
   bottomControlsFullscreen: {
     paddingHorizontal: spacing.md,
@@ -2255,12 +2678,14 @@ const styles = StyleSheet.create({
   bottomSection: {
     width: "100%",
     alignSelf: "flex-end",
+    paddingBottom: 10,
   },
   bottomSectionFullscreen: {
     paddingBottom: spacing.md,
   },
   controlIcon: {
-    padding: spacing.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: borderRadius.md,
     justifyContent: "center",
     alignItems: "center",
@@ -2320,6 +2745,7 @@ const styles = StyleSheet.create({
     height: 3,
     backgroundColor: "rgba(255, 255, 255, 0.3)",
     borderRadius: 0,
+    overflow: "visible",
   },
   progressBarFullscreen: {
     height: 4,
@@ -2329,6 +2755,15 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: themeColors.accent,
     borderRadius: 0,
+  },
+  seekThumb: {
+    position: "absolute",
+    top: "50%",
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: themeColors.accent,
+    transform: [{ translateY: -7 }],
   },
   timeText: {
     ...typography.caption,
