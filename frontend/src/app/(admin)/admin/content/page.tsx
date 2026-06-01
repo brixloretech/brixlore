@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useAdminContent, useAuth } from "@/contexts";
@@ -54,6 +54,10 @@ export default function AdminContentPage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const isReadOnly = user?.role === "CUSTOMER_SUPPORT";
   const isSuperAdmin = user?.role === "SUPER_ADMIN" || user?.role === "admin";
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   async function handleTogglePublish(id: string, current: boolean) {
     setTogglingId(id);

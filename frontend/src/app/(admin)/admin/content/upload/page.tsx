@@ -19,7 +19,7 @@ import {
 } from "@/lib/multipart-upload";
 import { adminService } from "@/lib/services";
 import type { AdminCategoryDto, ContentType } from "@/types/api";
-import { useAuth } from "@/contexts";
+import { useAdminContent, useAuth } from "@/contexts";
 
 const VIDEO_TYPES = ["video/mp4", "video/webm", "video/mkv"];
 const THUMBNAIL_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -62,6 +62,7 @@ function getCategoryOptions(list: AdminCategoryDto[]): AdminCategoryDto[] {
 export default function AdminUploadPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { refresh } = useAdminContent();
   const isReadOnly = user?.role === "CUSTOMER_SUPPORT";
   const [title, setTitle] = useState("");
   const [duration, setDuration] = useState("");
@@ -425,6 +426,8 @@ export default function AdminUploadPage() {
             : undefined,
         });
       }
+
+      await refresh();
 
       setSuccess(true);
       setTitle("");
