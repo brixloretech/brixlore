@@ -5,9 +5,13 @@ import { useAuthStore } from "../store/useAuthStore";
 
 type Props = {
   message?: string | null;
+  loginPath?: string;
 };
 
-export default function EmailVerificationPendingScreen({ message }: Props) {
+export default function EmailVerificationPendingScreen({
+  message,
+  loginPath,
+}: Props) {
   const router = useRouter();
   const clearPendingVerification = useAuthStore(
     (state) => state.clearPendingVerification,
@@ -15,7 +19,7 @@ export default function EmailVerificationPendingScreen({ message }: Props) {
 
   const handleAlreadyVerified = () => {
     clearPendingVerification();
-    router.replace("/login");
+    router.replace((loginPath || "/login") as any);
   };
 
   return (

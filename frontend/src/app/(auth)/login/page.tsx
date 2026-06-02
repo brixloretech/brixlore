@@ -24,6 +24,10 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const { login } = useAuth();
   const returnUrlParam = searchParams.get("returnUrl");
+  const returnUrl =
+    returnUrlParam && returnUrlParam.startsWith("/")
+      ? returnUrlParam
+      : "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState<{ email?: string; password?: string }>(
@@ -67,18 +71,10 @@ function LoginPageContent() {
 
   useEffect(() => {
     if (!success) return;
-    const returnUrl =
-      returnUrlParam && returnUrlParam.startsWith("/")
-        ? returnUrlParam
-        : "/dashboard";
     router.replace(returnUrl);
-  }, [success, returnUrlParam, router]);
+  }, [success, returnUrl, router]);
 
   if (success) {
-    const returnUrl =
-      returnUrlParam && returnUrlParam.startsWith("/")
-        ? returnUrlParam
-        : "/dashboard";
     return (
       <Card>
         <CardHeader>
@@ -152,7 +148,7 @@ function LoginPageContent() {
               Forgot password?
             </Link>
             <Link
-              href="/signup"
+              href={`/signup?returnUrl=${encodeURIComponent(returnUrl)}`}
               className="text-neutral-600 underline hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
             >
               Create an account

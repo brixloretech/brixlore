@@ -12,16 +12,29 @@ import {
   BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../src/theme/colors";
 import { spacing, typography } from "../constants/theme";
 import { useAuthStore } from "../store/useAuthStore";
+import { useLimitedAccessStore } from "../store/useLimitedAccessStore";
 import EmailVerificationPendingScreen from "./EmailVerificationPendingScreen";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    returnToVideoId?: string | string[];
+    returnToEpisodeId?: string | string[];
+    returnToResumeAt?: string | string[];
+    fromGuestPreview?: string | string[];
+  }>();
   const { login, isLoading, error, clearError, isAuthenticated, pendingVerification, verificationMessage } = useAuthStore();
+  const setFreeUnlockedVideoId = useLimitedAccessStore(
+    (state) => state.setFreeUnlockedVideoId,
+  );
+  const saveLimitedAccessToStorage = useLimitedAccessStore(
+    (state) => state.saveToStorage,
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,6 +43,72 @@ export default function LoginScreen() {
     email?: string;
     password?: string;
   }>({});
+
+  const returnToVideoId = Array.isArray(params.returnToVideoId)
+    ? params.returnToVideoId[0]
+    : params.returnToVideoId;
+  const returnToEpisodeId = Array.isArray(params.returnToEpisodeId)
+    ? params.returnToEpisodeId[0]
+    : params.returnToEpisodeId;
+  const returnToResumeAt = Array.isArray(params.returnToResumeAt)
+    ? params.returnToResumeAt[0]
+    : params.returnToResumeAt;
+  const fromGuestPreview =
+    (Array.isArray(params.fromGuestPreview)
+      ? params.fromGuestPreview[0]
+      : params.fromGuestPreview) === "1";
+
+  const postLoginPath = React.useMemo(() => {
+    if (!returnToVideoId) return "/(tabs)";
+    const queryParts: string[] = [];
+    if (returnToEpisodeId) {
+      queryParts.push(`episodeId=${encodeURIComponent(returnToEpisodeId)}`);
+    }
+    if (returnToResumeAt) {
+      queryParts.push(`resumeAt=${encodeURIComponent(returnToResumeAt)}`);
+    }
+    return `/video/${encodeURIComponent(returnToVideoId)}${
+      queryParts.length ? `?${queryParts.join("&")}` : ""
+    }`;
+  }, [returnToEpisodeId, returnToResumeAt, returnToVideoId]);
+
+  const signupPath = React.useMemo(() => {
+    const queryParts: string[] = [];
+    if (returnToVideoId) {
+      queryParts.push(`returnToVideoId=${encodeURIComponent(returnToVideoId)}`);
+    }
+    if (returnToEpisodeId) {
+      queryParts.push(
+        `returnToEpisodeId=${encodeURIComponent(returnToEpisodeId)}`,
+      );
+    }
+    if (returnToResumeAt) {
+      queryParts.push(`returnToResumeAt=${encodeURIComponent(returnToResumeAt)}`);
+    }
+    if (fromGuestPreview) {
+      queryParts.push("fromGuestPreview=1");
+    }
+    return `/signup${queryParts.length ? `?${queryParts.join("&")}` : ""}`;
+  }, [fromGuestPreview, returnToEpisodeId, returnToResumeAt, returnToVideoId]);
+
+  const loginPath = React.useMemo(() => {
+    const queryParts: string[] = [];
+    if (returnToVideoId) {
+      queryParts.push(`returnToVideoId=${encodeURIComponent(returnToVideoId)}`);
+    }
+    if (returnToEpisodeId) {
+      queryParts.push(
+        `returnToEpisodeId=${encodeURIComponent(returnToEpisodeId)}`,
+      );
+    }
+    if (returnToResumeAt) {
+      queryParts.push(`returnToResumeAt=${encodeURIComponent(returnToResumeAt)}`);
+    }
+    if (fromGuestPreview) {
+      queryParts.push("fromGuestPreview=1");
+    }
+    return `/login${queryParts.length ? `?${queryParts.join("&")}` : ""}`;
+  }, [fromGuestPreview, returnToEpisodeId, returnToResumeAt, returnToVideoId]);
 
   // Reset login state when component mounts (in case isLoading is stuck from checkAuth)
   useEffect(() => {
@@ -43,9 +122,22 @@ export default function LoginScreen() {
   // Monitor auth state to navigate on success
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
-      router.replace("/(tabs)");
+      if (fromGuestPreview && returnToEpisodeId) {
+        setFreeUnlockedVideoId(returnToEpisodeId);
+        void saveLimitedAccessToStorage();
+      }
+      router.replace(postLoginPath as any);
     }
-  }, [isAuthenticated, isLoading, router]);
+  }, [
+    fromGuestPreview,
+    isAuthenticated,
+    isLoading,
+    postLoginPath,
+    returnToEpisodeId,
+    router,
+    saveLimitedAccessToStorage,
+    setFreeUnlockedVideoId,
+  ]);
 
   const handleSafeBack = () => {
     const canGoBack =
@@ -126,7 +218,12 @@ export default function LoginScreen() {
 
   // Keep this return after all hooks to preserve hook order across renders.
   if (pendingVerification) {
-    return <EmailVerificationPendingScreen message={verificationMessage} />;
+    return (
+      <EmailVerificationPendingScreen
+        message={verificationMessage}
+        loginPath={loginPath}
+      />
+    );
   }
 
   return (
@@ -261,7 +358,7 @@ export default function LoginScreen() {
               {/* Sign Up Link */}
               <View style={styles.footer}>
                 <Text style={styles.footerText}>Don't have an account? </Text>
-                <Pressable onPress={() => router.replace("/signup")}>
+                <Pressable onPress={() => router.replace(signupPath as any)}>
                   <Text style={styles.footerLink}>Sign Up</Text>
                 </Pressable>
               </View>

@@ -12,15 +12,22 @@ import {
   BackHandler,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../src/theme/colors";
 import { spacing, typography } from "../constants/theme";
 import { useAuthStore } from "../store/useAuthStore";
+import { useLimitedAccessStore } from "../store/useLimitedAccessStore";
 import EmailVerificationPendingScreen from "./EmailVerificationPendingScreen";
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{
+    returnToVideoId?: string | string[];
+    returnToEpisodeId?: string | string[];
+    returnToResumeAt?: string | string[];
+    fromGuestPreview?: string | string[];
+  }>();
   const {
     signup,
     isAuthenticated,
@@ -29,6 +36,12 @@ export default function SignUpScreen() {
     pendingVerification,
     verificationMessage,
   } = useAuthStore();
+  const setFreeUnlockedVideoId = useLimitedAccessStore(
+    (state) => state.setFreeUnlockedVideoId,
+  );
+  const saveLimitedAccessToStorage = useLimitedAccessStore(
+    (state) => state.saveToStorage,
+  );
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,6 +56,53 @@ export default function SignUpScreen() {
     password?: string;
     confirmPassword?: string;
   }>({});
+
+  const returnToVideoId = Array.isArray(params.returnToVideoId)
+    ? params.returnToVideoId[0]
+    : params.returnToVideoId;
+  const returnToEpisodeId = Array.isArray(params.returnToEpisodeId)
+    ? params.returnToEpisodeId[0]
+    : params.returnToEpisodeId;
+  const returnToResumeAt = Array.isArray(params.returnToResumeAt)
+    ? params.returnToResumeAt[0]
+    : params.returnToResumeAt;
+  const fromGuestPreview =
+    (Array.isArray(params.fromGuestPreview)
+      ? params.fromGuestPreview[0]
+      : params.fromGuestPreview) === "1";
+
+  const postSignupPath = React.useMemo(() => {
+    if (!returnToVideoId) return "/(tabs)";
+    const queryParts: string[] = [];
+    if (returnToEpisodeId) {
+      queryParts.push(`episodeId=${encodeURIComponent(returnToEpisodeId)}`);
+    }
+    if (returnToResumeAt) {
+      queryParts.push(`resumeAt=${encodeURIComponent(returnToResumeAt)}`);
+    }
+    return `/video/${encodeURIComponent(returnToVideoId)}${
+      queryParts.length ? `?${queryParts.join("&")}` : ""
+    }`;
+  }, [returnToEpisodeId, returnToResumeAt, returnToVideoId]);
+
+  const loginPath = React.useMemo(() => {
+    const queryParts: string[] = [];
+    if (returnToVideoId) {
+      queryParts.push(`returnToVideoId=${encodeURIComponent(returnToVideoId)}`);
+    }
+    if (returnToEpisodeId) {
+      queryParts.push(
+        `returnToEpisodeId=${encodeURIComponent(returnToEpisodeId)}`,
+      );
+    }
+    if (returnToResumeAt) {
+      queryParts.push(`returnToResumeAt=${encodeURIComponent(returnToResumeAt)}`);
+    }
+    if (fromGuestPreview) {
+      queryParts.push("fromGuestPreview=1");
+    }
+    return `/login${queryParts.length ? `?${queryParts.join("&")}` : ""}`;
+  }, [fromGuestPreview, returnToEpisodeId, returnToResumeAt, returnToVideoId]);
 
   const handleSafeBack = () => {
     const canGoBack =
@@ -72,9 +132,21 @@ export default function SignUpScreen() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      router.replace("/(tabs)");
+      if (fromGuestPreview && returnToEpisodeId) {
+        setFreeUnlockedVideoId(returnToEpisodeId);
+        void saveLimitedAccessToStorage();
+      }
+      router.replace(postSignupPath as any);
     }
-  }, [isAuthenticated, router]);
+  }, [
+    fromGuestPreview,
+    isAuthenticated,
+    postSignupPath,
+    returnToEpisodeId,
+    router,
+    saveLimitedAccessToStorage,
+    setFreeUnlockedVideoId,
+  ]);
 
   useEffect(() => {
     if (authError) {
@@ -151,7 +223,12 @@ export default function SignUpScreen() {
 
   // Keep this return after all hooks to preserve hook order across renders.
   if (pendingVerification) {
-    return <EmailVerificationPendingScreen message={verificationMessage} />;
+    return (
+      <EmailVerificationPendingScreen
+        message={verificationMessage}
+        loginPath={loginPath}
+      />
+    );
   }
 
   return (
@@ -365,7 +442,7 @@ export default function SignUpScreen() {
               {/* Sign In Link */}
               <View style={styles.footer}>
                 <Text style={styles.footerText}>Already have an account? </Text>
-                <Pressable onPress={() => router.replace("/login")}>
+                <Pressable onPress={() => router.replace(loginPath as any)}>
                   <Text style={styles.footerLink}>Sign In</Text>
                 </Pressable>
               </View>

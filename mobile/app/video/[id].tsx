@@ -99,9 +99,17 @@ function durationToSeconds(duration?: string): number {
 export default function WatchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const params = useLocalSearchParams<{ id: string; episodeId?: string }>();
+  const params = useLocalSearchParams<{
+    id: string;
+    episodeId?: string;
+    resumeAt?: string;
+  }>();
   const contentId = params.id;
   const episodeIdFromUrl = params.episodeId;
+  const resumeAtFromUrl = Number(params.resumeAt ?? 0);
+  const resumeFromUrlSec = Number.isFinite(resumeAtFromUrl)
+    ? Math.max(0, Math.floor(resumeAtFromUrl))
+    : 0;
   const { isAuthenticated } = useAuthStore();
   const videosWatchedCount = useLimitedAccessStore(
     (state) => state.videosWatchedCount,
@@ -714,6 +722,7 @@ export default function WatchScreen() {
         }
 
         if (isAuthenticated) {
+          let nextSavedProgress = resumeFromUrlSec;
           // Fetch saved progress from continue watching BEFORE loading video
           try {
             const continueWatchingList =
@@ -723,12 +732,16 @@ export default function WatchScreen() {
               (item) => item.episodeId === episode.id,
             );
             if (savedItem && savedItem.progress > 0) {
-              setSavedProgress(savedItem.progress);
-              hasSeekedToSavedProgressRef.current = false;
+              nextSavedProgress = Math.max(nextSavedProgress, savedItem.progress);
             }
           } catch (error) {
             console.error("Failed to fetch saved progress:", error);
             // Continue without saved progress
+          }
+
+          if (nextSavedProgress > 0) {
+            setSavedProgress(nextSavedProgress);
+            hasSeekedToSavedProgressRef.current = false;
           }
         }
 
@@ -2287,7 +2300,23 @@ export default function WatchScreen() {
                     style={styles.modalButtonPrimary}
                     onPress={() => {
                       setShowLimitedAccessLoginModal(false);
-                      router.push("/login");
+                      router.push({
+                        pathname: "/login",
+                        params: {
+                          returnToVideoId: String(contentId ?? ""),
+                          ...(selectedEpisodeId
+                            ? { returnToEpisodeId: selectedEpisodeId }
+                            : {}),
+                          ...(currentTimeRef.current > 0
+                            ? {
+                                returnToResumeAt: String(
+                                  Math.floor(currentTimeRef.current),
+                                ),
+                              }
+                            : {}),
+                          fromGuestPreview: "1",
+                        },
+                      });
                     }}
                   >
                     <Text style={styles.modalButtonPrimaryText}>Sign In</Text>
@@ -2296,7 +2325,23 @@ export default function WatchScreen() {
                     style={styles.modalButtonSecondary}
                     onPress={() => {
                       setShowLimitedAccessLoginModal(false);
-                      router.push("/signup");
+                      router.push({
+                        pathname: "/signup",
+                        params: {
+                          returnToVideoId: String(contentId ?? ""),
+                          ...(selectedEpisodeId
+                            ? { returnToEpisodeId: selectedEpisodeId }
+                            : {}),
+                          ...(currentTimeRef.current > 0
+                            ? {
+                                returnToResumeAt: String(
+                                  Math.floor(currentTimeRef.current),
+                                ),
+                              }
+                            : {}),
+                          fromGuestPreview: "1",
+                        },
+                      });
                     }}
                   >
                     <Text style={styles.modalButtonSecondaryText}>

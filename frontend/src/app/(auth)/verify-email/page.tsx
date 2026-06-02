@@ -18,6 +18,11 @@ function VerifyEmailInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
+  const returnUrlParam = searchParams.get("returnUrl");
+  const returnUrl =
+    returnUrlParam && returnUrlParam.startsWith("/")
+      ? returnUrlParam
+      : "/dashboard";
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
   const [message, setMessage] = useState("");
 
@@ -101,7 +106,7 @@ function VerifyEmailInner() {
       <CardFooter>
         <Button
           fullWidth
-          onClick={() => router.push("/login")}
+          onClick={() => router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)}
           variant={status === "error" ? "outline" : "primary"}
         >
           Go to Login

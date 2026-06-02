@@ -75,6 +75,11 @@ function SignupFormInner() {
       ? "yearly"
       : "monthly";
   const trialSelected = searchParams.get("trial") === "1";
+  const returnUrlParam = searchParams.get("returnUrl");
+  const returnUrl =
+    returnUrlParam && returnUrlParam.startsWith("/")
+      ? returnUrlParam
+      : "/dashboard";
 
   useEffect(() => {
     let active = true;
@@ -277,7 +282,7 @@ function SignupFormInner() {
           </p>
         </CardHeader>
         <CardFooter className="flex flex-col gap-3">
-          <Button fullWidth onClick={() => router.push("/login")}>
+          <Button fullWidth onClick={() => router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)}>
             Go to Login
           </Button>
           <p className="text-center text-xs text-neutral-500">
@@ -409,8 +414,8 @@ function SignupFormInner() {
           </Button>
           <p className="text-center text-sm text-neutral-600 dark:text-neutral-400">
             Already have an account?{" "}
-            <Link
-              href="/login"
+             <Link
+               href={`/login?returnUrl=${encodeURIComponent(returnUrl)}`}
               className="underline hover:text-neutral-900 dark:hover:text-white"
             >
               Sign in
