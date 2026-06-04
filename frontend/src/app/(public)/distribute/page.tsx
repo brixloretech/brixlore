@@ -78,6 +78,16 @@ const advantages = [
       </svg>
     ),
   },
+  {
+    badge: "04",
+    title: "Direct Audience Backing",
+    body: "Fuel your next production directlyfrom the screen. We natively embed sleek, frictionless patronage rails beneath every file. Viewers can instantly back your studio with $5, $10 or$25 capital infusions via Apple Pay or Google Pay while they watch-and you keep 90% of the pool.",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-7 w-7" aria-hidden>
+        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+      </svg>
+    ),
+  },
 ];
 
 const criteria = [
@@ -124,7 +134,7 @@ const criteria = [
   },
 ];
 
-// â”€â”€â”€ Form types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Form types ───────────────────────────────────────────────────────────────
 type FormFields = {
   fullName: string;
   email: string;
@@ -313,9 +323,9 @@ export default function DistributePage() {
 
       <main className="relative flex flex-1 flex-col overflow-hidden" style={{ background: "#0b0b0e" }}>
 
-        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        {/* ══════════════════════════════════════════════════
             1. HERO
-        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        ══════════════════════════════════════════════════ */}
         <section className="relative w-full overflow-hidden px-4 py-28 sm:px-6 lg:px-8" aria-label="Hero">
 
           <div className="pointer-events-none absolute inset-0" aria-hidden style={{
@@ -380,7 +390,7 @@ export default function DistributePage() {
                 className="btn-shine group inline-flex items-center justify-center rounded-xl px-10 py-3.5 text-base font-black text-black"
               >
                 Submit Your Feature
-                <span className="ml-2 transition-transform duration-300 group-hover:translate-y-0.5">â†“</span>
+                <span className="ml-2 transition-transform duration-300 group-hover:translate-y-0.5">↓</span>
               </a>
             </div>
 
@@ -390,7 +400,7 @@ export default function DistributePage() {
                   { value: "60+", label: "min runtime" },
                   { value: "60/40", label: "revenue split" },
                   { value: "$5.00", label: "subscriber bounty" },
-                  { value: "5â€“7", label: "day review" },
+                  { value: "5–7", label: "day review" },
                 ].map((stat, i) => (
                   <div key={stat.label} className="flex flex-col items-center gap-1.5">
                     {i > 0 && (
@@ -410,9 +420,9 @@ export default function DistributePage() {
           }} aria-hidden />
         </section>
 
-        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        {/* ══════════════════════════════════════════════════
             2. THE BRIXLORE ADVANTAGE
-        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        ══════════════════════════════════════════════════ */}
         <section className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8" aria-labelledby="advantage-heading">
 
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
@@ -457,9 +467,9 @@ export default function DistributePage() {
           </div>
         </section>
 
-        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        {/* ══════════════════════════════════════════════════
             3. WHAT WE ARE LOOKING FOR
-        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        ══════════════════════════════════════════════════ */}
         <section className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8" aria-labelledby="requirements-heading">
 
           <div className="pointer-events-none absolute inset-0" aria-hidden style={{
@@ -523,9 +533,9 @@ export default function DistributePage() {
           </div>
         </section>
 
-        {/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        {/* ══════════════════════════════════════════════════
             4. SUBMISSION FORM
-        â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */}
+        ══════════════════════════════════════════════════ */}
         <section id="submit" className="relative overflow-hidden px-4 py-28 sm:px-6 lg:px-8" aria-labelledby="form-heading">
 
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden>
@@ -542,7 +552,7 @@ export default function DistributePage() {
                 Start the Conversation
               </h2>
               <p className="mt-3 text-neutral-500">
-                Submit your feature below. Our team reviews all submissions within 5â€“7 business days.
+                Submit your feature below. Our team reviews all submissions within 5–7 business days.
               </p>
             </Reveal>
 
@@ -565,7 +575,7 @@ export default function DistributePage() {
                 <div className="pointer-events-none absolute bottom-6 left-6 h-10 w-10 rounded-bl-xl border-b border-l border-white/10" aria-hidden />
                 <div className="pointer-events-none absolute bottom-6 right-6 h-10 w-10 rounded-br-xl border-b border-r border-white/10" aria-hidden />
 
-                {/* â”€â”€ Success state â”€â”€ */}
+                {/* ── Success state ── */}
                 {submitted ? (
                   <div className="flex flex-col items-center py-10 text-center">
                     <div
@@ -591,10 +601,10 @@ export default function DistributePage() {
                     </button>
                   </div>
                 ) : (
-                  /* â”€â”€ Form â”€â”€ */
+                  /* ── Form ── */
                   <form className="space-y-6" noValidate onSubmit={handleSubmit}>
 
-                    {/* Row 1 â€” Full Name + Email */}
+                    {/* Row 1 — Full Name + Email */}
                     <div className="grid gap-5 sm:grid-cols-2">
                       <div>
                         <label htmlFor="fullName" className="form-label">
@@ -622,7 +632,7 @@ export default function DistributePage() {
                       </div>
                     </div>
 
-                    {/* Row 2 â€” Film Title + Trailer Link */}
+                    {/* Row 2 — Film Title + Trailer Link */}
                     <div className="grid gap-5 sm:grid-cols-2">
                       <div>
                         <label htmlFor="filmTitle" className="form-label">
@@ -650,7 +660,7 @@ export default function DistributePage() {
                       </div>
                     </div>
 
-                    {/* Row 3 â€” Production Status */}
+                    {/* Row 3 — Production Status */}
                     <div>
                       <label htmlFor="productionStatus" className="form-label">
                         Production Status <span className="text-white/30">*</span>
@@ -661,13 +671,13 @@ export default function DistributePage() {
                         onChange={handleChange}
                         className="form-field"
                       >
-                        <option value="" disabled>Select statusâ€¦</option>
+                        <option value="" disabled>Select status…</option>
                         <option value="completed">Completed</option>
                         <option value="post-production">In Post-Production</option>
                       </select>
                     </div>
 
-                    {/* Row 4 â€” Synopsis */}
+                    {/* Row 4 — Synopsis */}
                     <div>
                       <div className="mb-2 flex items-center justify-between">
                         <label htmlFor="synopsis" className="form-label mb-0">
@@ -708,14 +718,14 @@ export default function DistributePage() {
                         className="btn-shine w-full inline-flex items-center justify-center rounded-xl py-3.5 text-sm font-black text-black"
                       >
                         {loading && <span className="spinner" />}
-                        {loading ? "Sending to Acquisitionsâ€¦" : "Send to Acquisitions"}
+                        {loading ? "Sending to Acquisitions…" : "Send to Acquisitions"}
                       </button>
                     </div>
 
                     {/* Footer note */}
                     <p className="text-center text-xs leading-5 text-neutral-600">
                       By submitting, you agree to be contacted by our Content Acquisition team.
-                      We review all submissions within 5â€“7 business days.
+                      We review all submissions within 5–7 business days.
                     </p>
                   </form>
                 )}
