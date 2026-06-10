@@ -322,14 +322,9 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
     }
 
     const watched = normalizedCurrent - currentVideoStartPosition;
-    const maxSeconds =
-      accessTier === "free"
-        ? FREE_MAX_PLAYBACK_SECONDS
-        : GUEST_MAX_PLAYBACK_SECONDS;
+    const maxSeconds = GUEST_MAX_PLAYBACK_SECONDS;
     if (watched >= maxSeconds) {
-      setLimitModalReason(
-        accessTier === "free" ? "free-time-limit" : "guest-time-limit",
-      );
+      setLimitModalReason("guest-time-limit");
       if (mp4VideoRef.current) {
         void mp4VideoRef.current.pause();
       }
