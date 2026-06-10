@@ -55,7 +55,7 @@ export default function WatchHistoryPage() {
           Your Watch History
         </h1>
         <p className="mt-2 max-w-2xl text-sm text-neutral-400">
-          A complete log of titles you've watched.
+          A complete log of titles you&apos;ve watched.
         </p>
       </header>
 

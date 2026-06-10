@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Loader } from "@/components/ui";
-import { useAuth } from "@/contexts";
 import { streamingService } from "@/lib/services";
 import type { ContinueWatchingItemDto } from "@/types/api";
 
@@ -15,7 +14,6 @@ function progressPercent(progress: number, duration: number): number {
 }
 
 export default function ContinueWatchingPage() {
-  const { isAuthenticated, isSubscribed, isAdmin } = useAuth();
   const [items, setItems] = useState<ContinueWatchingItemDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);

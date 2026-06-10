@@ -21,8 +21,7 @@ function progressPercent(progress: number, duration: number): number {
 }
 
 export default function DashboardPage() {
-  const { user, isSubscribed, isAuthenticated, isAdmin } = useAuth();
-  const isFreeUser = isAuthenticated && !isSubscribed && !isAdmin;
+  const { user, isSubscribed } = useAuth();
   const displayName = user?.name ?? user?.email?.split("@")[0] ?? "there";
   const [contentItems, setContentItems] = useState<ContentSummaryDto[]>([]);
   const [categories, setCategories] = useState<string[]>([]);

@@ -5,12 +5,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button, Loader } from "@/components/ui";
 import { contentService } from "@/lib/services";
-import { useAuth, useMyList } from "@/contexts";
+import { useMyList } from "@/contexts";
 import type { ContentSummaryDto } from "@/types/api";
 
 export default function MyListPage() {
-  const { isAuthenticated, isSubscribed, isAdmin } = useAuth();
-  const isFreeUser = isAuthenticated && !isSubscribed && !isAdmin;
   const { listIds, remove } = useMyList();
   const [savedItems, setSavedItems] = useState<ContentSummaryDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -230,8 +230,7 @@ export default function DashboardLayoutClient({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout, isAuthenticated, isSubscribed, isAdmin } = useAuth();
-  const isFreeUser = isAuthenticated && !isSubscribed && !isAdmin;
+  const { logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
