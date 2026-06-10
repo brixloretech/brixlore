@@ -22,6 +22,8 @@ export interface UserDto {
 export interface LoginRequestDto {
   email: string;
   password: string;
+  platform?: "ANDROID" | "IOS" | "WEB";
+  deviceIdentifier?: string;
 }
 
 /** Response for POST /auth/login */

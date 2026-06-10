@@ -23,6 +23,14 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
+
+    if (payload.deviceIdentifier) {
+      const deviceExists = await this.authService.validateDevice(payload.sub, payload.deviceIdentifier);
+      if (!deviceExists) {
+        throw new UnauthorizedException('Session expired: device logged out from another session');
+      }
+    }
+
     return user;
   }
 }

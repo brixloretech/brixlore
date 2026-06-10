@@ -413,6 +413,7 @@ export function AdOverlay({
         style={StyleSheet.absoluteFillObject}
         contentFit="contain"
         nativeControls={false}
+        surfaceType="textureView"
       />
 
       {/* Buffering spinner while the ad creative loads */}

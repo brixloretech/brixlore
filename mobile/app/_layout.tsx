@@ -208,6 +208,16 @@ export default function RootLayout() {
     });
   }, [isAuthenticated, user?.id, register]);
 
+  // Poll session every 15 seconds to enforce device limits (automatic logout)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const intervalId = setInterval(() => {
+      // refreshUser catches 401s silently, which triggers automatic logout
+      useAuthStore.getState().refreshUser();
+    }, 15000);
+    return () => clearInterval(intervalId);
+  }, [isAuthenticated]);
+
   return (
     <View
       style={{ flex: 1, backgroundColor: APP_BG }}

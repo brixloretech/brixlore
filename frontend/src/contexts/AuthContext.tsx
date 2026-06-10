@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@/types";
-import { getApiErrorMessage } from "@/lib/api-client";
+import { getApiErrorMessage, post } from "@/lib/api-client";
 import {
   accountService,
   authService,
@@ -17,6 +17,8 @@ import {
   subscriptionService,
 } from "@/lib/services";
 import { USE_MOCK_API } from "@/lib/services/config";
+import { generateDeviceIdentifier } from "@/lib/device-utils";
+import { getStoredAuth } from "@/lib/auth-storage";
 
 // ---------------------------------------------------------------------------
 // Global auth state (Context)
@@ -43,7 +45,7 @@ export type AuthActions = {
   /** Set user after successful login/signup (and clear sessionError). */
   login: (user: User) => void;
   /** Clear tokens/storage and set user to null. */
-  logout: () => void;
+  logout: () => Promise<void>;
   /** Re-fetch current user from GET /users/me (clears sessionError, sets loading). */
   refreshUser: () => Promise<void>;
   /** Set subscription status (e.g. after user subscribes). */
@@ -110,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSessionError(getApiErrorMessage(err));
         }
       })
+
       .finally(() => {
         if (!cancelled) setIsLoading(false);
       });
@@ -117,6 +120,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, []);
+
+  // Poll session every 15 seconds to enforce device limits (automatic logout)
+  useEffect(() => {
+    if (!user) return;
+    const intervalId = setInterval(() => {
+      // fetchSession catches 401 globally and logs out
+      fetchSession().catch(() => {});
+    }, 15000);
+    return () => clearInterval(intervalId);
+  }, [user]);
 
   const refreshUser = useCallback(async () => {
     setSessionError(null);
@@ -151,8 +164,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     subscriptionService.clearSubscriptionCache();
+
+    // Best-effort: deregister this browser's device before clearing the token
+    if (!USE_MOCK_API && typeof window !== "undefined") {
+      try {
+        const auth = getStoredAuth();
+        const deviceIdentifier = generateDeviceIdentifier();
+        if (auth?.accessToken && deviceIdentifier) {
+          await post<void>("devices/logout", { deviceIdentifier }, {
+            headers: { Authorization: `Bearer ${auth.accessToken}` },
+          }).catch(() => { /* Silently ignore — token may already be expired */ });
+        }
+      } catch {
+        // Silently ignore
+      }
+    }
+
     authService.logout();
     setUser(null);
     setSessionError(null);

@@ -21,6 +21,25 @@ export type SubscriptionMeResponseDto = {
   createdAt?: string | null;
 };
 
+export interface BillingSummaryDto {
+  paymentMethod: {
+    brand: string;
+    last4: string;
+    expMonth: number;
+    expYear: number;
+  } | null;
+  invoices: Array<{
+    id: string;
+    amountPaid: number;
+    amountDue: number;
+    currency: string;
+    status: string;
+    hostedInvoiceUrl?: string | null;
+    invoicePdf?: string | null;
+    createdAt: string;
+  }>;
+}
+
 class SubscriptionService {
   async getPlans(): Promise<PublicPlanDto[]> {
     const response = await api.get<PublicPlanDto[]>("/subscriptions/plans");
@@ -31,6 +50,13 @@ class SubscriptionService {
     const response =
       await api.get<SubscriptionMeResponseDto>("/subscriptions/me");
     return response.data ?? { isSubscribed: false };
+  }
+
+  async getBillingSummary(): Promise<BillingSummaryDto> {
+    const response = await api.get<BillingSummaryDto>(
+      "/subscriptions/billing-summary",
+    );
+    return response.data ?? { paymentMethod: null, invoices: [] };
   }
 
   async createPortalSession(

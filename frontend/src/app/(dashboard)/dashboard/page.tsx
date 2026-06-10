@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@/contexts";
+import { useAuth, useMyList } from "@/contexts";
 import { Button, Loader } from "@/components/ui";
 import {
   contentService,
@@ -41,7 +41,7 @@ export default function DashboardPage() {
       contentService.getCategories(),
       subscriptionService.getPlans(),
       subscriptionService.getSubscription(true),
-      isFreeUser ? Promise.resolve([]) : streamingService.getContinueWatching(),
+      streamingService.getContinueWatching(),
     ])
       .then(([items, cats, planList, subscription, continueList]) => {
         if (!active) return;
@@ -66,7 +66,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, [isFreeUser]);
+  }, []);
 
   const activePlan = useMemo(
     () => plans.find((plan) => plan.id === planId) ?? null,
@@ -78,7 +78,10 @@ export default function DashboardPage() {
   const exploreTags = categories
     .filter((category) => category.toLowerCase() !== "all")
     .slice(0, 4);
-  const savedItems: ContentSummaryDto[] = [];
+  const { listIds } = useMyList();
+  const savedItems = useMemo(() => {
+    return contentItems.filter((item) => listIds.includes(item.id));
+  }, [contentItems, listIds]);
 
   if (isLoading) {
     return (
@@ -115,19 +118,11 @@ export default function DashboardPage() {
                 Start exploring
               </Button>
             </Link>
-            {!isFreeUser ? (
-              <Link href="/dashboard/continue-watching">
-                <Button type="button" variant="outline" size="lg">
-                  Resume playback
-                </Button>
-              </Link>
-            ) : (
-              <Link href="/subscription">
-                <Button type="button" variant="outline" size="lg">
-                  Upgrade now
-                </Button>
-              </Link>
-            )}
+            <Link href="/dashboard/continue-watching">
+              <Button type="button" variant="outline" size="lg">
+                Resume playback
+              </Button>
+            </Link>
           </div>
         </div>
       </header>
@@ -159,10 +154,10 @@ export default function DashboardPage() {
             Subscription
           </p>
           <p className="mt-3 text-2xl font-semibold text-white">
-            {isSubscribed ? (activePlan?.name ?? "Active") : "Inactive"}
+            {isSubscribed ? (activePlan?.name ?? "Active") : "Free"}
           </p>
           <p className="mt-1 text-xs text-neutral-400">
-            {isSubscribed ? "Full access" : "Upgrade to unlock everything"}
+            {isSubscribed ? "Full access" : "Choose a plan to unlock premium access."}
           </p>
         </div>
       </section>
@@ -189,7 +184,7 @@ export default function DashboardPage() {
             </Link>
           </div>
           <div className="mt-6 space-y-4">
-            {!isFreeUser && continueItems.length > 0 ? (
+            {continueItems.length > 0 ? (
               continueItems.slice(0, 5).map((item) => {
                 const percent = progressPercent(item.progress, item.duration);
                 const watchUrl = `/watch/${item.contentId}?episodeId=${encodeURIComponent(item.episodeId)}`;
@@ -228,14 +223,9 @@ export default function DashboardPage() {
                   </div>
                 );
               })
-            ) : !isFreeUser ? (
-              <div className="rounded-xl border border-dashed border-neutral-700/60 bg-neutral-950/40 p-4 text-sm text-neutral-400">
-                Nothing in progress yet. Start a new title to pick up here.
-              </div>
             ) : (
-              <div className="rounded-xl border border-dashed border-neutral-700/60 bg-neutral-950/40 p-4 text-sm text-neutral-300">
-                Continue Watching is available on paid plans. Upgrade to sync
-                playback progress across devices.
+              <div className="rounded-xl border border-dashed border-neutral-700/60 bg-neutral-950/40 p-4 text-sm text-neutral-400">
+                Nothing in progress yet. Start watching a title to pick up here.
               </div>
             )}
           </div>
@@ -280,7 +270,7 @@ export default function DashboardPage() {
               Titles you saved for later.
             </p>
             <div className="mt-5 space-y-3">
-              {!isFreeUser && savedItems.length > 0 ? (
+              {savedItems.length > 0 ? (
                 savedItems.map((item) => (
                   <div
                     key={item.id}
@@ -289,28 +279,26 @@ export default function DashboardPage() {
                     <p className="text-sm font-medium text-white">
                       {item.title}
                     </p>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-neutral-400 hover:text-accent"
-                    >
-                      Play
-                    </button>
+                    <Link href={`/watch/${item.id}`}>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-neutral-400 hover:text-accent"
+                      >
+                        Play
+                      </button>
+                    </Link>
                   </div>
                 ))
-              ) : !isFreeUser ? (
-                <p className="text-sm text-neutral-400">Your list is empty.</p>
               ) : (
-                <p className="text-sm text-neutral-300">
-                  My List is available on paid plans.
-                </p>
+                <p className="text-sm text-neutral-400">Your list is empty.</p>
               )}
             </div>
             <Link
-              href={isFreeUser ? "/subscription" : "/dashboard/my-list"}
+              href="/dashboard/my-list"
               className="mt-5 inline-flex"
             >
               <Button type="button" variant="outline" size="sm">
-                {isFreeUser ? "Upgrade now" : "View full list"}
+                View full list
               </Button>
             </Link>
           </div>

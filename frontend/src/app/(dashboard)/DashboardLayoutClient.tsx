@@ -183,6 +183,24 @@ function IconLogout({ className }: { className?: string }) {
     </svg>
   );
 }
+function IconHistory({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+      aria-hidden
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+      />
+    </svg>
+  );
+}
 
 const PRIMARY_NAV_ITEMS = [
   { href: "/dashboard", label: "Home", icon: IconHome },
@@ -192,6 +210,11 @@ const PRIMARY_NAV_ITEMS = [
     href: "/dashboard/continue-watching",
     label: "Continue Watching",
     icon: IconPlay,
+  },
+  {
+    href: "/dashboard/watch-history",
+    label: "Watch History",
+    icon: IconHistory,
   },
 ] as const;
 
@@ -212,13 +235,7 @@ export default function DashboardLayoutClient({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
-  const visiblePrimaryNavItems = isFreeUser
-    ? PRIMARY_NAV_ITEMS.filter(
-        (item) =>
-          item.href !== "/dashboard/my-list" &&
-          item.href !== "/dashboard/continue-watching",
-      )
-    : PRIMARY_NAV_ITEMS;
+  const visiblePrimaryNavItems = PRIMARY_NAV_ITEMS;
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -339,8 +356,8 @@ export default function DashboardLayoutClient({
           })}
           <button
             type="button"
-            onClick={() => {
-              logout();
+            onClick={async () => {
+              await logout();
               router.replace("/login");
             }}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800/50 hover:text-accent"

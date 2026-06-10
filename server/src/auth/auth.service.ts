@@ -25,6 +25,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   type: 'access' | 'refresh';
+  deviceIdentifier?: string;
   jti?: string;
 }
 
@@ -242,7 +243,7 @@ export class AuthService {
       );
     }
 
-    return this.issueTokens(user);
+    return this.issueTokens(user, hasDeviceIdentifier ? deviceIdentifier!.trim() : undefined);
   }
 
   async refresh(refreshToken: string) {
@@ -270,8 +271,15 @@ export class AuthService {
     ) {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
+    if (payload.deviceIdentifier) {
+      const deviceExists = await this.validateDevice(payload.sub, payload.deviceIdentifier);
+      if (!deviceExists) {
+        throw new UnauthorizedException('Session expired: device logged out from another session');
+      }
+    }
+
     await this.revokeRefreshToken(record.id);
-    return this.issueTokens(record.user);
+    return this.issueTokens(record.user, payload.deviceIdentifier);
   }
 
   async validateUser(email: string, password: string): Promise<User | null> {
@@ -284,6 +292,15 @@ export class AuthService {
 
   async validateUserById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { id } });
+  }
+
+  async validateDevice(userId: string, deviceIdentifier: string): Promise<boolean> {
+    const device = await this.prisma.device.findUnique({
+      where: {
+        userId_deviceIdentifier: { userId, deviceIdentifier },
+      },
+    });
+    return !!device;
   }
 
   /** Request password reset: create token, store hash, send email. Always returns same message for security. */
@@ -419,7 +436,7 @@ export class AuthService {
     return { message: 'All sessions have been reset.' };
   }
 
-  private async issueTokens(user: User) {
+  private async issueTokens(user: User, deviceIdentifier?: string) {
     const accessSecret = process.env.JWT_ACCESS_SECRET ?? process.env.JWT_SECRET ?? 'dev-secret';
     const refreshSecret =
       process.env.JWT_REFRESH_SECRET ??
@@ -437,6 +454,7 @@ export class AuthService {
         sub: user.id,
         email: user.email,
         type: 'access',
+        deviceIdentifier,
       } satisfies JwtPayload,
       {
         secret: accessSecret,
@@ -455,6 +473,7 @@ export class AuthService {
         sub: user.id,
         email: user.email,
         type: 'refresh',
+        deviceIdentifier,
         jti,
       } satisfies JwtPayload,
       {

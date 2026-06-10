@@ -16,11 +16,6 @@ export default function MyListPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (isFreeUser) {
-      setSavedItems([]);
-      setIsLoading(false);
-      return;
-    }
     if (listIds.length === 0) {
       setSavedItems([]);
       setIsLoading(false);
@@ -38,33 +33,7 @@ export default function MyListPage() {
       })
       .catch(() => setSavedItems([]))
       .finally(() => setIsLoading(false));
-  }, [isFreeUser, listIds]);
-
-  if (isFreeUser) {
-    return (
-      <div className="font-[var(--font-geist-sans)]">
-        <header className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-neutral-500">
-            My List
-          </p>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Upgrade to unlock My List
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-neutral-400">
-            Saving titles to My List is available on paid plans.
-          </p>
-        </header>
-        <section className="rounded-2xl border border-neutral-700/60 bg-neutral-900/60 p-6">
-          <p className="text-sm text-neutral-300">
-            Upgrade your account to save titles and access your list everywhere.
-          </p>
-          <Link href="/subscription" className="mt-4 inline-flex">
-            <Button type="button">Upgrade now</Button>
-          </Link>
-        </section>
-      </div>
-    );
-  }
+  }, [listIds]);
 
   const hasSaved = savedItems.length > 0;
   if (isLoading) {

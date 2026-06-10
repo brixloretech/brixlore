@@ -90,6 +90,8 @@ export type HLSVideoPlayerProps = {
   viewerAge?: number | null;
   /** Optional ad lifecycle callback (hook point for analytics/logging). */
   onAdEvent?: (event: AdEvent) => void;
+  /** Optional start position in seconds to resume playback from. */
+  startTime?: number;
 };
 
 const VIDEO_JS_OPTIONS = {
@@ -233,6 +235,7 @@ export function HLSVideoPlayer({
   viewerCountryCode,
   viewerAge,
   onAdEvent,
+  startTime,
 }: HLSVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<VideoJsPlayer | null>(null);
@@ -255,6 +258,11 @@ export function HLSVideoPlayer({
   const [adPaused, setAdPaused] = useState<boolean>(false);
   const [seekFeedbackOverlay, setSeekFeedbackOverlay] =
     useState<SeekFeedbackOverlay | null>(null);
+
+  const startTimeRef = useRef<number | undefined>(startTime);
+  useEffect(() => {
+    startTimeRef.current = startTime;
+  }, [startTime]);
 
   const activeAdOverlayRef = useRef<ActiveAdOverlay | null>(null);
   const adOverlayHideTimerRef = useRef<number | null>(null);
@@ -607,7 +615,7 @@ export function HLSVideoPlayer({
       if (!playerElement.hasAttribute("tabindex")) {
         playerElement.setAttribute("tabindex", "0");
       }
-      let preRollTriggered = false;
+      let preRollTriggered = Boolean(startTimeRef.current && startTimeRef.current > 0);
       let postRollTriggered = false;
       let midRollCount = 0;
       const firedTimestampBreaks = new Set<number>();
@@ -898,6 +906,23 @@ export function HLSVideoPlayer({
 
       player.on("loadedmetadata", rebuildQualityOptions);
       player.on("loadeddata", rebuildQualityOptions);
+
+      let hasSeekedInitial = false;
+      const doInitialSeek = (eventName: string) => {
+        if (hasSeekedInitial || !startTimeRef.current || startTimeRef.current <= 0) {
+          return;
+        }
+        try {
+          player.currentTime(startTimeRef.current);
+          if (eventName === "playing") {
+            hasSeekedInitial = true;
+          }
+        } catch {
+          // ignore errors on uninitialized player
+        }
+      };
+      player.on("loadedmetadata", () => doInitialSeek("loadedmetadata"));
+      player.on("playing", () => doInitialSeek("playing"));
 
       player.on("play", () => {
         if (preRollTriggered) return;

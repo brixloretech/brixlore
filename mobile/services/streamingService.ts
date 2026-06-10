@@ -218,6 +218,25 @@ class StreamingService {
       return [];
     }
   }
+
+  /**
+   * Get watch history list
+   * Real API: GET /streaming/watch-history
+   */
+  async getWatchHistory(): Promise<ContinueWatchingItemDto[]> {
+    try {
+      const response = await api.get<ContinueWatchingItemDto[]>(
+        "/streaming/watch-history",
+      );
+      return Array.isArray(response.data) ? response.data : [];
+    } catch (error: any) {
+      if (error?.response?.status === 401) {
+        return [];
+      }
+      console.error("Failed to get watch history:", error);
+      return [];
+    }
+  }
 }
 
 export const streamingService = new StreamingService();

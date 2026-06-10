@@ -35,6 +35,7 @@ export interface PlaybackInfoResponseDto {
     licenseUrl?: string;
     certificateUrl?: string;
   };
+  progress?: number;
 }
 
 /** Request for POST /episodes/:id/play (if using body for entitlements). */

@@ -52,13 +52,13 @@ export function AddToMyListButton({
       <View style={styles.iconContainer}>
         {inList ? (
           <Ionicons
-            name="checkmark"
+            name="bookmark"
             size={iconSize}
             color={themeColors.textPrimary}
           />
         ) : (
           <Ionicons
-            name="add"
+            name="bookmark-outline"
             size={iconSize}
             color={themeColors.textPrimary}
           />

@@ -25,6 +25,7 @@ import {
   clearStoredAuth,
 } from "@/lib/auth-storage";
 import { USE_MOCK_API } from "./config";
+import { detectPlatform, generateDeviceIdentifier } from "@/lib/device-utils";
 import {
   mockLogin,
   mockSignup,
@@ -136,9 +137,14 @@ export const authService = {
       };
     }
 
+    const platform = typeof window !== "undefined" ? detectPlatform() : undefined;
+    const deviceIdentifier = typeof window !== "undefined" ? generateDeviceIdentifier() : undefined;
+
     const tokens = await post<TokensResponse>("auth/login", {
       email: body.email,
       password: body.password,
+      platform,
+      deviceIdentifier,
     });
     setStoredAuth({
       accessToken: tokens.accessToken,

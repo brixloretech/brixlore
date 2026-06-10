@@ -188,13 +188,6 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         console.error("Failed to clear downloads on logout:", error);
       }
 
-      // Clear device ID
-      try {
-        await AsyncStorage.removeItem("@device_id");
-      } catch (error) {
-        console.error("Failed to clear device ID:", error);
-      }
-
       set({
         user: null,
         isAuthenticated: false,

@@ -83,6 +83,12 @@ export class StreamingController {
     return this.streamingService.getContinueWatching(user.id);
   }
 
+  /** Authenticated: list all watch history. */
+  @Get('watch-history')
+  async getWatchHistory(@CurrentUser() user: User): Promise<any[]> {
+    return this.streamingService.getWatchHistory(user.id);
+  }
+
   /** Authenticated: report watch progress (seconds). Call on pause or periodically. */
   @Patch('continue-watching/:episodeId')
   async updateProgress(

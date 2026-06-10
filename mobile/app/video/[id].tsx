@@ -13,10 +13,9 @@ import {
   type AppStateStatus,
   Modal,
   Animated,
-  PanResponder,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import { VideoView, useVideoPlayer } from "expo-video";
 import { useEventListener } from "expo";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -48,6 +47,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PROGRESS_REPORT_INTERVAL_SEC = 10;
 const DOUBLE_TAP_WINDOW_MS = 320;
 const TAP_ACCUMULATION_RESET_MS = 900;
+const PLAYER_DEBUG = __DEV__;
 
 // Report progress every 10 seconds
 type ContentDetailDto = {
@@ -148,13 +148,14 @@ export default function WatchScreen() {
   const videoViewRef = useRef<VideoView>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasPlayingRef = useRef(false);
+  const adResumeRetryTimersRef = useRef<ReturnType<typeof setTimeout>[]>([]);
   const backgroundAudioActiveRef = useRef(false);
   const lastPositionRef = useRef(0);
-  const progressReportIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const progressReportIntervalRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastReportedRef = useRef(0);
   const hasSeekedToSavedProgressRef = useRef(false);
   const primaryEpisodeRef = useRef<PlayableEpisode | null>(null);
-  const watchTimeTrackerRef = useRef<NodeJS.Timeout | null>(null);
+  const watchTimeTrackerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoStartPositionRef = useRef<number | null>(null);
   const currentTimeRef = useRef(0);
   const initialCumulativeTimeRef = useRef<number>(0);
@@ -175,8 +176,21 @@ export default function WatchScreen() {
     }
   }, []);
 
+  const logPlayerDebug = useCallback((message: string, extra?: Record<string, unknown>) => {
+    if (!PLAYER_DEBUG) return;
+    console.log(`[WatchDebug] ${message}`, {
+      t: Date.now(),
+      playerPlaying: player.playing,
+      playerTime: player.currentTime,
+      uiIsPlaying: isPlayingRef.current,
+      ...extra,
+    });
+  }, [player]);
+
   useEffect(() => {
     return () => {
+      adResumeRetryTimersRef.current.forEach((t) => clearTimeout(t));
+      adResumeRetryTimersRef.current = [];
       playerMountedRef.current = false;
     };
   }, []);
@@ -214,6 +228,18 @@ export default function WatchScreen() {
         // Signal that the next playingChange(nowPlaying=true) is ad-driven.
         adJustResumedRef.current = true;
         safePlayerCall(() => player.play(), "resumeContent");
+
+        // Some devices need a second/third nudge right after ad teardown.
+        adResumeRetryTimersRef.current.forEach((t) => clearTimeout(t));
+        adResumeRetryTimersRef.current = [120, 320].map((delayMs) =>
+          setTimeout(() => {
+            safePlayerCall(() => {
+              if (!player.playing) {
+                player.play();
+              }
+            }, `resumeContentRetry:${delayMs}`);
+          }, delayMs),
+        );
       }
     }, [player, safePlayerCall]),
   });
@@ -256,7 +282,7 @@ export default function WatchScreen() {
       duration: 200,
       useNativeDriver: true,
     }).start();
-  }, [controlsOpacity]);
+  }, []);
 
   const hideControlsAnimated = useCallback(() => {
     Animated.timing(controlsOpacity, {
@@ -264,7 +290,7 @@ export default function WatchScreen() {
       duration: 300,
       useNativeDriver: true,
     }).start(() => setShowControls(false));
-  }, [controlsOpacity]);
+  }, []);
 
   const resetControlsTimeout = useCallback(() => {
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
@@ -275,12 +301,10 @@ export default function WatchScreen() {
         useNativeDriver: true,
       }).start(() => setShowControls(false));
     }, 4000);
-  }, [controlsOpacity]);
+  }, []);
 
   // Keep showControlsRef current for stable callbacks
   useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
-  // Keep progressBarWidthRef current
-  useEffect(() => { progressBarWidthRef.current = progressBarWidth; }, [progressBarWidth]);
 
   useEffect(() => {
     if (showControls) resetControlsTimeout();
@@ -329,8 +353,22 @@ export default function WatchScreen() {
     };
   }, [isFreeTier, updateEpisodeCumulativeTime, saveLimitedAccessToStorage, player, safePlayerCall]);
 
+  // Pause the player whenever this screen loses focus (e.g. user pushes a new
+  // video screen on top). Without this, the old player keeps playing audio while
+  // the new video screen is active.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        safePlayerCall(() => player.pause(), "screenBlurPause");
+        stopAudio().catch(() => {});
+      };
+    }, [player, safePlayerCall]),
+  );
+
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  // Ref so PanResponder closures (created once) always see the current duration.
+  const durationRef = useRef(0);
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(
     null,
   );
@@ -364,10 +402,20 @@ export default function WatchScreen() {
   const [qualityLevel, setQualityLevel] = useState<"auto" | "1080p" | "720p" | "480p">("auto");
   // Drag seek state
   const [isDragging, setIsDragging] = useState(false);
-  const [dragDisplay, setDragDisplay] = useState(0); // 0–100
+  const [dragTime, setDragTime] = useState(0);
+  const [pendingSeekTime, setPendingSeekTime] = useState<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const dragTimeRef = useRef(0);
+  const pendingSeekTimeRef = useRef<number | null>(null);
+  const pendingSeekStartedAtRef = useRef(0);
+  const pendingSeekRetryRef = useRef(false);
+  const shouldResumeAfterSeekRef = useRef(false);
+  const progressBarWidthRef = useRef(0);
+  const progressBarTouchAreaRef = useRef<View>(null);
+  const progressBarLeftRef = useRef(0);
   const lastTapTimeRef = useRef<number>(0);
   const lastTapSideRef = useRef<"left" | "right" | null>(null);
-  const holdTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const holdTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const normalPlaybackRateRef = useRef<number>(1);
   // Controls fade animation (GAP 9)
   const controlsOpacity = useRef(new Animated.Value(1)).current;
@@ -379,11 +427,16 @@ export default function WatchScreen() {
     timer: ReturnType<typeof setTimeout> | null;
   }>({ side: "right", amount: 0, timer: null });
   const singleTapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Progress bar drag refs
-  const dragProgressRef = useRef(0);
-  const progressBarWidthRef = useRef(0);
+  const wasPlayingBeforeScrubRef = useRef(false);
   // Quality change guard — skip effect on first render
   const isFirstQualityRender = useRef(true);
+  const activePlaybackTime = isDragging
+    ? dragTime
+    : pendingSeekTime ?? currentTime;
+  const activeProgressPercent =
+    duration > 0
+      ? Math.max(0, Math.min(100, (activePlaybackTime / duration) * 100))
+      : 0;
 
   useEffect(() => {
     primaryEpisodeRef.current = primaryEpisode;
@@ -454,12 +507,58 @@ export default function WatchScreen() {
     currentTimeRef.current = currentTime;
   }, [currentTime]);
 
+  useEffect(() => {
+    isDraggingRef.current = isDragging;
+  }, [isDragging]);
+
+  useEffect(() => {
+    dragTimeRef.current = dragTime;
+  }, [dragTime]);
+
+  useEffect(() => {
+    pendingSeekTimeRef.current = pendingSeekTime;
+  }, [pendingSeekTime]);
+
+  useEffect(() => {
+    progressBarWidthRef.current = progressBarWidth;
+  }, [progressBarWidth]);
+
+  const updateProgressBarMetrics = useCallback(() => {
+    const node = progressBarTouchAreaRef.current;
+    if (!node) return;
+    node.measureInWindow((x, _y, width) => {
+      if (Number.isFinite(x)) {
+        progressBarLeftRef.current = x;
+      }
+      if (Number.isFinite(width) && width > 0) {
+        progressBarWidthRef.current = width;
+        setProgressBarWidth(width);
+      }
+    });
+  }, []);
+
+  const getDragTimeFromPageX = useCallback((pageX: number, fallbackLocationX?: number) => {
+    if (durationRef.current <= 0 || progressBarWidthRef.current <= 0) return null;
+    let localX = pageX - progressBarLeftRef.current;
+    if (!Number.isFinite(localX) && Number.isFinite(fallbackLocationX)) {
+      localX = fallbackLocationX as number;
+    }
+    const pct = Math.max(0, Math.min(1, localX / progressBarWidthRef.current));
+    return pct * durationRef.current;
+  }, []);
+
+  // Keep durationRef current so PanResponder closures always read the real duration.
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
   // Limited Access: Check if user is trying to watch more than 3 videos
   // (This is a backup check to ensure modal stays visible if state changes)
   useEffect(() => {
     if (isGuest && selectedEpisodeId && !isTrailerPlayback) {
       const liveState = useLimitedAccessStore.getState();
       if (!liveState.watchedVideoIds.has(selectedEpisodeId) && liveState.videosWatchedCount >= 3) {
+        safePlayerCall(() => player.pause(), "backupLimitPause");
         setShowLimitedAccessLoginModal(true);
         setLimitedAccessModalReason("video-limit");
         setIsPlaying(false);
@@ -531,6 +630,7 @@ export default function WatchScreen() {
                 totalWatchedTime,
               );
               saveLimitedAccessToStorage();
+              safePlayerCall(() => player.pause(), "freeTierLimitPause");
               setShowLimitedAccessLoginModal(true);
               setLimitedAccessModalReason("free-tier-limit");
               setIsPlaying(false);
@@ -547,6 +647,7 @@ export default function WatchScreen() {
             const { loginModalShownFor30s } = useLimitedAccessStore.getState();
             if (actualPlaybackTime >= 120 && !loginModalShownFor30s) {
               setLoginModalShownFor30s(true);
+              safePlayerCall(() => player.pause(), "guestLimitPause");
               setShowLimitedAccessLoginModal(true);
               setLimitedAccessModalReason("guest-limit");
               setIsPlaying(false);
@@ -714,6 +815,7 @@ export default function WatchScreen() {
             !liveState.watchedVideoIds.has(episode.id)
           ) {
             setLoading(false);
+            safePlayerCall(() => player.pause(), "videoLimitLoadPause");
             setShowLimitedAccessLoginModal(true);
             setLimitedAccessModalReason("video-limit");
             setIsPlaying(false);
@@ -912,14 +1014,63 @@ export default function WatchScreen() {
 
   // expo-video: Playback time updates (~250 ms while playing)
   useEventListener(player, "timeUpdate", ({ currentTime: ct }: { currentTime: number; bufferedPosition: number }) => {
-    setCurrentTime(ct);
+    currentTimeRef.current = ct;
     adSystem.onTimeUpdate(ct);
+
+    if (isDraggingRef.current) {
+      return;
+    }
+
+    const pending = pendingSeekTimeRef.current;
+    if (pending !== null) {
+      const reachedTarget = Math.abs(ct - pending) < 0.35;
+      if (reachedTarget) {
+        pendingSeekTimeRef.current = null;
+        pendingSeekRetryRef.current = false;
+        setPendingSeekTime(null);
+        if (shouldResumeAfterSeekRef.current) {
+          shouldResumeAfterSeekRef.current = false;
+          safePlayerCall(() => {
+            if (!player.playing) {
+              player.play();
+            }
+          }, "progressDragSeek:resumeAfterSettle");
+        }
+      } else {
+        const waitMs = Date.now() - pendingSeekStartedAtRef.current;
+        if (waitMs > 1200 && !pendingSeekRetryRef.current) {
+          pendingSeekRetryRef.current = true;
+          pendingSeekStartedAtRef.current = Date.now();
+          safePlayerCall(() => {
+            const anyPlayer = player as unknown as {
+              currentTime: number;
+              seekBy: (seconds: number) => void;
+            };
+            try {
+              anyPlayer.currentTime = pending;
+            } catch {
+              const current = Number.isFinite(anyPlayer.currentTime)
+                ? anyPlayer.currentTime
+                : 0;
+              const delta = pending - current;
+              if (Math.abs(delta) > 0.2) {
+                anyPlayer.seekBy(delta);
+              }
+            }
+          }, "progressDragSeek:retry");
+        }
+        return;
+      }
+    }
+
+    setCurrentTime(ct);
   });
 
   // Fallback timer sync: keeps UI time moving even if a timeUpdate event is missed.
   useEffect(() => {
     if (!isPlaying) return;
     const interval = setInterval(() => {
+      if (isDraggingRef.current || pendingSeekTimeRef.current !== null) return;
       let t = 0;
       try {
         t = player.currentTime;
@@ -954,6 +1105,15 @@ export default function WatchScreen() {
 
   // expo-video: Report progress when playback pauses; track play/pause/resume events.
   useEventListener(player, "playingChange", ({ isPlaying: nowPlaying }: { isPlaying: boolean }) => {
+    logPlayerDebug("event:playingChange", { nowPlaying });
+
+    if (!nowPlaying && pendingSeekTimeRef.current !== null && shouldResumeAfterSeekRef.current) {
+      logPlayerDebug("event:playingChange:ignoredTransientPause", {
+        pendingSeek: pendingSeekTimeRef.current,
+      });
+      return;
+    }
+
     setIsPlaying(nowPlaying);
     if (!nowPlaying) {
       const episode = primaryEpisodeRef.current;
@@ -1150,7 +1310,7 @@ export default function WatchScreen() {
       void lockPortrait();
     }
     resetControlsTimeout();
-  }, [isFullscreen, lockLandscape, lockPortrait, resetControlsTimeout]);
+  }, [isFullscreen, resetControlsTimeout]);
   const lockLandscape = useCallback(async () => {
     try {
       await ScreenOrientation.lockAsync(
@@ -1176,31 +1336,92 @@ export default function WatchScreen() {
       return rates[(index + 1) % rates.length];
     });
   }, []);
+
+  const seekToTime = useCallback(
+    (
+      targetTime: number,
+      label: string,
+      preservePlayback = false,
+      expectedPlayingBeforeSeek?: boolean,
+    ) => {
+      const rawDuration = durationRef.current || player.duration || 0;
+      const hasDuration = Number.isFinite(rawDuration) && rawDuration > 0;
+      const clamped = hasDuration
+        ? Math.max(0, Math.min(targetTime, rawDuration))
+        : Math.max(0, targetTime);
+      const wasPlayingBeforeSeek = player.playing;
+
+      logPlayerDebug("seek:start", {
+        label,
+        targetTime,
+        clamped,
+        wasPlayingBeforeSeek,
+      });
+
+      safePlayerCall(() => {
+        const anyPlayer = player as unknown as {
+          currentTime: number;
+          seekBy: (seconds: number) => void;
+        };
+
+        // Single-path seek avoids rewind flashes from chained absolute+relative seeks.
+        try {
+          anyPlayer.currentTime = clamped;
+        } catch {
+          const current = Number.isFinite(anyPlayer.currentTime)
+            ? anyPlayer.currentTime
+            : 0;
+          const delta = clamped - current;
+          if (Math.abs(delta) > 0.2) {
+            anyPlayer.seekBy(delta);
+          }
+        }
+      }, label);
+
+      if (!preservePlayback && !wasPlayingBeforeSeek) {
+        setTimeout(() => {
+          safePlayerCall(() => {
+            if (player.playing) {
+              player.pause();
+            }
+          }, `${label}:preservePausedState`);
+
+          logPlayerDebug("seek:preservePausedState", {
+            label,
+            playerPlayingAfterSeek: player.playing,
+          });
+        }, 40);
+      }
+
+      logPlayerDebug("seek:end", { label, clamped });
+    },
+    [logPlayerDebug, player, safePlayerCall],
+  );
+
   const handleSeek = useCallback((seekTime: number) => {
-    safePlayerCall(() => player.seekBy(seekTime - player.currentTime), "handleSeek");
-    setCurrentTime(seekTime);
-  }, [player, safePlayerCall]);
+    seekToTime(seekTime, "handleSeek");
+  }, [seekToTime]);
   const handlePlayPause = useCallback(() => {
+    logPlayerDebug("playPause:tap", { playerPlayingBefore: player.playing });
     if (player.playing) {
       safePlayerCall(() => player.pause(), "handlePlayPausePause");
     } else {
       safePlayerCall(() => player.play(), "handlePlayPausePlay");
     }
     resetControlsTimeout();
-  }, [player, resetControlsTimeout, safePlayerCall]);
+  }, [logPlayerDebug, player, resetControlsTimeout, safePlayerCall]);
   const handleSkip = useCallback(
     (deltaSeconds: number) => {
       const nextTime = Math.max(
         0,
         Math.min(
-          currentTime + deltaSeconds,
-          duration || currentTime + deltaSeconds,
+          currentTimeRef.current + deltaSeconds,
+          durationRef.current || currentTimeRef.current + deltaSeconds,
         ),
       );
-      safePlayerCall(() => player.seekBy(nextTime - player.currentTime), "handleSkip");
-      setCurrentTime(nextTime);
+      seekToTime(nextTime, "handleSkip");
     },
-    [currentTime, duration, player, safePlayerCall],
+    [seekToTime],
   );
 
   // Double tap handler with YouTube-style accumulation (+10, +20, +30...) 
@@ -1257,63 +1478,57 @@ export default function WatchScreen() {
     }
   }, [handleDoubleTap, resetControlsTimeout]);
 
-  const handleProgressBarPress = useCallback(
-    (event: any) => {
-      if (duration <= 0 || progressBarWidth <= 0) return;
-      const locationX = Math.max(
-        0,
-        Math.min(event.nativeEvent.locationX, progressBarWidth),
-      );
-      const nextTime = (locationX / progressBarWidth) * duration;
-      handleSeek(nextTime);
-      resetControlsTimeout();
-    },
-    [duration, progressBarWidth, handleSeek, resetControlsTimeout],
-  );
+  const handleProgressDragStart = useCallback((pageX: number, fallbackLocationX?: number) => {
+    if (durationRef.current <= 0 || progressBarWidthRef.current <= 0) return;
+    showControlsAnimated();
+    isDraggingRef.current = true;
+    shouldResumeAfterSeekRef.current = false;
+    setIsDragging(true);
+    wasPlayingBeforeScrubRef.current = player.playing;
+    const nextDragTime = getDragTimeFromPageX(pageX, fallbackLocationX);
+    if (nextDragTime === null) return;
+    dragTimeRef.current = nextDragTime;
+    setDragTime(nextDragTime);
+    logPlayerDebug("drag:grant", {
+      pageX,
+      duration: durationRef.current,
+    });
+  }, [getDragTimeFromPageX, logPlayerDebug, player.playing, showControlsAnimated]);
 
-  // Draggable seek thumb (GAP 3)
-  const progressPanResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2,
-      onPanResponderGrant: (e) => {
-        if (duration <= 0 || progressBarWidthRef.current <= 0) return;
-        showControlsAnimated();
-        setIsDragging(true);
-        const pct = Math.max(
-          0,
-          Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
-        );
-        dragProgressRef.current = pct;
-        setDragDisplay(pct * 100);
-      },
-      onPanResponderMove: (e) => {
-        if (duration <= 0 || progressBarWidthRef.current <= 0) return;
-        const pct = Math.max(
-          0,
-          Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
-        );
-        dragProgressRef.current = pct;
-        setDragDisplay(pct * 100);
-      },
-      onPanResponderRelease: () => {
-        if (duration <= 0) {
-          setIsDragging(false);
-          return;
+  const handleProgressDragMove = useCallback((pageX: number, fallbackLocationX?: number) => {
+    if (!isDraggingRef.current) return;
+    if (durationRef.current <= 0 || progressBarWidthRef.current <= 0) return;
+    const nextDragTime = getDragTimeFromPageX(pageX, fallbackLocationX);
+    if (nextDragTime === null) return;
+    dragTimeRef.current = nextDragTime;
+    setDragTime(nextDragTime);
+  }, [getDragTimeFromPageX]);
+
+  const handleProgressDragEnd = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    const target = Math.max(0, Math.min(dragTimeRef.current, durationRef.current || dragTimeRef.current));
+    logPlayerDebug("drag:release", {
+      targetTime: target,
+    });
+    isDraggingRef.current = false;
+    dragTimeRef.current = target;
+    setDragTime(target);
+    setIsDragging(false);
+    shouldResumeAfterSeekRef.current = wasPlayingBeforeScrubRef.current;
+    pendingSeekTimeRef.current = target;
+    pendingSeekStartedAtRef.current = Date.now();
+    pendingSeekRetryRef.current = false;
+    setPendingSeekTime(target);
+    seekToTime(target, "progressDragSeek", false, wasPlayingBeforeScrubRef.current);
+    if (wasPlayingBeforeScrubRef.current) {
+      safePlayerCall(() => {
+        if (!player.playing) {
+          player.play();
         }
-        safePlayerCall(
-          () => player.seekBy(dragProgressRef.current * player.duration - player.currentTime),
-          "progressPanReleaseSeek",
-        );
-        setIsDragging(false);
-        resetControlsTimeout();
-      },
-      onPanResponderTerminate: () => {
-        setIsDragging(false);
-      },
-    }),
-  ).current;
+      }, "progressDragSeek:immediateResumeNudge");
+    }
+    resetControlsTimeout();
+  }, [logPlayerDebug, player.playing, resetControlsTimeout, safePlayerCall, seekToTime]);
 
   // Long press handler for 2x speed
   const handlePressIn = useCallback(() => {
@@ -1410,6 +1625,7 @@ export default function WatchScreen() {
                 if (liveState.videosWatchedCount >= 3) {
                   // Already at limit, block this episode
                   setPlaybackInfo(null);
+                  safePlayerCall(() => player.pause(), "episodeLimitPause");
                   setShowLimitedAccessLoginModal(true);
                   setLimitedAccessModalReason("video-limit");
                   setIsPlaying(false);
@@ -1698,6 +1914,7 @@ export default function WatchScreen() {
           style={styles.video}
           contentFit="contain"
           nativeControls={false}
+          surfaceType="textureView"
         />
 
         {/* Controls Overlay — always mounted for fade animation */}
@@ -1776,7 +1993,7 @@ export default function WatchScreen() {
               ]}
             >
               <Text style={styles.timeText}>
-                {formatTime(Math.floor(currentTime))} /{" "}
+                {formatTime(Math.floor(activePlaybackTime))} /{" "}
                 {formatTime(Math.floor(duration))}
               </Text>
 
@@ -1801,84 +2018,63 @@ export default function WatchScreen() {
                 fullscreen && styles.progressBarContainerFullscreen,
               ]}
             >
-              <View
-                style={[
-                  styles.progressBarTouchArea,
-                  fullscreen && styles.progressBarTouchAreaFullscreen,
-                ]}
-                onLayout={(event) => {
-                  setProgressBarWidth(event.nativeEvent.layout.width);
-                }}
-                {...progressPanResponder.panHandlers}
-              >
                 <View
+                  ref={progressBarTouchAreaRef}
                   style={[
-                    styles.progressBar,
-                    fullscreen && styles.progressBarFullscreen,
+                    styles.progressBarTouchArea,
+                    fullscreen && styles.progressBarTouchAreaFullscreen,
                   ]}
+                  onLayout={(event) => {
+                    const width = event.nativeEvent.layout.width;
+                    progressBarWidthRef.current = width;
+                    setProgressBarWidth(width);
+                    requestAnimationFrame(updateProgressBarMetrics);
+                  }}
+                  onTouchStart={(event) =>
+                    handleProgressDragStart(
+                      event.nativeEvent.pageX,
+                      event.nativeEvent.locationX,
+                    )
+                  }
+                  onTouchMove={(event) =>
+                    handleProgressDragMove(
+                      event.nativeEvent.pageX,
+                      event.nativeEvent.locationX,
+                    )
+                  }
+                  onTouchEnd={handleProgressDragEnd}
+                  onTouchCancel={handleProgressDragEnd}
                 >
                   <View
                     style={[
-                      styles.progressFill,
-                      {
-                        width: `${
-                          isDragging
-                            ? dragDisplay
-                            : duration > 0
-                              ? (currentTime / duration) * 100
-                              : 0
-                        }%`,
-                      },
+                      styles.progressBar,
+                      fullscreen && styles.progressBarFullscreen,
                     ]}
-                  />
-                  {progressBarWidth > 0 && (
+                  >
                     <View
                       style={[
-                        styles.seekThumb,
+                        styles.progressFill,
                         {
-                          left:
-                            ((isDragging
-                              ? dragDisplay
-                              : duration > 0
-                                ? (currentTime / duration) * 100
-                                : 0) /
-                              100) *
-                              progressBarWidth -
-                            7,
+                          width: `${activeProgressPercent}%`,
                         },
                       ]}
                     />
-                  )}
+                    {progressBarWidth > 0 && (
+                      <View
+                        style={[
+                          styles.seekThumb,
+                          styles.seekThumbFallback,
+                          {
+                            left: (activeProgressPercent / 100) * progressBarWidth - 8,
+                          },
+                        ]}
+                      />
+                    )}
+                  </View>
                 </View>
-              </View>
             </View>
           </View>
         </Animated.View>
-
-        {/* Gesture Overlay - MUST BE LAST so it's on top and captures touches */}
-        <View
-          style={styles.gestureContainer}
-          pointerEvents={showControls ? "none" : "box-none"}
-        >
-          <Pressable
-            style={styles.gestureZoneLeft}
-            onPress={() => handleSideTap("left")}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-          />
-          <Pressable
-            style={styles.gestureZoneCenter}
-            onPress={handleCenterTap}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-          />
-          <Pressable
-            style={styles.gestureZoneRight}
-            onPress={() => handleSideTap("right")}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-          />
-        </View>
 
         {showDoubleTapFeedback && (
           <View
@@ -1904,6 +2100,28 @@ export default function WatchScreen() {
             </Text>
           </View>
         )}
+
+        {/* Gesture Overlay: only active when controls are hidden — prevents blocking buttons/seek bar. */}
+        <View style={styles.gestureContainer} pointerEvents={showControls ? "none" : "box-none"}>
+          <Pressable
+            style={styles.gestureZoneLeft}
+            onPress={() => handleSideTap("left")}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          />
+          <Pressable
+            style={styles.gestureZoneCenter}
+            onPress={handleCenterTap}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          />
+          <Pressable
+            style={styles.gestureZoneRight}
+            onPress={() => handleSideTap("right")}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+          />
+        </View>
 
         {isHolding && (
           <View style={styles.speedIndicator}>
@@ -1940,7 +2158,7 @@ export default function WatchScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
-        scrollEnabled={!isFullscreen}
+        scrollEnabled={!isFullscreen && !isDragging}
       >
         {/* Video Player */}
         {!isFullscreen && renderVideoPlayer(false)}
@@ -2767,6 +2985,7 @@ const styles = StyleSheet.create({
   progressBarContainer: {
     width: "100%",
     paddingHorizontal: 0,
+    justifyContent: "center",
   },
   progressBarContainerFullscreen: {
     paddingHorizontal: spacing.md,
@@ -2775,7 +2994,7 @@ const styles = StyleSheet.create({
   progressBarTouchArea: {
     width: "100%",
     justifyContent: "center",
-    paddingVertical: spacing.xs,
+    paddingVertical: spacing.md,
   },
   progressBarTouchAreaFullscreen: {
     paddingVertical: spacing.sm,
@@ -2804,11 +3023,16 @@ const styles = StyleSheet.create({
   seekThumb: {
     position: "absolute",
     top: "50%",
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     backgroundColor: themeColors.accent,
-    transform: [{ translateY: -7 }],
+    transform: [{ translateY: -8 }],
+  },
+  seekThumbFallback: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.25)",
   },
   timeText: {
     ...typography.caption,

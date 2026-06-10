@@ -167,9 +167,25 @@ export class AdConfigService {
    * Public-safe config for the web player.
    * Returns all fields the player needs.  Tag URLs are only included when the
    * master `adsEnabled` flag is true, so accidental exposure is impossible.
+   * If userId is provided, we check for an active paid subscription to suppress ads.
    */
-  async getPublicAdConfig(): Promise<AdConfigResponseDto> {
+  async getPublicAdConfig(userId?: string): Promise<AdConfigResponseDto> {
     const config = await this.getAdConfig();
+
+    if (userId) {
+      const activeSubscription = await this.prisma.subscription.findFirst({
+        where: {
+          userId,
+          status: 'ACTIVE',
+          endDate: { gte: new Date() },
+        },
+      });
+
+      if (activeSubscription) {
+        // Suppress ads for paid subscribers
+        return { ...config, adsEnabled: false };
+      }
+    }
 
     if (!config.adsEnabled) {
       // Return a "disabled" shell so the player has a consistent shape to work with

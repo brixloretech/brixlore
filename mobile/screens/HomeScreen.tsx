@@ -29,13 +29,14 @@ import {
 } from "../components/LargeVideoCard";
 import { SmallVideoCard } from "../components/SmallVideoCard";
 import { useMatomo } from "../hooks/useMatomo";
-import { useContinueWatching } from "../hooks";
 import {
   contentService,
   type ContentSummaryDto,
 } from "../services/contentService";
+import { subscriptionService } from "../services/subscriptionService";
 import { useAuthStore } from "../store/useAuthStore";
 import { useSubscriptionStore } from "../store/useSubscriptionStore";
+import { useMyList } from "../contexts/MyListContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const HERO_HEIGHT = Math.min(290, SCREEN_WIDTH * 0.58);
@@ -71,8 +72,7 @@ export default function HomeScreen() {
   const { trackEvent } = useMatomo();
   const { user, isAuthenticated } = useAuthStore();
   const { subscription, fetchSubscription } = useSubscriptionStore();
-  const { items: continueWatching, refresh: refreshContinueWatching } =
-    useContinueWatching();
+  const { listIds, refresh: refreshList } = useMyList();
   const isFreeTier = !subscription?.isSubscribed;
 
   const [heroItems, setHeroItems] = useState<VideoCardItem[]>([]);
@@ -80,6 +80,13 @@ export default function HomeScreen() {
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Snapshot and categories states
+  const [contentCount, setContentCount] = useState<number>(0);
+  const [categoriesCount, setCategoriesCount] = useState<number>(0);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [planName, setPlanName] = useState<string | null>(null);
+  const [allContentItems, setAllContentItems] = useState<ContentSummaryDto[]>([]);
 
   const heroListRef = useRef<FlatList<VideoCardItem>>(null);
   const autoScrollRef = useRef<NodeJS.Timeout | null>(null);
@@ -90,12 +97,44 @@ export default function HomeScreen() {
     }
   }, [fetchSubscription, isAuthenticated]);
 
+  const savedItems = useMemo(() => {
+    const byId = new Map(allContentItems.map((c) => [c.id, c]));
+    return listIds
+      .map((id) => byId.get(id))
+      .filter((c): c is ContentSummaryDto => c != null)
+      .map(toVideoCardItem);
+  }, [allContentItems, listIds]);
+
   const loadContent = useCallback(async () => {
     try {
       setIsLoading(true);
-      const allContent = await contentService.getContentForBrowse();
+      const [allContent, cats] = await Promise.all([
+        contentService.getContentForBrowse(),
+        contentService.getCategories(),
+      ]);
 
+      setAllContentItems(allContent);
       setHeroItems(allContent.slice(0, 3).map(toVideoCardItem));
+      setContentCount(allContent.length);
+
+      const filteredCats = cats.filter((c) => c.toLowerCase() !== "all");
+      setCategoriesCount(filteredCats.length);
+      setCategories(filteredCats);
+
+      if (isAuthenticated) {
+        try {
+          const [plans, sub] = await Promise.all([
+            subscriptionService.getPlans(),
+            subscriptionService.getSubscription(),
+          ]);
+          const match = plans.find((p) => p.id === sub.planId);
+          setPlanName(match?.name ?? (sub.isSubscribed ? "Active" : "Free"));
+        } catch {
+          setPlanName("Free");
+        }
+      } else {
+        setPlanName(null);
+      }
 
       const nextSections: HomeSection[] = [];
       const trendingNow = allContent.slice(0, 10).map(toVideoCardItem);
@@ -134,7 +173,7 @@ export default function HomeScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     loadContent();
@@ -161,10 +200,13 @@ export default function HomeScreen() {
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    Promise.all([loadContent(), refreshContinueWatching()]).finally(() => {
+    Promise.all([
+      loadContent(),
+      refreshList(),
+    ]).finally(() => {
       setIsRefreshing(false);
     });
-  }, [loadContent, refreshContinueWatching]);
+  }, [loadContent, refreshList]);
 
   const handleItemPress = useCallback(
     (id: string, episodeId?: string, title?: string) => {
@@ -286,7 +328,6 @@ export default function HomeScreen() {
             </Pressable>
           </View>
         </View>
-
         {heroItems.length > 0 ? (
           <View style={styles.heroWrap}>
             <FlatList
@@ -362,35 +403,62 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
-        {isAuthenticated && !isFreeTier && continueWatching.length > 0 ? (
+
+        {isAuthenticated && savedItems.length > 0 ? (
           <View style={styles.section}>
             <View style={styles.sectionHeaderRow}>
               <View>
-                <Text style={styles.sectionTitle}>Continue Watching</Text>
-                <Text style={styles.sectionSubtitle}>Resume your sessions</Text>
+                <Text style={styles.sectionTitle}>My List</Text>
+                <Text style={styles.sectionSubtitle}>Saved for later</Text>
               </View>
+              <Pressable onPress={() => router.push("/(tabs)/my-list")}>
+                <Text style={styles.sectionLink}>See all</Text>
+              </Pressable>
             </View>
             <FlatList
-              data={continueWatching}
+              data={savedItems}
               horizontal
               showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => `${item.contentId}-${item.episodeId}`}
+              keyExtractor={(item) => item.id}
               renderItem={({ item }) => (
-                <LargeVideoCard
-                  item={{
-                    id: item.contentId,
-                    title: item.title,
-                    subtitle: item.subtitle,
-                    thumbnailUri: item.thumbnailUri,
-                    progressPercent: item.progressPercent,
-                  }}
-                  onPress={() =>
-                    handleItemPress(item.contentId, item.episodeId, item.title)
-                  }
+                <SmallVideoCard
+                  item={item}
+                  onPress={() => handleItemPress(item.id, undefined, item.title)}
                 />
               )}
               contentContainerStyle={styles.horizontalList}
             />
+          </View>
+        ) : null}
+
+        {categories.length > 0 ? (
+          <View style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionTitle}>Explore Categories</Text>
+                <Text style={styles.sectionSubtitle}>Browse curated tags</Text>
+              </View>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.tagsScroll}
+            >
+              {categories.map((category) => (
+                <Pressable
+                  key={category}
+                  style={styles.tagPill}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/(tabs)/explore",
+                      params: { category },
+                    })
+                  }
+                >
+                  <Text style={styles.tagText}>{category}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
         ) : null}
 
@@ -588,5 +656,59 @@ const styles = StyleSheet.create({
   horizontalList: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
+  },
+  snapshotRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  snapshotCard: {
+    flex: 1,
+    backgroundColor: themeColors.surface,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    padding: spacing.sm,
+    minHeight: 90,
+    justifyContent: "space-between",
+  },
+  snapshotLabel: {
+    ...typography.caption,
+    color: themeColors.textSecondary,
+    fontSize: 9,
+    textTransform: "uppercase",
+    letterSpacing: 1.2,
+  },
+  snapshotValue: {
+    ...typography.title,
+    color: themeColors.textPrimary,
+    fontSize: 18,
+    fontWeight: "700",
+    marginVertical: 2,
+  },
+  snapshotSubtext: {
+    ...typography.caption,
+    color: themeColors.textSecondary,
+    fontSize: 9,
+  },
+  tagsScroll: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+  },
+  tagPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: themeColors.surface,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+  },
+  tagText: {
+    ...typography.caption,
+    color: themeColors.textSecondary,
+    fontSize: 12,
+    fontWeight: "500",
   },
 });

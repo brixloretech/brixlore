@@ -39,10 +39,14 @@ async function withAuthRetry<T>(
 class AdConfigService {
   /**
    * Fetches the public-safe ad config the web player uses to decide whether
-   * and how to display ads.  No auth token required.
+   * and how to display ads.  Includes auth headers if the user is authenticated.
    */
   async getPublicAdConfig(): Promise<AdConfigDto> {
-    return get<AdConfigDto>("/ad-config");
+    const headers = authHeaders();
+    return get<AdConfigDto>(
+      "/ad-config",
+      headers.Authorization ? { headers } : undefined
+    );
   }
 
   /**

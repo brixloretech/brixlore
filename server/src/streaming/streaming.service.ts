@@ -122,11 +122,18 @@ export class StreamingService {
   async getPlaybackMetadata(
     episodeId: string,
     userId: string,
-  ): Promise<{ streamKey: string; type?: 'hls' | 'mp4' }> {
+  ): Promise<{ streamKey: string; type?: 'hls' | 'mp4'; progress?: number }> {
     const { streamKey, type } = await this.resolvePlaybackSource(episodeId);
+    const existing = await (this.prisma as any).viewHistory.findFirst({
+      where: { userId, episodeId },
+    });
     await this.recordEpisodeView(userId, episodeId);
 
-    return { streamKey, type };
+    return {
+      streamKey,
+      type,
+      progress: existing ? existing.progress : 0,
+    };
   }
 
   /** Return playback metadata for a guest user (no auth/subscription checks). */
@@ -312,6 +319,55 @@ export class StreamingService {
         duration: Number(ep.duration ?? 0),
         thumbnailUrl,
         type: content.type,
+        watchedAt: row.watchedAt?.toISOString?.() ?? new Date().toISOString(),
+      });
+    }
+    return dtos;
+  }
+
+  /** Return all view history for the user (both completed and in-progress, ordered by watchedAt desc). */
+  async getWatchHistory(userId: string): Promise<any[]> {
+    const rows = await (this.prisma as any).viewHistory.findMany({
+      where: { userId },
+      orderBy: { watchedAt: 'desc' },
+      select: {
+        progress: true,
+        watchedAt: true,
+        completed: true,
+        episode: {
+          select: {
+            id: true,
+            title: true,
+            duration: true,
+            content: {
+              select: {
+                id: true,
+                title: true,
+                thumbnailUrl: true,
+                type: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const dtos: any[] = [];
+    for (const row of rows) {
+      const ep = row.episode;
+      if (!ep?.content) continue;
+      const content = ep.content;
+      const thumbnailUrl = await this.resolveThumbnailUrl(content.thumbnailUrl);
+      dtos.push({
+        contentId: content.id,
+        episodeId: ep.id,
+        contentTitle: content.title,
+        episodeTitle: ep.title,
+        progress: Number(row.progress ?? 0),
+        duration: Number(ep.duration ?? 0),
+        thumbnailUrl,
+        type: content.type,
+        completed: Boolean(row.completed),
         watchedAt: row.watchedAt?.toISOString?.() ?? new Date().toISOString(),
       });
     }

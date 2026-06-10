@@ -13,6 +13,7 @@ import { USE_MOCK_API } from "./config";
 interface PlaybackMetadataResponse {
   streamKey: string;
   type?: PlaybackType;
+  progress?: number;
 }
 
 function inferPlaybackType(url: string): PlaybackType | undefined {
@@ -119,6 +120,7 @@ export const streamingService = {
         "hls",
       url,
       streamKey: res.streamKey,
+      progress: res.progress,
     };
   },
 
@@ -173,6 +175,24 @@ export const streamingService = {
 
     const items = await get<ContinueWatchingItemDto[]>(
       "streaming/continue-watching",
+      {
+        headers: { Authorization: `Bearer ${auth.accessToken}` },
+      },
+    );
+    return Array.isArray(items) ? items : [];
+  },
+
+  /**
+   * Get all watch history. Real API: GET /streaming/watch-history.
+   */
+  async getWatchHistory(): Promise<ContinueWatchingItemDto[]> {
+    if (USE_MOCK_API) return [];
+
+    const auth = getStoredAuth();
+    if (!auth?.accessToken) return [];
+
+    const items = await get<ContinueWatchingItemDto[]>(
+      "streaming/watch-history",
       {
         headers: { Authorization: `Bearer ${auth.accessToken}` },
       },

@@ -81,6 +81,43 @@ function writeWatchedIds(storageKey: string, ids: Set<string>): void {
   );
 }
 
+const GUEST_PROGRESS_KEY = "guest-playback-progress-v1";
+
+interface GuestProgressMap {
+  [episodeId: string]: number;
+}
+
+function saveGuestProgress(episodeId: string, seconds: number) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(GUEST_PROGRESS_KEY);
+    const progressMap: GuestProgressMap = raw ? JSON.parse(raw) : {};
+    progressMap[episodeId] = seconds;
+    window.localStorage.setItem(GUEST_PROGRESS_KEY, JSON.stringify(progressMap));
+  } catch {}
+}
+
+function readGuestProgress(episodeId: string): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = window.localStorage.getItem(GUEST_PROGRESS_KEY);
+    const progressMap: GuestProgressMap = raw ? JSON.parse(raw) : {};
+    return progressMap[episodeId] ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+function clearGuestProgress(episodeId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = window.localStorage.getItem(GUEST_PROGRESS_KEY);
+    const progressMap: GuestProgressMap = raw ? JSON.parse(raw) : {};
+    delete progressMap[episodeId];
+    window.localStorage.setItem(GUEST_PROGRESS_KEY, JSON.stringify(progressMap));
+  } catch {}
+}
+
 function toDisplayContent(dto: ContentDetailDto): DisplayContent {
   return {
     id: dto.id,
@@ -178,6 +215,7 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
   const [selectedSeasonId, setSelectedSeasonId] = useState<string | null>(null);
   const [streamUrl, setStreamUrl] = useState<string | null>(null);
   const [playbackType, setPlaybackType] = useState<PlaybackType | undefined>();
+  const [initialStartTime, setInitialStartTime] = useState<number>(0);
   const [adConfig, setAdConfig] = useState<AdConfigDto | null>(null);
   const [loading, setLoading] = useState(true);
   const [usingDevStream, setUsingDevStream] = useState(false);
@@ -211,10 +249,16 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
       return;
     }
 
-    const storageKey =
-      accessTier === "free" ? FREE_LIMIT_STORAGE_KEY : GUEST_LIMIT_STORAGE_KEY;
-    const ids = readWatchedIds(storageKey);
-    setWatchedVideoIds(ids);
+    if (accessTier === "free") {
+      const guestIds = readWatchedIds(GUEST_LIMIT_STORAGE_KEY);
+      const freeIds = readWatchedIds(FREE_LIMIT_STORAGE_KEY);
+      const merged = new Set([...Array.from(freeIds), ...Array.from(guestIds)]);
+      writeWatchedIds(FREE_LIMIT_STORAGE_KEY, merged);
+      setWatchedVideoIds(merged);
+    } else {
+      const ids = readWatchedIds(GUEST_LIMIT_STORAGE_KEY);
+      setWatchedVideoIds(ids);
+    }
     setLimitsReady(true);
     setCurrentVideoStartPosition(null);
   }, [accessTier]);
@@ -255,6 +299,7 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
   function handlePlaybackTick(currentSeconds: number): void {
     if (
       accessTier === "paid" ||
+      accessTier === "free" ||
       isTrailerPlayback ||
       limitModalReason === "guest-video-limit" ||
       limitModalReason === "free-video-limit"
@@ -263,6 +308,10 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
     }
 
     const normalizedCurrent = Math.max(0, Math.floor(currentSeconds));
+    if (accessTier === "guest") {
+      saveGuestProgress(primaryEpisode?.id || id, normalizedCurrent);
+    }
+
     if (currentVideoStartPosition === null && normalizedCurrent > 0) {
       setCurrentVideoStartPosition(normalizedCurrent);
       return;
@@ -396,12 +445,30 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
           setStreamUrl(null);
           setPlaybackError("unavailable");
           setPlaybackType(undefined);
+          setInitialStartTime(0);
           if (process.env.NODE_ENV !== "production") {
             //console.warn("[Watch] missing playback URL", playbackRes);
           }
         } else {
           setStreamUrl(playbackRes.url);
           setPlaybackType(playbackRes.type);
+          
+          let startingProgress = playbackRes.progress ?? 0;
+          const localGuestProgress = readGuestProgress(episode.id);
+          if (localGuestProgress > 0) {
+            startingProgress = localGuestProgress;
+            if (accessTier !== "guest") {
+              const durationSec = durationToSeconds(episode.duration);
+              await streamingService.reportProgress(
+                episode.id,
+                localGuestProgress,
+                durationSec > 0 ? durationSec : undefined,
+              );
+              clearGuestProgress(episode.id);
+            }
+          }
+          setInitialStartTime(startingProgress);
+
           if (process.env.NODE_ENV !== "production") {
             //console.log("[Watch] playback URL", playbackRes.url);
             if (playbackRes.streamKey) {
@@ -670,8 +737,9 @@ export default function WatchPageClient({ params }: WatchPageClientProps) {
                   title={title}
                   className="vjs-theme-stream"
                   adConfig={adConfig}
+                  startTime={initialStartTime}
                   onProgress={
-                    primaryEpisode && accessTier === "paid"
+                    primaryEpisode && accessTier !== "guest"
                       ? (progressSeconds) => {
                           const durationSec = durationToSeconds(
                             primaryEpisode?.duration,

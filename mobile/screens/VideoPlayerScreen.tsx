@@ -80,6 +80,7 @@ export default function VideoPlayerScreen() {
   const controlsOpacity = useRef(new Animated.Value(1)).current;
   // PanResponder drag refs (read inside stable callbacks)
   const dragProgressRef = useRef(0);
+  const dragStartProgressRef = useRef(0);
   const progressBarWidthRef = useRef(0);
   // Double-tap tracking refs
   const lastTapTimeRef = useRef(0);
@@ -97,6 +98,11 @@ export default function VideoPlayerScreen() {
   const player = useVideoPlayer(videoUrl ? { uri: videoUrl } : null, (p) => {
     p.play();
   });
+
+  useEffect(() => {
+    // Ensure frequent time updates so scrub UI feels responsive on Android devices.
+    player.timeUpdateEventInterval = 0.25;
+  }, [player]);
 
   // Track player status for loading / error states
   const { status } = useEvent(player, "statusChange", {
@@ -143,8 +149,19 @@ export default function VideoPlayerScreen() {
       savedStartTimeRef.current > 0
     ) {
       hasAppliedStartTimeRef.current = true;
-      const delta = savedStartTimeRef.current - player.currentTime;
-      if (delta > 0.5) player.seekBy(delta);
+      const target = savedStartTimeRef.current;
+      const anyPlayer = player as unknown as {
+        currentTime: number;
+        seekBy: (seconds: number) => void;
+      };
+      try {
+        anyPlayer.currentTime = target;
+      } catch {
+        // no-op
+      }
+      const current = Number.isFinite(anyPlayer.currentTime) ? anyPlayer.currentTime : 0;
+      const delta = target - current;
+      if (Math.abs(delta) > 0.5) anyPlayer.seekBy(delta);
     }
   }, [status, player]);
 
@@ -268,17 +285,47 @@ export default function VideoPlayerScreen() {
     });
   }, []);
 
+  const seekToTime = useCallback(
+    (targetTime: number) => {
+      const rawDuration = durationRef.current || player.duration || 0;
+      const hasDuration = Number.isFinite(rawDuration) && rawDuration > 0;
+      const clamped = hasDuration
+        ? Math.max(0, Math.min(targetTime, rawDuration))
+        : Math.max(0, targetTime);
+
+      const anyPlayer = player as unknown as {
+        currentTime: number;
+        seekBy: (seconds: number) => void;
+      };
+
+      // Try absolute seek first (more reliable on some expo-video Android builds).
+      try {
+        anyPlayer.currentTime = clamped;
+      } catch {
+        // No-op, fallback below.
+      }
+
+      const current = Number.isFinite(anyPlayer.currentTime) ? anyPlayer.currentTime : 0;
+      const delta = clamped - current;
+      if (Math.abs(delta) > 0.2) {
+        anyPlayer.seekBy(delta);
+      }
+    },
+    [player],
+  );
+
   const handleSeek = useCallback(
     (seekTime: number) => {
-      const clamped = Math.max(0, Math.min(seekTime, duration));
-      player.seekBy(clamped - player.currentTime);
+      seekToTime(seekTime);
     },
-    [player, duration],
+    [seekToTime],
   );
 
   const handleSkip = useCallback(
-    (deltaSeconds: number) => { player.seekBy(deltaSeconds); },
-    [player],
+    (deltaSeconds: number) => {
+      seekToTime(currentTimeRef.current + deltaSeconds);
+    },
+    [seekToTime],
   );
 
   const formatTime = (seconds: number): string => {
@@ -374,30 +421,39 @@ export default function VideoPlayerScreen() {
   const seekPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponder: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 2 || Math.abs(gestureState.dy) > 2,
+        Math.abs(gestureState.dx) > 2,
+      onMoveShouldSetPanResponderCapture: (_, gestureState) =>
+        Math.abs(gestureState.dx) > 2,
+      onPanResponderTerminationRequest: () => false,
       onPanResponderGrant: (e) => {
         showControlsAnimated();
         setIsDragging(true);
+        if (progressBarWidthRef.current <= 0) return;
         const pct = Math.max(
           0,
           Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
         );
+        dragStartProgressRef.current = pct;
         dragProgressRef.current = pct;
         setDragDisplay(pct * 100);
       },
-      onPanResponderMove: (e) => {
+      onPanResponderMove: (_, gestureState) => {
+        if (progressBarWidthRef.current <= 0) return;
         const pct = Math.max(
           0,
-          Math.min(1, e.nativeEvent.locationX / progressBarWidthRef.current),
+          Math.min(
+            1,
+            dragStartProgressRef.current + gestureState.dx / progressBarWidthRef.current,
+          ),
         );
         dragProgressRef.current = pct;
         setDragDisplay(pct * 100);
       },
       onPanResponderRelease: () => {
         const seekTo = dragProgressRef.current * durationRef.current;
-        const clamped = Math.max(0, Math.min(seekTo, durationRef.current));
-        player.seekBy(clamped - player.currentTime);
+        handleSeek(seekTo);
         setIsDragging(false);
         if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
         controlsTimeoutRef.current = setTimeout(() => {
@@ -551,7 +607,11 @@ export default function VideoPlayerScreen() {
               {/* Draggable progress bar */}
               <View
                 style={styles.progressBarContainer}
-                onLayout={(e) => setProgressBarWidth(e.nativeEvent.layout.width)}
+                onLayout={(e) => {
+                  const width = e.nativeEvent.layout.width;
+                  setProgressBarWidth(width);
+                  progressBarWidthRef.current = width;
+                }}
                 {...seekPanResponder.panHandlers}
               >
                 <View style={styles.progressBar}>
