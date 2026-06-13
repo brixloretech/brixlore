@@ -176,11 +176,14 @@ export default function SubscriptionPage() {
     return "monthly";
   }, [activePlan, billingSummary?.invoices, subscription?.currentPeriodEnd]);
 
-  const nextCharge = formatNextChargeDate(subscription?.currentPeriodEnd);
+  const isFreePlan = activePlan?.price === 0;
+  const nextCharge = isFreePlan ? "--" : formatNextChargeDate(subscription?.currentPeriodEnd);
   const priceLabel = activePlan
-    ? inferredBillingCycle === "yearly" && activePlan.yearlyPrice != null
-      ? `$${activePlan.yearlyPrice.toFixed(2)} / year`
-      : `$${activePlan.price.toFixed(2)} / month`
+    ? isFreePlan
+      ? "$0.00 / free"
+      : inferredBillingCycle === "yearly" && activePlan.yearlyPrice != null
+        ? `$${activePlan.yearlyPrice.toFixed(2)} / year`
+        : `$${activePlan.price.toFixed(2)} / month`
     : "--";
   const paymentMethod = billingSummary?.paymentMethod ?? null;
   const invoices = billingSummary?.invoices ?? [];

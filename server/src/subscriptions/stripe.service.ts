@@ -772,6 +772,22 @@ export class StripeService {
         await this.revokeOfflineAccess(userId);
         revokedOffline = true;
       }
+
+      if (isActive) {
+        // Cancel any other active subscriptions for this user (e.g. Free Tier)
+        await (this.prisma as any).subscription.updateMany({
+          where: {
+            userId,
+            id: { not: existing.id },
+            status: 'ACTIVE',
+          },
+          data: {
+            status: 'CANCELLED',
+            endDate: new Date(),
+          },
+        });
+      }
+
       return { subscriptionId: existing.id, userId, revokedOffline };
     }
 
@@ -790,6 +806,22 @@ export class StripeService {
         endDate,
       },
     });
+
+    if (isActive) {
+      // Cancel any other active subscriptions for this user (e.g. Free Tier)
+      await (this.prisma as any).subscription.updateMany({
+        where: {
+          userId,
+          id: { not: created.id },
+          status: 'ACTIVE',
+        },
+        data: {
+          status: 'CANCELLED',
+          endDate: new Date(),
+        },
+      });
+    }
+
     return { subscriptionId: created.id, userId, revokedOffline };
   }
 

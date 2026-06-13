@@ -1,12 +1,12 @@
 import { IsString, MinLength, IsOptional } from 'class-validator';
 
-export class CreateAdminCategoryDto {
+export class UpdateAdminCategoryDto {
   @IsString()
+  @IsOptional()
   @MinLength(1)
-  name: string;
+  name?: string;
 
   @IsString()
   @IsOptional()
   parentId?: string;
 }
-

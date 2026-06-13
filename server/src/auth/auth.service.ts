@@ -51,6 +51,26 @@ export class AuthService {
     const user = await this.prisma.user.create({
       data: { email: normalizedEmail, passwordHash, name },
     });
+
+    const freePlan = await this.prisma.plan.findFirst({
+      where: { name: 'Free Account' },
+    });
+
+    if (freePlan) {
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setFullYear(endDate.getFullYear() + 100); // 100 years duration for free plan
+
+      await this.prisma.subscription.create({
+        data: {
+          userId: user.id,
+          planId: freePlan.id,
+          status: 'ACTIVE',
+          startDate,
+          endDate,
+        },
+      });
+    }
     
     try {
       await this.sendVerificationEmail(user);
@@ -227,23 +247,21 @@ export class AuthService {
     const hasDeviceIdentifier =
       typeof deviceIdentifier === 'string' && deviceIdentifier.trim().length > 0;
 
-    if (hasPlatform !== hasDeviceIdentifier) {
+    if (!hasPlatform || !hasDeviceIdentifier) {
       throw new BadRequestException(
-        'platform and deviceIdentifier must both be provided for device-aware login',
+        'platform and deviceIdentifier are strictly required for login to enforce device limits',
       );
     }
 
-    if (hasPlatform && hasDeviceIdentifier) {
-      // Enforce plan device limit at login time for new devices.
-      // Existing devices are simply updated and allowed.
-      await this.devicesService.registerDevice(
-        user.id,
-        platform as Platform,
-        deviceIdentifier!.trim(),
-      );
-    }
+    // Enforce plan device limit at login time for new devices.
+    // Existing devices are simply updated and allowed.
+    await this.devicesService.registerDevice(
+      user.id,
+      platform as Platform,
+      deviceIdentifier!.trim(),
+    );
 
-    return this.issueTokens(user, hasDeviceIdentifier ? deviceIdentifier!.trim() : undefined);
+    return this.issueTokens(user, deviceIdentifier!.trim());
   }
 
   async refresh(refreshToken: string) {

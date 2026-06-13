@@ -102,6 +102,7 @@ export default function SubscriptionDetailsScreen() {
   const isSubscribed = subscription?.isSubscribed ?? false;
 
   const nextChargeLabel = () => {
+    if (activePlan?.price === 0) return "--";
     if (!isSubscribed) return "Not available";
     if (subscription?.currentPeriodEnd) {
       return new Date(subscription.currentPeriodEnd).toLocaleDateString();
@@ -167,7 +168,9 @@ export default function SubscriptionDetailsScreen() {
               <Text style={styles.nextChargeValue}>{nextChargeLabel()}</Text>
               {isSubscribed && activePlan ? (
                 <Text style={styles.nextChargePrice}>
-                  {formatCurrency(activePlan.price * 100, "USD")} / {activePlan.duration}
+                  {activePlan.price === 0 
+                    ? "$0.00 / free" 
+                    : `${formatCurrency(activePlan.price * 100, "USD")} / ${activePlan.duration}`}
                 </Text>
               ) : null}
             </View>

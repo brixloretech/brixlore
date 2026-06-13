@@ -6,6 +6,18 @@ async function main() {
   // Define the new plans details
   const newPlans = [
     {
+      oldName: 'Free',
+      name: 'Free Account',
+      price: '0.00',
+      yearlyPrice: '0.00',
+      duration: 'MONTHLY',
+      deviceLimit: 1,
+      offlineAllowed: false,
+      maxOfflineDownloads: 0,
+      perks: ['Ad-supported streaming', '1 device logged in at once', 'Upgrade anytime'],
+      isPopular: false,
+    },
+    {
       oldName: 'Fan',
       name: 'Lore Member',
       price: '4.99',

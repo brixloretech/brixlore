@@ -20,6 +20,7 @@ import type {
   EpisodeResponseDto,
   AdminCategoryDto,
   CreateAdminCategoryRequestDto,
+  UpdateAdminCategoryRequestDto,
   SitePageDto,
   SitePageSummaryDto,
   UpdateSitePageRequestDto,
@@ -54,6 +55,8 @@ export interface DashboardStatsDto {
   subscribersTrend?: string;
   contentByCategory: { label: string; value: number }[];
   videosByCategory?: { label: string; value: number }[];
+  mainCategoriesCount?: number;
+  focusQueue?: string[];
 }
 
 /** Content item from GET /admin/content */
@@ -461,6 +464,15 @@ export const adminService = {
   async deleteCategory(id: string): Promise<void> {
     return withAuthRetry((headers) =>
       del<void>(`admin/categories/${id}`, { headers }),
+    );
+  },
+
+  async updateCategory(
+    id: string,
+    body: UpdateAdminCategoryRequestDto,
+  ): Promise<AdminCategoryDto> {
+    return withAuthRetry((headers) =>
+      patch<AdminCategoryDto>(`admin/categories/${id}`, body, { headers }),
     );
   },
 

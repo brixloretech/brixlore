@@ -232,6 +232,7 @@ export interface AdminCategoryDto {
   id: string;
   name: string;
   slug: string;
+  parentId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -239,6 +240,13 @@ export interface AdminCategoryDto {
 /** Request body for POST /admin/categories */
 export interface CreateAdminCategoryRequestDto {
   name: string;
+  parentId?: string;
+}
+
+/** Request body for PATCH /admin/categories/:id */
+export interface UpdateAdminCategoryRequestDto {
+  name?: string;
+  parentId?: string | null;
 }
 
 /** Response for POST /admin/content */

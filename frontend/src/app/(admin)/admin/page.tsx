@@ -43,9 +43,10 @@ export default function AdminPage() {
     (best, current) => (current.value > best.value ? current : best),
     { label: "—", value: 0 },
   );
+  const mainCategoriesCount = stats.mainCategoriesCount ?? totalCategories;
   const avgPerCategory =
-    totalCategories > 0
-      ? (Number(stats.totalContent ?? 0) / totalCategories).toFixed(1)
+    mainCategoriesCount > 0
+      ? (Number(stats.totalContent ?? 0) / mainCategoriesCount).toFixed(1)
       : "0";
   const sortedCategories = [...contentByCategory].sort(
     (a, b) => b.value - a.value,
@@ -88,8 +89,8 @@ export default function AdminPage() {
     },
     {
       label: "Categories",
-      value: totalCategories.toString(),
-      hint: "Distinct tags",
+      value: mainCategoriesCount.toString(),
+      hint: "Main categories",
     },
     {
       label: "Avg per category",
@@ -206,15 +207,21 @@ export default function AdminPage() {
             Suggested next steps based on current stats.
           </p>
           <ul className="mt-6 space-y-4 text-sm text-neutral-300">
-            <li className="rounded-xl border border-neutral-800/70 bg-neutral-900/60 px-4 py-3">
-              Review unpublished content to keep the catalog fresh.
-            </li>
-            <li className="rounded-xl border border-neutral-800/70 bg-neutral-900/60 px-4 py-3">
-              Add more categories to balance discovery.
-            </li>
-            <li className="rounded-xl border border-neutral-800/70 bg-neutral-900/60 px-4 py-3">
-              Check subscriber trends and update promotions.
-            </li>
+            {(stats.focusQueue && stats.focusQueue.length > 0
+              ? stats.focusQueue
+              : [
+                  "Review unpublished content to keep the catalog fresh.",
+                  "Add more categories to balance discovery.",
+                  "Check subscriber trends and update promotions.",
+                ]
+            ).map((item, index) => (
+              <li
+                key={index}
+                className="rounded-xl border border-neutral-800/70 bg-neutral-900/60 px-4 py-3"
+              >
+                {item}
+              </li>
+            ))}
           </ul>
           <Link
             href="/admin/content"

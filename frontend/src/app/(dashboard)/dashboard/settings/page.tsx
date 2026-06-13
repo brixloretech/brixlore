@@ -103,7 +103,8 @@ export default function SettingsPage() {
     }).format(parsed);
   };
 
-  const nextChargeLabel = formatNextChargeDate(subscription?.currentPeriodEnd);
+  const isFreePlan = plans.find((plan) => plan.id === planId)?.price === 0;
+  const nextChargeLabel = isFreePlan ? "--" : formatNextChargeDate(subscription?.currentPeriodEnd);
 
   const isLoading = profileLoading || deviceLoading;
 

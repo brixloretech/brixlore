@@ -6,4 +6,7 @@ export class DashboardStatsDto {
   contentTrend?: string;
   subscribersTrend?: string;
   contentByCategory: { label: string; value: number }[];
+  mainCategoriesCount?: number;
+  focusQueue?: string[];
 }
+

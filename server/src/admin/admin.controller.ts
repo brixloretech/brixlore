@@ -35,6 +35,7 @@ import type { SitePageDto, SitePageSummaryDto } from '../site/dto/site-page.dto'
 import { UpdateSitePageDto } from '../site/dto/update-site-page.dto';
 import type { AdminCategoryDto } from './dto/admin-category.dto';
 import { CreateAdminCategoryDto } from './dto/create-admin-category.dto';
+import { UpdateAdminCategoryDto } from './dto/update-admin-category.dto';
 import { UpdateAdminContentDto } from './dto/update-admin-content.dto';
 import { PublishAdminContentDto } from './dto/publish-admin-content.dto';
 import type { AdminSubscriptionsResponseDto } from './dto/admin-subscription.dto';
@@ -358,6 +359,19 @@ export class AdminController {
     ensureAdmin(user);
     await this.adminService.deleteCategory(id);
     return { success: true };
+  }
+
+  /**
+   * Update a category name or parent mapping.
+   */
+  @Patch('categories/:id')
+  async updateCategory(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: UpdateAdminCategoryDto,
+  ): Promise<AdminCategoryDto> {
+    ensureAdmin(user);
+    return this.adminService.updateCategory(id, body);
   }
 
   /**

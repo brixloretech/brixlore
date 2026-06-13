@@ -12,6 +12,7 @@ import type { CreateAdminEpisodeDto } from './dto/create-admin-episode.dto';
 import type { CreateAdminTrailerDto } from './dto/create-admin-trailer.dto';
 import type { AdminCategoryDto } from './dto/admin-category.dto';
 import type { CreateAdminCategoryDto } from './dto/create-admin-category.dto';
+import type { UpdateAdminCategoryDto } from './dto/update-admin-category.dto';
 import type { UpdateAdminContentDto } from './dto/update-admin-content.dto';
 import type {
   AdminSubscriptionDto,
@@ -177,29 +178,166 @@ export class AdminService {
 
   async getDashboardStats(): Promise<DashboardStatsDto> {
     const now = new Date();
-    const [totalUsers, totalContent, totalSubscribers, contentRows] = await Promise.all([
+
+    const trailerLinkedRows = await (this.prisma as any).content.findMany({
+      where: { trailerId: { not: null } },
+      select: { trailerId: true },
+    });
+    const linkedTrailerIds = trailerLinkedRows
+      .map((row: any) => row.trailerId)
+      .filter((id: any): id is string => typeof id === 'string' && id.length > 0);
+
+    const contentWhere = {
+      type: { not: 'TRAILER' },
+      ...(linkedTrailerIds.length > 0 ? { id: { notIn: linkedTrailerIds } } : {}),
+    };
+
+    const [totalUsers, totalContent, totalSubscribers, contentRows, categories] = await Promise.all([
       this.prisma.user.count(),
-      (this.prisma as any).content.count(),
+      (this.prisma as any).content.count({ where: contentWhere }),
       this.prisma.subscription.count({
         where: { status: 'ACTIVE', endDate: { gte: now } },
       }),
       (this.prisma as any).content.findMany({
-        select: { category: { select: { name: true } } },
+        where: contentWhere,
+        select: { categoryId: true },
+      }),
+      this.prisma.category.findMany({
+        select: { id: true, name: true, parentId: true },
       }),
     ]);
+
+    const categoryMap = new Map<string, { id: string; name: string; parentId: string | null }>();
+    for (const cat of categories) {
+      categoryMap.set(cat.id, cat);
+    }
+
+    const getRootCategory = (catId: string | null): { id: string; name: string } | null => {
+      if (!catId) return null;
+      let current = categoryMap.get(catId);
+      if (!current) return null;
+      let depth = 0;
+      while (current.parentId && depth < 10) {
+        const parent = categoryMap.get(current.parentId);
+        if (!parent) break;
+        current = parent;
+        depth++;
+      }
+      return current;
+    };
+
     const categoryCounts = new Map<string, number>();
     for (const row of contentRows) {
-      const name = row.category?.name ?? 'Uncategorized';
+      const rootCat = row.categoryId ? getRootCategory(row.categoryId) : null;
+      const name = rootCat?.name ?? 'Uncategorized';
       categoryCounts.set(name, (categoryCounts.get(name) ?? 0) + 1);
     }
+
     const contentByCategory = Array.from(categoryCounts.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((a, b) => b.value - a.value);
+
+    const mainCategoriesCount = categories.filter((c) => c.parentId === null).length;
+
+    // Build Focus Queue
+    const focusQueue: string[] = [];
+
+    // Rule 1: Support Requests (High)
+    const openSupportCount = await (this.prisma as any).supportRequest.count({
+      where: { status: 'OPEN' },
+    });
+    if (openSupportCount > 0) {
+      focusQueue.push(
+        `You have ${openSupportCount} open support request${openSupportCount > 1 ? 's' : ''}. Reply to customers.`,
+      );
+    }
+
+    // Rule 2: Missing HLS Transcode (High)
+    const missingHlsCount = await this.prisma.episode.count({
+      where: {
+        AND: [
+          { videoUrl: { not: '' } },
+          { OR: [{ hlsUrl: null }, { hlsUrl: '' }, { hlsUrl: 'null' }] },
+        ],
+      },
+    });
+    if (missingHlsCount > 0) {
+      focusQueue.push(
+        `There ${missingHlsCount > 1 ? 'are' : 'is'} ${missingHlsCount} episode${missingHlsCount > 1 ? 's' : ''} missing HLS video transcoding. Start transcoding.`,
+      );
+    }
+
+    // Rule 3: Unpublished content drafts (Medium)
+    const unpublishedCount = await (this.prisma as any).content.count({
+      where: { ...contentWhere, isPublished: false },
+    });
+    if (unpublishedCount > 0) {
+      focusQueue.push(
+        `You have ${unpublishedCount} unpublished content draft${unpublishedCount > 1 ? 's' : ''}. Review and publish them.`,
+      );
+    }
+
+    // Rule 4: Empty categories (Low)
+    const mainCats = categories.filter((c) => c.parentId === null);
+    const emptyCats = mainCats.filter(
+      (cat) => !categoryCounts.has(cat.name) || categoryCounts.get(cat.name) === 0,
+    );
+    if (emptyCats.length > 0) {
+      if (emptyCats.length === 1) {
+        focusQueue.push(`Category "${emptyCats[0].name}" is empty. Add content to enable discovery.`);
+      } else {
+        focusQueue.push(
+          `${emptyCats.length} categories (e.g. ${emptyCats.slice(0, 2).map((c) => c.name).join(', ')}) are empty. Add content.`,
+        );
+      }
+    }
+
+    // Rule 5: Low-content categories (Low)
+    const lowContentCats = mainCats.filter((cat) => categoryCounts.get(cat.name) === 1);
+    if (lowContentCats.length > 0) {
+      if (lowContentCats.length === 1) {
+        focusQueue.push(
+          `Category "${lowContentCats[0].name}" has only 1 title. Add more content to balance discovery.`,
+        );
+      } else {
+        focusQueue.push(
+          `${lowContentCats.length} categories (e.g. ${lowContentCats.slice(0, 2).map((c) => c.name).join(', ')}) have only 1 title. Add content.`,
+        );
+      }
+    }
+
+    // Rule 6: Plans with 0 active subscribers (Low)
+    const plans = await this.prisma.plan.findMany({
+      select: {
+        id: true,
+        name: true,
+        subscriptions: {
+          where: { status: 'ACTIVE', endDate: { gte: now } },
+          select: { id: true },
+        },
+      },
+    });
+    const emptyPlans = plans.filter((p) => p.subscriptions.length === 0);
+    if (emptyPlans.length > 0) {
+      focusQueue.push(
+        `Subscription plan "${emptyPlans[0].name}" has no active subscribers. Review pricing or promotions.`,
+      );
+    }
+
+    // Default Fallbacks if queue is empty
+    if (focusQueue.length === 0) {
+      focusQueue.push('Check subscriber trends and update promotions.');
+      focusQueue.push('Review user sign-up analytics for the past 30 days.');
+      focusQueue.push('Audit content views to identify top-performing titles.');
+    }
+
     return {
       totalUsers,
       totalContent,
       totalSubscribers,
       contentByCategory,
+      mainCategoriesCount,
+      focusQueue: focusQueue.slice(0, 4),
     };
   }
 
@@ -548,6 +686,7 @@ export class AdminService {
 
   async createCategory(dto: CreateAdminCategoryDto): Promise<AdminCategoryDto> {
     const name = dto.name.trim();
+    const parentId = dto.parentId?.trim() || null;
     const slug = slugify(name);
     if (!slug) {
       throw new BadRequestException('Category name is required');
@@ -557,7 +696,7 @@ export class AdminService {
     if (existing) return toAdminCategoryDto(existing);
 
     const created = await this.prisma.category.create({
-      data: { name, slug },
+      data: { name, slug, parentId },
     });
     return toAdminCategoryDto(created);
   }
@@ -567,7 +706,47 @@ export class AdminService {
     if (usedCount > 0) {
       throw new BadRequestException('Category has content and cannot be deleted');
     }
+    const childCount = await this.prisma.category.count({ where: { parentId: id } });
+    if (childCount > 0) {
+      throw new BadRequestException('Category has sub-categories and cannot be deleted');
+    }
     await this.prisma.category.delete({ where: { id } });
+  }
+
+  async updateCategory(id: string, dto: UpdateAdminCategoryDto): Promise<AdminCategoryDto> {
+    const category = await this.prisma.category.findUnique({ where: { id } });
+    if (!category) {
+      throw new NotFoundException('Category not found');
+    }
+
+    const data: { name?: string; slug?: string; parentId?: string | null } = {};
+
+    if (typeof dto.name === 'string') {
+      const name = dto.name.trim();
+      if (!name) throw new BadRequestException('Category name cannot be empty');
+      data.name = name;
+      data.slug = slugify(name);
+    }
+
+    if (dto.parentId !== undefined) {
+      const parentId = dto.parentId?.trim() || null;
+      if (parentId === id) {
+        throw new BadRequestException('A category cannot be its own parent');
+      }
+      if (parentId) {
+        const parent = await this.prisma.category.findUnique({ where: { id: parentId } });
+        if (!parent) {
+          throw new BadRequestException('Parent category not found');
+        }
+      }
+      data.parentId = parentId;
+    }
+
+    const updated = await this.prisma.category.update({
+      where: { id },
+      data,
+    });
+    return toAdminCategoryDto(updated);
   }
   async publishContent(id: string, isPublished: boolean): Promise<AdminContentItemDto | null> {
     const content = await (this.prisma as any).content.findUnique({
@@ -616,13 +795,22 @@ export class AdminService {
   async deleteContent(id: string): Promise<void> {
     const content = await (this.prisma as any).content.findUnique({
       where: { id },
-      select: { id: true },
+      select: { id: true, trailerId: true },
     });
     if (!content) {
       throw new NotFoundException('Content not found');
     }
-    await (this.prisma as any).content.delete({
-      where: { id },
+
+    await this.prisma.$transaction(async (tx: any) => {
+      await tx.content.delete({
+        where: { id },
+      });
+
+      if (content.trailerId) {
+        await tx.content.delete({
+          where: { id: content.trailerId },
+        });
+      }
     });
   }
 
@@ -1220,14 +1408,33 @@ export class AdminService {
     const now = new Date();
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const [totalContent, publishedContent, totalViews, viewsLast30Days, categoryRows, topViews] =
+    const trailerLinkedRows = await (this.prisma as any).content.findMany({
+      where: { trailerId: { not: null } },
+      select: { trailerId: true },
+    });
+    const linkedTrailerIds = trailerLinkedRows
+      .map((row: any) => row.trailerId)
+      .filter((id: any): id is string => typeof id === 'string' && id.length > 0);
+
+    const contentWhere = {
+      type: { not: 'TRAILER' },
+      ...(linkedTrailerIds.length > 0 ? { id: { notIn: linkedTrailerIds } } : {}),
+    };
+
+    const publishedWhere = {
+      ...contentWhere,
+      isPublished: true,
+    };
+
+    const [totalContent, publishedContent, totalViews, viewsLast30Days, contentRows, topViews, categories] =
       await Promise.all([
-        (this.prisma as any).content.count(),
-        (this.prisma as any).content.count({ where: { isPublished: true } }),
+        (this.prisma as any).content.count({ where: contentWhere }),
+        (this.prisma as any).content.count({ where: publishedWhere }),
         this.prisma.viewHistory.count(),
         this.prisma.viewHistory.count({ where: { watchedAt: { gte: last30Days } } }),
         (this.prisma as any).content.findMany({
-          select: { category: { select: { name: true } } },
+          where: contentWhere,
+          select: { categoryId: true },
         }),
         (this.prisma as any).viewHistory.groupBy({
           by: ['episodeId'],
@@ -1235,11 +1442,34 @@ export class AdminService {
           orderBy: { _count: { episodeId: 'desc' } },
           take: 5,
         }),
+        this.prisma.category.findMany({
+          select: { id: true, name: true, parentId: true },
+        }),
       ]);
 
+    const categoryMap = new Map<string, { id: string; name: string; parentId: string | null }>();
+    for (const cat of categories) {
+      categoryMap.set(cat.id, cat);
+    }
+
+    const getRootCategory = (catId: string | null): { id: string; name: string } | null => {
+      if (!catId) return null;
+      let current = categoryMap.get(catId);
+      if (!current) return null;
+      let depth = 0;
+      while (current.parentId && depth < 10) {
+        const parent = categoryMap.get(current.parentId);
+        if (!parent) break;
+        current = parent;
+        depth++;
+      }
+      return current;
+    };
+
     const categoryCounts = new Map<string, number>();
-    for (const row of categoryRows) {
-      const name = row.category?.name ?? 'Uncategorized';
+    for (const row of contentRows) {
+      const rootCat = row.categoryId ? getRootCategory(row.categoryId) : null;
+      const name = rootCat?.name ?? 'Uncategorized';
       categoryCounts.set(name, (categoryCounts.get(name) ?? 0) + 1);
     }
     const contentByCategory: CategoryCountDto[] = Array.from(categoryCounts.entries())
