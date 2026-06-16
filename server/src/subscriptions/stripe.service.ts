@@ -520,13 +520,22 @@ export class StripeService {
   async syncActiveSubscriptionsForUser(userId: string): Promise<{ synced: number }> {
     const user = await (this.prisma as any).user.findUnique({
       where: { id: userId },
-      select: { stripeCustomerId: true },
+      select: { stripeCustomerId: true, email: true, name: true },
     });
-    if (!user?.stripeCustomerId) return { synced: 0 };
+    if (!user) return { synced: 0 };
+    if (!user.stripeCustomerId) return { synced: 0 };
+
+    let customerId: string;
+    try {
+      customerId = await this.getOrCreateStripeCustomer(userId, user.email, user.name);
+    } catch (err: any) {
+      console.warn(`[Stripe Self-Healing] Failed to sync because customer could not be resolved: ${err.message}`);
+      return { synced: 0 };
+    }
 
     const stripe = this.getStripe();
     const result = await stripe.subscriptions.list({
-      customer: user.stripeCustomerId,
+      customer: customerId,
       status: 'all',
       limit: 10,
       expand: [],
@@ -662,15 +671,36 @@ export class StripeService {
   ): Promise<string> {
     const user = await (this.prisma as any).user.findUnique({
       where: { id: userId },
-      select: { stripeCustomerId: true },
+      select: { stripeCustomerId: true, email: true, name: true },
     });
     if (!user) throw new NotFoundException('User not found');
-    if (user.stripeCustomerId) return user.stripeCustomerId;
 
     const stripe = this.getStripe();
+
+    if (user.stripeCustomerId) {
+      try {
+        const existingCustomer = await stripe.customers.retrieve(user.stripeCustomerId);
+        if (existingCustomer && !(existingCustomer as any).deleted) {
+          return user.stripeCustomerId;
+        }
+        console.warn(`[Stripe Self-Healing] Customer ${user.stripeCustomerId} is marked as deleted in Stripe.`);
+      } catch (err: any) {
+        const isCustomerMissing =
+          err.message?.includes('No such customer') ||
+          err.raw?.message?.includes('No such customer') ||
+          err.code === 'resource_missing';
+
+        if (isCustomerMissing) {
+          console.warn(`[Stripe Self-Healing] Customer ${user.stripeCustomerId} does not exist in Stripe. Re-creating...`);
+        } else {
+          throw err;
+        }
+      }
+    }
+
     const customer = await stripe.customers.create({
-      email,
-      name: name ?? undefined,
+      email: email || user.email,
+      name: name ?? user.name ?? undefined,
       metadata: { userId },
     });
     await (this.prisma as any).user.update({
@@ -775,15 +805,19 @@ export class StripeService {
   async createPortalSession(userId: string, returnUrl: string): Promise<{ url: string }> {
     const user = await (this.prisma as any).user.findUnique({
       where: { id: userId },
-      select: { stripeCustomerId: true },
+      select: { stripeCustomerId: true, email: true, name: true },
     });
-    if (!user?.stripeCustomerId) {
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.stripeCustomerId) {
       throw new BadRequestException('No Stripe customer linked. Subscribe first.');
     }
 
+    const customerId = await this.getOrCreateStripeCustomer(userId, user.email, user.name);
     const stripe = this.getStripe();
     const session = await stripe.billingPortal.sessions.create({
-      customer: user.stripeCustomerId,
+      customer: customerId,
       return_url: returnUrl,
     });
     return { url: session.url };
@@ -795,14 +829,18 @@ export class StripeService {
   async getBillingSummary(userId: string): Promise<BillingSummaryDto> {
     const user = await (this.prisma as any).user.findUnique({
       where: { id: userId },
-      select: { stripeCustomerId: true },
+      select: { stripeCustomerId: true, email: true, name: true },
     });
-    if (!user?.stripeCustomerId) {
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (!user.stripeCustomerId) {
       throw new BadRequestException('No Stripe customer linked. Subscribe first.');
     }
 
+    const customerId = await this.getOrCreateStripeCustomer(userId, user.email, user.name);
     const stripe = this.getStripe();
-    const customer = (await stripe.customers.retrieve(user.stripeCustomerId, {
+    const customer = (await stripe.customers.retrieve(customerId, {
       expand: ['invoice_settings.default_payment_method'],
     })) as Stripe.Customer;
 
@@ -816,7 +854,7 @@ export class StripeService {
 
     if (!paymentMethod) {
       const paymentMethods = await stripe.paymentMethods.list({
-        customer: user.stripeCustomerId,
+        customer: customerId,
         type: 'card',
         limit: 1,
       });
@@ -834,7 +872,7 @@ export class StripeService {
       : null;
 
     const invoices = await stripe.invoices.list({
-      customer: user.stripeCustomerId,
+      customer: customerId,
       limit: 10,
     });
 
