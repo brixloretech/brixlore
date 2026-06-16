@@ -123,12 +123,15 @@ export default function HomeScreen() {
 
       if (isAuthenticated) {
         try {
-          const [plans, sub] = await Promise.all([
-            subscriptionService.getPlans(),
-            subscriptionService.getSubscription(),
-          ]);
-          const match = plans.find((p) => p.id === sub.planId);
-          setPlanName(match?.name ?? (sub.isSubscribed ? "Active" : "Free"));
+          const plans = await subscriptionService.getPlans();
+          await fetchSubscription();
+          const sub = useSubscriptionStore.getState().subscription;
+          if (sub) {
+            const match = plans.find((p) => p.id === sub.planId);
+            setPlanName(match?.name ?? (sub.isSubscribed ? "Active" : "Free"));
+          } else {
+            setPlanName("Free");
+          }
         } catch {
           setPlanName("Free");
         }

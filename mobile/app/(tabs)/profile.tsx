@@ -130,7 +130,7 @@ function AuthenticatedProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthStore();
-  const { subscription } = useSubscriptionStore();
+  const { subscription, fetchSubscription } = useSubscriptionStore();
   const isFreeTier = !subscription?.isSubscribed;
   const [planName, setPlanName] = useState<string | null>(null);
   const [contentCount, setContentCount] = useState<number>(0);
@@ -143,15 +143,17 @@ function AuthenticatedProfileScreen() {
     let active = true;
     const loadPlanAndCounts = async () => {
       try {
-        const [plans, sub, allContent, cats] = await Promise.all([
+        await fetchSubscription();
+        const sub = useSubscriptionStore.getState().subscription;
+
+        const [plans, allContent, cats] = await Promise.all([
           subscriptionService.getPlans(),
-          subscriptionService.getSubscription(),
           contentService.getContentForBrowse(),
           contentService.getCategories(),
         ]);
         if (!active) return;
-        const match = plans.find((plan) => plan.id === sub.planId);
-        setPlanName(match?.name ?? (sub.isSubscribed ? "Active" : "Free"));
+        const match = sub ? plans.find((plan) => plan.id === sub.planId) : null;
+        setPlanName(match?.name ?? (sub?.isSubscribed ? "Active" : "Free"));
         setContentCount(allContent.length);
         const filteredCats = cats.filter((c) => c.toLowerCase() !== "all");
         setCategoriesCount(filteredCats.length);
@@ -162,7 +164,7 @@ function AuthenticatedProfileScreen() {
     };
     loadPlanAndCounts();
     return () => { active = false; };
-  }, []);
+  }, [fetchSubscription]);
 
   const handleLogout = async () => {
     await logout();

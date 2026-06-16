@@ -21,7 +21,7 @@ function progressPercent(progress: number, duration: number): number {
 }
 
 export default function DashboardPage() {
-  const { user, isSubscribed } = useAuth();
+  const { user, isSubscribed, setSubscribed } = useAuth();
   const displayName = user?.name ?? user?.email?.split("@")[0] ?? "there";
   const [contentItems, setContentItems] = useState<ContentSummaryDto[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -48,6 +48,7 @@ export default function DashboardPage() {
         setCategories(cats);
         setPlans(planList);
         setPlanId(subscription.planId ?? null);
+        setSubscribed(subscription.isSubscribed);
         setContinueItems(Array.isArray(continueList) ? continueList : []);
       })
       .catch(() => {
@@ -65,7 +66,7 @@ export default function DashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [setSubscribed]);
 
   const activePlan = useMemo(
     () => plans.find((plan) => plan.id === planId) ?? null,
