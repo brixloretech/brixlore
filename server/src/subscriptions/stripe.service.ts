@@ -211,15 +211,13 @@ export class StripeService {
     if (!plan) throw new NotFoundException('Plan not found');
 
     // Select price ID based on billing cycle
-    const priceId = billingCycle === 'YEARLY' ? plan.yearlyStripePriceId : plan.stripePriceId;
+    let priceId = billingCycle === 'YEARLY' ? plan.yearlyStripePriceId : plan.stripePriceId;
     console.log(
       `[StripeDebug] createSubscriptionForSignup planId=${planId} billingCycle=${billingCycle} selectedPriceId=${priceId ?? 'null'}`,
     );
     if (!priceId) {
-      const priceType = billingCycle === 'YEARLY' ? 'yearly' : 'monthly';
-      throw new BadRequestException(
-        `Plan "${plan.name}" is not linked to a Stripe ${priceType} Price. Add the appropriate price ID in the database.`,
-      );
+      console.log(`[Stripe Self-Healing] No price ID found for plan "${plan.name}" at signup. Registering in Stripe...`);
+      priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
     }
 
     const stripe = this.getStripe();
@@ -235,12 +233,33 @@ export class StripeService {
       invoice_settings: { default_payment_method: paymentMethodId },
     });
 
-    const subscription = (await stripe.subscriptions.create({
-      customer: customer.id,
-      items: [{ price: priceId, quantity: 1 }],
-      payment_behavior: 'error_if_incomplete',
-      expand: ['latest_invoice.payment_intent'],
-    })) as unknown as StripeSubscription;
+    let subscription: StripeSubscription;
+    try {
+      subscription = (await stripe.subscriptions.create({
+        customer: customer.id,
+        items: [{ price: priceId, quantity: 1 }],
+        payment_behavior: 'error_if_incomplete',
+        expand: ['latest_invoice.payment_intent'],
+      })) as unknown as StripeSubscription;
+    } catch (err: any) {
+      const isPriceMissing = 
+        err.message?.includes('No such price') || 
+        err.raw?.message?.includes('No such price') || 
+        err.code === 'resource_missing';
+
+      if (isPriceMissing) {
+        console.warn(`[Stripe Self-Healing] Price ${priceId} does not exist in Stripe at signup. Re-registering...`);
+        priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
+        subscription = (await stripe.subscriptions.create({
+          customer: customer.id,
+          items: [{ price: priceId, quantity: 1 }],
+          payment_behavior: 'error_if_incomplete',
+          expand: ['latest_invoice.payment_intent'],
+        })) as unknown as StripeSubscription;
+      } else {
+        throw err;
+      }
+    }
 
     return { customerId: customer.id, subscription };
   }
@@ -273,15 +292,13 @@ export class StripeService {
     if (!plan) throw new NotFoundException('Plan not found');
 
     // Select price ID based on billing cycle
-    const priceId = billingCycle === 'YEARLY' ? plan.yearlyStripePriceId : plan.stripePriceId;
+    let priceId = billingCycle === 'YEARLY' ? plan.yearlyStripePriceId : plan.stripePriceId;
     console.log(
       `[StripeDebug] createSubscriptionIntentForSignup planId=${planId} billingCycle=${billingCycle} selectedPriceId=${priceId ?? 'null'}`,
     );
     if (!priceId) {
-      const priceType = billingCycle === 'YEARLY' ? 'yearly' : 'monthly';
-      throw new BadRequestException(
-        `Plan "${plan.name}" is not linked to a Stripe ${priceType} Price. Add the appropriate price ID in the database.`,
-      );
+      console.log(`[Stripe Self-Healing] No price ID found for plan "${plan.name}" in subscription intent. Registering in Stripe...`);
+      priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
     }
 
     const stripe = this.getStripe();
@@ -314,11 +331,32 @@ export class StripeService {
     };
 
     // Create subscription with default_incomplete to get a PaymentIntent requiring confirmation
-    const subscription = (await stripe.subscriptions.create(
-      subscriptionCreateParams,
-    )) as unknown as StripeSubscription & {
-      latest_invoice?: StripeInvoiceRef;
-    };
+    let subscription: StripeSubscription & { latest_invoice?: StripeInvoiceRef };
+    try {
+      subscription = (await stripe.subscriptions.create(
+        subscriptionCreateParams,
+      )) as unknown as StripeSubscription & {
+        latest_invoice?: StripeInvoiceRef;
+      };
+    } catch (err: any) {
+      const isPriceMissing = 
+        err.message?.includes('No such price') || 
+        err.raw?.message?.includes('No such price') || 
+        err.code === 'resource_missing';
+
+      if (isPriceMissing) {
+        console.warn(`[Stripe Self-Healing] Price ${priceId} does not exist in Stripe in subscription intent. Re-registering...`);
+        priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
+        subscriptionCreateParams.items = [{ price: priceId, quantity: 1 }];
+        subscription = (await stripe.subscriptions.create(
+          subscriptionCreateParams,
+        )) as unknown as StripeSubscription & {
+          latest_invoice?: StripeInvoiceRef;
+        };
+      } else {
+        throw err;
+      }
+    }
 
     // Get the invoice ID from the subscription
     const latestInvoice = subscription.latest_invoice;
@@ -542,6 +580,79 @@ export class StripeService {
   }
 
   /**
+   * Resolves or registers a plan product and price dynamically in the configured Stripe account.
+   * Useful to auto-recover when database price IDs do not match the Stripe environment.
+   */
+  async resolveOrRegisterPriceInStripe(
+    planId: string,
+    billingCycle: 'MONTHLY' | 'YEARLY',
+  ): Promise<string> {
+    const plan = await (this.prisma as any).plan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('Plan not found');
+
+    const stripe = this.getStripe();
+    console.log(`[Stripe Self-Healing] Checking/Creating product for plan: "${plan.name}"`);
+
+    // 1. Search for an existing product with this exact name in Stripe by listing
+    let product: Stripe.Product | null = null;
+    try {
+      const products = await stripe.products.list({ limit: 100 });
+      product = products.data.find(p => p.name.trim().toLowerCase() === plan.name.trim().toLowerCase()) || null;
+      if (product) {
+        console.log(`[Stripe Self-Healing] Found existing product: "${product.name}" (${product.id})`);
+      }
+    } catch (err) {
+      console.warn('[Stripe Self-Healing] Error listing products:', err);
+    }
+
+    if (!product) {
+      product = await stripe.products.create({
+        name: plan.name,
+        description: `Brixlore ${plan.name} Tier Subscription`,
+      });
+      console.log(`[Stripe Self-Healing] Created new product: "${product.name}" (${product.id})`);
+    }
+
+    // 2. Create a new price in Stripe for this product
+    const isYearly = billingCycle === 'YEARLY';
+    const priceAmount = isYearly ? plan.yearlyPrice : plan.price;
+    if (!priceAmount) {
+      throw new BadRequestException(`Price amount for cycle ${billingCycle} is not configured on this plan.`);
+    }
+
+    const unitAmount = Math.round(Number(priceAmount) * 100);
+    console.log(`[Stripe Self-Healing] Creating price of ${unitAmount} cents for product: ${product.id}`);
+
+    const newPrice = await stripe.prices.create({
+      product: product.id,
+      unit_amount: unitAmount,
+      currency: 'usd',
+      recurring: {
+        interval: isYearly ? 'year' : 'month',
+      },
+      metadata: {
+        planId: plan.id,
+        billingCycle,
+      },
+    });
+
+    console.log(`[Stripe Self-Healing] Created price in Stripe: ${newPrice.id}`);
+
+    // 3. Update the database record with the new price ID
+    const updateData = isYearly
+      ? { yearlyStripePriceId: newPrice.id }
+      : { stripePriceId: newPrice.id };
+
+    await (this.prisma as any).plan.update({
+      where: { id: plan.id },
+      data: updateData,
+    });
+
+    console.log(`[Stripe Self-Healing] Successfully updated database plan "${plan.name}" with new Stripe Price ID: ${newPrice.id}`);
+    return newPrice.id;
+  }
+
+  /**
    * Get or create Stripe customer for user.
    */
   async getOrCreateStripeCustomer(
@@ -585,16 +696,18 @@ export class StripeService {
     if (!plan) throw new NotFoundException('Plan not found');
 
     const isYearly = billingCycle === 'YEARLY';
-    const priceId = isYearly ? (plan.yearlyStripePriceId ?? null) : (plan.stripePriceId ?? null);
+    let priceId = isYearly ? (plan.yearlyStripePriceId ?? null) : (plan.stripePriceId ?? null);
     console.log(
       `[StripeDebug] createCheckoutSession userId=${userId} planId=${planId} billingCycle=${billingCycle} selectedPriceId=${priceId ?? 'null'}`,
     );
 
     if (!priceId) {
-      const label = isYearly ? 'yearly' : 'monthly';
-      throw new BadRequestException(
-        `Plan "${plan.name}" is not linked to a Stripe ${label} Price. Add the ${label} stripePriceId in the admin panel.`,
-      );
+      console.log(`[Stripe Self-Healing] No price ID found for plan "${plan.name}". Registering in Stripe...`);
+      try {
+        priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
+      } catch (err: any) {
+        throw new BadRequestException(`Failed to automatically register price in Stripe: ${err.message}`);
+      }
     }
 
     const customerId = await this.getOrCreateStripeCustomer(userId, userEmail, userName);
@@ -606,18 +719,50 @@ export class StripeService {
     const trialDays =
       !hasAnyPriorSubscription && this.defaultTrialDays > 0 ? this.defaultTrialDays : 0;
 
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      metadata: { userId, planId, billingCycle },
-      subscription_data: {
+    let session: Stripe.Checkout.Session;
+    try {
+      session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: 'subscription',
+        line_items: [{ price: priceId, quantity: 1 }],
+        success_url: successUrl,
+        cancel_url: cancelUrl,
         metadata: { userId, planId, billingCycle },
-        ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
-      },
-    });
+        subscription_data: {
+          metadata: { userId, planId, billingCycle },
+          ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
+        },
+      });
+    } catch (err: any) {
+      const isPriceMissing = 
+        err.message?.includes('No such price') || 
+        err.raw?.message?.includes('No such price') || 
+        err.code === 'resource_missing';
+
+      if (isPriceMissing) {
+        console.warn(`[Stripe Self-Healing] Price ${priceId} does not exist in Stripe. Re-registering...`);
+        try {
+          priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
+          // Retry session creation with the new price ID
+          session = await stripe.checkout.sessions.create({
+            customer: customerId,
+            mode: 'subscription',
+            line_items: [{ price: priceId, quantity: 1 }],
+            success_url: successUrl,
+            cancel_url: cancelUrl,
+            metadata: { userId, planId, billingCycle },
+            subscription_data: {
+              metadata: { userId, planId, billingCycle },
+              ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
+            },
+          });
+        } catch (retryErr: any) {
+          throw new BadRequestException(`Stripe checkout failed after self-healing retry: ${retryErr.message}`);
+        }
+      } else {
+        throw err;
+      }
+    }
 
     const url = session.url;
     if (!url) throw new BadRequestException('Failed to create checkout session');

@@ -51,8 +51,9 @@ export class SubscriptionsController {
     if (!sub) {
       return { isSubscribed: false };
     }
+    const isPaid = Number(sub.plan.price) > 0;
     return {
-      isSubscribed: true,
+      isSubscribed: isPaid,
       planId: sub.plan.id,
       currentPeriodEnd: sub.endDate.toISOString(),
       createdAt: sub.createdAt.toISOString(),

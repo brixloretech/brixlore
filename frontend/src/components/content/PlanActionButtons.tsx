@@ -29,7 +29,9 @@ export function PlanActionButtons({
       : "/signup"
     : isFreeUser
       ? `/subscription/payment-details?plan=${encodeURIComponent(planId)}&autostart=1&billingCycle=${billingCycle}`
-      : `/signup?plan=${planId}&planName=${encodeURIComponent(planName)}&billingCycle=${billingCycle}`;
+      : isAuthenticated
+        ? "/dashboard/subscription"
+        : `/signup?plan=${planId}&planName=${encodeURIComponent(planName)}&billingCycle=${billingCycle}`;
 
   return (
     <div className="mt-5">

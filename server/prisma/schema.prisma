@@ -9,26 +9,26 @@ datasource db {
 }
 
 model User {
-  id                  String               @id @default(cuid())
-  email               String               @unique
-  name                String?
-  passwordHash        String?
-  role                String               @default("user")
-  emailVerified       Boolean              @default(false)
-  stripeCustomerId    String?              @unique
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
-  bio                 String?
-  phone               String?
-  devices             Device[]
-  downloads           Download[]
-  passwordResetTokens PasswordResetToken[]
+  id                      String                   @id @default(cuid())
+  email                   String                   @unique
+  name                    String?
+  passwordHash            String?
+  role                    String                   @default("user")
+  stripeCustomerId        String?                  @unique
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  bio                     String?
+  phone                   String?
+  emailVerified           Boolean                  @default(false)
+  devices                 Device[]
+  downloads               Download[]
   emailVerificationTokens EmailVerificationToken[]
-  refreshTokens       RefreshToken[]
-  subscriptions       Subscription[]
-  supportReplies      SupportReply[]
-  preferences         UserPreferences?
-  viewHistory         ViewHistory[]
+  passwordResetTokens     PasswordResetToken[]
+  refreshTokens           RefreshToken[]
+  subscriptions           Subscription[]
+  supportReplies          SupportReply[]
+  preferences             UserPreferences?
+  viewHistory             ViewHistory[]
 
   @@index([email])
 }
@@ -74,6 +74,7 @@ model RefreshToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+  @@index([userId])
 }
 
 model EmailVerificationToken {
@@ -92,18 +93,18 @@ model EmailVerificationToken {
 model Plan {
   id                  String         @id @default(cuid())
   name                String
-  price               Decimal        @db.Decimal(10, 2)   // monthly price
-  yearlyPrice         Decimal?       @db.Decimal(10, 2)   // yearly price (optional)
-  duration            String         @default("MONTHLY")  // kept for internal period fallback
+  price               Decimal        @db.Decimal(10, 2)
+  duration            String         @default("MONTHLY")
   deviceLimit         Int
   offlineAllowed      Boolean        @default(false)
   maxOfflineDownloads Int            @default(0)
-  stripePriceId       String?        // monthly Stripe price ID
-  yearlyStripePriceId String?        // yearly Stripe price ID (optional)
+  stripePriceId       String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   perks               String[]       @default([])
   isPopular           Boolean        @default(false)
+  yearlyPrice         Decimal?       @db.Decimal(10, 2)
+  yearlyStripePriceId String?
   subscriptions       Subscription[]
 
   @@index([name])
@@ -159,6 +160,7 @@ model Content {
   isPublished  Boolean     @default(false)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
+  tags         String[]    @default([])
   category     Category?   @relation(fields: [categoryId], references: [id])
   trailer      Content?    @relation("ContentTrailer", fields: [trailerId], references: [id])
   trailerFor   Content[]   @relation("ContentTrailer")
@@ -213,6 +215,7 @@ model Episode {
   createdAt     DateTime      @default(now())
   hlsUrl        String?
   thumbnailUrl  String?
+  tags          String[]      @default([])
   downloads     Download[]
   content       Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
   season        Season?       @relation(fields: [seasonId], references: [id])
@@ -320,6 +323,45 @@ model ViewHistory {
   @@index([userId, episodeId])
 }
 
+/// Global AdButler / ad-network configuration.
+/// Singleton pattern: always one row with id = "singleton".
+/// All ad behaviour is driven from the admin panel – nothing is hardcoded in the player.
+model AdConfig {
+  id                       String   @id @default("singleton")
+  adsEnabled               Boolean  @default(false)
+  preRollEnabled           Boolean  @default(false)
+  preRollTagUrl            String   @default("")
+  preRollSkippable         Boolean  @default(false)
+  preRollSkipAfterSeconds  Int      @default(5)
+  midRollEnabled           Boolean  @default(false)
+  midRollTagUrl            String   @default("")
+  /// "INTERVAL" | "FIXED_TIMESTAMPS"
+  midRollTriggerMode       String   @default("INTERVAL")
+  midRollIntervalMinutes   Int      @default(10)
+  /// JSON-encoded string[] of HH:MM:SS timestamps e.g. '["00:05:00","00:15:00"]'
+  midRollTimestamps        String   @default("[]")
+  midRollSkippable         Boolean  @default(false)
+  midRollSkipAfterSeconds  Int      @default(5)
+  midRollMaxPerVideo       Int      @default(2)
+  postRollEnabled          Boolean  @default(false)
+  postRollTagUrl           String   @default("")
+  postRollSkippable        Boolean  @default(false)
+  postRollSkipAfterSeconds Int      @default(5)
+  outstreamEnabled         Boolean  @default(false)
+  outstreamTagUrl          String   @default("")
+  bannerEnabled            Boolean  @default(false)
+  bannerTagUrl             String   @default("")
+  /// "SKIP_IMMEDIATELY" | "RETRY_ONCE"
+  adFailureBehavior        String   @default("SKIP_IMMEDIATELY")
+  adLoadTimeoutSeconds     Int      @default(8)
+  geoRestrictionsEnabled   Boolean  @default(false)
+  /// JSON-encoded string[] of ISO-3166-1-alpha-2 country codes e.g. '["US","GB"]'
+  geoBlockedCountries      String   @default("[]")
+  ageRestrictionEnabled    Boolean  @default(false)
+  minAge                   Int      @default(18)
+  updatedAt                DateTime @default(now()) @updatedAt
+}
+
 enum Platform {
   ANDROID
   IOS
@@ -360,60 +402,4 @@ enum SupportStatus {
   IN_PROGRESS
   RESOLVED
   CLOSED
-}
-
-/// Global AdButler / ad-network configuration.
-/// Singleton pattern: always one row with id = "singleton".
-/// All ad behaviour is driven from the admin panel – nothing is hardcoded in the player.
-model AdConfig {
-  id String @id @default("singleton")
-
-  // ─── Master toggle ───────────────────────────────────────────────────────────
-  adsEnabled Boolean @default(false)
-
-  // ─── Pre-roll ────────────────────────────────────────────────────────────────
-  preRollEnabled          Boolean @default(false)
-  preRollTagUrl           String  @default("")
-  preRollSkippable        Boolean @default(false)
-  preRollSkipAfterSeconds Int     @default(5)
-
-  // ─── Mid-roll ────────────────────────────────────────────────────────────────
-  midRollEnabled           Boolean @default(false)
-  midRollTagUrl            String  @default("")
-  /// "INTERVAL" | "FIXED_TIMESTAMPS"
-  midRollTriggerMode       String  @default("INTERVAL")
-  midRollIntervalMinutes   Int     @default(10)
-  /// JSON-encoded string[] of HH:MM:SS timestamps e.g. '["00:05:00","00:15:00"]'
-  midRollTimestamps        String  @default("[]")
-  midRollSkippable         Boolean @default(false)
-  midRollSkipAfterSeconds  Int     @default(5)
-  midRollMaxPerVideo       Int     @default(2)
-
-  // ─── Post-roll ───────────────────────────────────────────────────────────────
-  postRollEnabled          Boolean @default(false)
-  postRollTagUrl           String  @default("")
-  postRollSkippable        Boolean @default(false)
-  postRollSkipAfterSeconds Int     @default(5)
-
-  // ─── Outstream / Banner ──────────────────────────────────────────────────────
-  outstreamEnabled Boolean @default(false)
-  outstreamTagUrl  String  @default("")
-  bannerEnabled    Boolean @default(false)
-  bannerTagUrl     String  @default("")
-
-  // ─── Failure behaviour ───────────────────────────────────────────────────────
-  /// "SKIP_IMMEDIATELY" | "RETRY_ONCE"
-  adFailureBehavior    String @default("SKIP_IMMEDIATELY")
-  adLoadTimeoutSeconds Int    @default(8)
-
-  // ─── Geo restrictions ────────────────────────────────────────────────────────
-  geoRestrictionsEnabled Boolean @default(false)
-  /// JSON-encoded string[] of ISO-3166-1-alpha-2 country codes e.g. '["US","GB"]'
-  geoBlockedCountries    String  @default("[]")
-
-  // ─── Age restriction ─────────────────────────────────────────────────────────
-  ageRestrictionEnabled Boolean @default(false)
-  minAge                Int     @default(18)
-
-  updatedAt DateTime @updatedAt
 }
