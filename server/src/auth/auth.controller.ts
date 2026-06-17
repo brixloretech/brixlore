@@ -11,6 +11,7 @@ import { SignupSubscriptionIntentDto } from './dto/signup-subscription-intent.dt
 import { SignupSubscriptionFinalizeDto } from './dto/signup-subscription-finalize.dto';
 import { TokensResponseDto } from './dto/tokens-response.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { User } from '@prisma/client';
@@ -99,6 +100,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   async verifyEmail(@Body() dto: VerifyEmailDto): Promise<{ message: string }> {
     return this.authService.verifyEmail(dto.token);
+  }
+
+  @Public()
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  async resendVerification(@Body() dto: ResendVerificationDto): Promise<{ message: string }> {
+    return this.authService.resendVerificationEmail(dto.email);
   }
 
   @Post('change-password')

@@ -220,6 +220,13 @@ export const authService = {
     return post<VerifyEmailResponseDto>("auth/verify-email", body);
   },
 
+  async resendVerification(body: { email: string }): Promise<{ message: string }> {
+    if (USE_MOCK_API) {
+      return { message: "Verification link resent. Please check your inbox. (Mock Mode)" };
+    }
+    return post<{ message: string }>("auth/resend-verification", body);
+  },
+
   async forgotPassword(
     body: ForgotPasswordRequestDto,
   ): Promise<ForgotPasswordResponseDto> {

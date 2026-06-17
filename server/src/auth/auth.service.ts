@@ -412,6 +412,26 @@ export class AuthService {
     return { message: 'Your email has been verified. You can now sign in.' };
   }
 
+  async resendVerificationEmail(email: string): Promise<{ message: string }> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
+    if (!user) {
+      // Security measure: Do not confirm or deny if email is registered
+      return { message: 'If this email is registered, a new verification link has been sent.' };
+    }
+    if (user.emailVerified) {
+      throw new BadRequestException('This email is already verified. You can sign in.');
+    }
+    // Clear old verification tokens
+    await this.prisma.emailVerificationToken.deleteMany({
+      where: { userId: user.id },
+    });
+    await this.sendVerificationEmail(user);
+    return { message: 'Verification link resent. Please check your inbox.' };
+  }
+
   private async sendVerificationEmail(user: User) {
     const rawToken = randomBytes(32).toString('hex');
     const tokenHash = this.hashToken(rawToken);

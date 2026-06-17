@@ -36,6 +36,8 @@ function LoginPageContent() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null);
 
   function runValidation(): boolean {
     const emailError = validateEmail(email);
@@ -50,6 +52,7 @@ function LoginPageContent() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitError(null);
+    setResendSuccess(null);
     if (!runValidation()) return;
 
     setIsLoading(true);
@@ -66,6 +69,21 @@ function LoginPageContent() {
       setSubmitError(getApiErrorMessage(err));
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!email) return;
+    setResendLoading(true);
+    setResendSuccess(null);
+    setSubmitError(null);
+    try {
+      const res = await authService.resendVerification({ email });
+      setResendSuccess(res.message);
+    } catch (err) {
+      setSubmitError(getApiErrorMessage(err));
+    } finally {
+      setResendLoading(false);
     }
   }
 
@@ -108,11 +126,29 @@ function LoginPageContent() {
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           {submitError && (
-            <p
-              className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400"
+            <div
+              className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400 space-y-2"
               role="alert"
             >
-              {submitError}
+              <p>{submitError}</p>
+              {submitError.includes("verify your email address") && (
+                <button
+                  type="button"
+                  onClick={handleResendVerification}
+                  disabled={resendLoading}
+                  className="text-xs font-semibold underline text-red-800 hover:text-red-900 dark:text-red-300 dark:hover:text-red-200 disabled:opacity-50 block"
+                >
+                  {resendLoading ? "Sending..." : "Send verification link again"}
+                </button>
+              )}
+            </div>
+          )}
+          {resendSuccess && (
+            <p
+              className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
+              role="status"
+            >
+              {resendSuccess}
             </p>
           )}
           <Input

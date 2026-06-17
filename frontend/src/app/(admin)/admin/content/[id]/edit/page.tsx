@@ -104,12 +104,14 @@ export default function AdminEditVideoPage() {
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
 
   // Movie Video File States
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [movieEpisode, setMovieEpisode] = useState<any | null>(null);
   const [movieVideoFile, setMovieVideoFile] = useState<File | null>(null);
   const [movieVideoProgress, setMovieVideoProgress] = useState<{ uploadedBytes: number; totalBytes: number } | null>(null);
   const [movieVideoProcessing, setMovieVideoProcessing] = useState(false);
 
   // Trailer States
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [existingTrailer, setExistingTrailer] = useState<any | null>(null);
   const [trailerVideoFile, setTrailerVideoFile] = useState<File | null>(null);
   const [trailerDuration, setTrailerDuration] = useState("");
@@ -135,6 +137,7 @@ export default function AdminEditVideoPage() {
   } | null>(null);
 
   // CRUD Modals State
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editingSeason, setEditingSeason] = useState<any | null>(null);
   const [editSeasonNumber, setEditSeasonNumber] = useState("");
   const [editSeasonTitle, setEditSeasonTitle] = useState("");
@@ -142,6 +145,7 @@ export default function AdminEditVideoPage() {
   const [editSeasonSubmitting, setEditSeasonSubmitting] = useState(false);
   const [editSeasonError, setEditSeasonError] = useState<string | null>(null);
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [editingEpisode, setEditingEpisode] = useState<any | null>(null);
   const [editEpisodeNumber, setEditEpisodeNumber] = useState("");
   const [editEpisodeTitle, setEditEpisodeTitle] = useState("");
