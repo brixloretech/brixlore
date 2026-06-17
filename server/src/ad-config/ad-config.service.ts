@@ -179,11 +179,18 @@ export class AdConfigService {
           status: 'ACTIVE',
           endDate: { gte: new Date() },
         },
+        include: {
+          plan: true,
+        },
       });
 
-      if (activeSubscription) {
-        // Suppress ads for paid subscribers
-        return { ...config, adsEnabled: false };
+      if (activeSubscription?.plan) {
+        const price = Number(activeSubscription.plan.price);
+        const name = activeSubscription.plan.name.toLowerCase();
+        // Suppress ads only for users on a paid plan (price > 0 and plan name does not contain 'free')
+        if (price > 0 && !name.includes('free')) {
+          return { ...config, adsEnabled: false };
+        }
       }
     }
 
