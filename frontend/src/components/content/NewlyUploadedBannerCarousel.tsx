@@ -12,6 +12,7 @@ export type BannerItem = {
   subtitle?: string;
   badge?: string;
   thumbnailUrl?: string | null;
+  bannerUrl?: string | null;
 };
 
 const GRADIENTS = [
@@ -59,7 +60,8 @@ export function NewlyUploadedBannerCarousel({
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = [];
     items.forEach((item, index) => {
-      if (!item.thumbnailUrl || imgErrors[index] || imgLoaded[index]) return;
+      const activeUrl = item.bannerUrl || item.thumbnailUrl;
+      if (!activeUrl || imgErrors[index] || imgLoaded[index]) return;
       timers.push(setTimeout(() => setImgError(index), IMAGE_LOAD_TIMEOUT_MS));
     });
     return () => timers.forEach(clearTimeout);
@@ -75,7 +77,8 @@ export function NewlyUploadedBannerCarousel({
           style={{ transform: `translateX(-${currentIndex * 100}%)` }}
         >
           {items.map((item, index) => {
-            const showThumbnail = item.thumbnailUrl && !imgErrors[index];
+            const bannerImage = item.bannerUrl || item.thumbnailUrl;
+            const showThumbnail = bannerImage && !imgErrors[index];
             return (
               <div
                 key={item.id}
@@ -100,7 +103,7 @@ export function NewlyUploadedBannerCarousel({
                   )}
                   {showThumbnail ? (
                     <Image
-                      src={item.thumbnailUrl!}
+                      src={bannerImage!}
                       alt=""
                       className="object-cover object-center"
                       fill

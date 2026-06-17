@@ -17,5 +17,6 @@
     "forceConsistentCasingInFileNames": true,
     "noFallthroughCasesInSwitch": true,
     "types": ["node"]
-  }
+  },
+  "exclude": ["node_modules", "dist", "tmp"]
 }

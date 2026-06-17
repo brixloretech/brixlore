@@ -15,6 +15,8 @@ import type {
   CreateAdminSeasonRequestDto,
   CreateAdminEpisodeRequestDto,
   CreateAdminTrailerRequestDto,
+  UpdateAdminSeasonRequestDto,
+  UpdateAdminEpisodeRequestDto,
   PublishAdminContentRequestDto,
   SeasonResponseDto,
   EpisodeResponseDto,
@@ -67,6 +69,7 @@ export interface AdminContentItemDto {
   type: string;
   thumbnailUrl: string;
   posterUrl?: string;
+  bannerUrl?: string;
   releaseYear: number;
   ageRating: string;
   duration?: string;
@@ -92,6 +95,17 @@ export interface AdminContentItemDto {
     duration: string;
     hlsReady: boolean;
   }[];
+  trailer?: {
+    id: string;
+    title: string;
+    duration: string;
+    thumbnailUrl?: string;
+    posterUrl?: string;
+    bannerUrl?: string;
+    episodeId?: string;
+    videoUrl?: string;
+    hlsUrl?: string;
+  };
 }
 
 export type {
@@ -444,6 +458,30 @@ export const adminService = {
   async createEpisode(body: CreateAdminEpisodeRequestDto) {
     return withAuthRetry((headers) =>
       post<EpisodeResponseDto>("admin/episode", body, { headers }),
+    );
+  },
+
+  async updateSeason(id: string, body: UpdateAdminSeasonRequestDto) {
+    return withAuthRetry((headers) =>
+      patch<SeasonResponseDto>(`admin/seasons/${id}`, body, { headers }),
+    );
+  },
+
+  async deleteSeason(id: string): Promise<{ success: boolean }> {
+    return withAuthRetry((headers) =>
+      del<{ success: boolean }>(`admin/seasons/${id}`, { headers }),
+    );
+  },
+
+  async updateEpisode(id: string, body: UpdateAdminEpisodeRequestDto) {
+    return withAuthRetry((headers) =>
+      patch<EpisodeResponseDto>(`admin/episodes/${id}`, body, { headers }),
+    );
+  },
+
+  async deleteEpisode(id: string): Promise<{ success: boolean }> {
+    return withAuthRetry((headers) =>
+      del<{ success: boolean }>(`admin/episodes/${id}`, { headers }),
     );
   },
 

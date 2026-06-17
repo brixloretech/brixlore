@@ -38,6 +38,8 @@ import { CreateAdminCategoryDto } from './dto/create-admin-category.dto';
 import { UpdateAdminCategoryDto } from './dto/update-admin-category.dto';
 import { UpdateAdminContentDto } from './dto/update-admin-content.dto';
 import { PublishAdminContentDto } from './dto/publish-admin-content.dto';
+import { UpdateAdminSeasonDto } from './dto/update-admin-season.dto';
+import { UpdateAdminEpisodeDto } from './dto/update-admin-episode.dto';
 import type { AdminSubscriptionsResponseDto } from './dto/admin-subscription.dto';
 import type { AdminPlanDto } from './dto/admin-plan.dto';
 import { CreateAdminPlanDto } from './dto/create-admin-plan.dto';
@@ -707,6 +709,58 @@ export class AdminController {
     });
 
     return episode;
+  }
+
+  /**
+   * Update a season.
+   */
+  @Patch('seasons/:id')
+  async updateSeason(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: UpdateAdminSeasonDto,
+  ) {
+    ensureAdmin(user);
+    return this.adminService.updateSeason(id, body);
+  }
+
+  /**
+   * Delete a season.
+   */
+  @Delete('seasons/:id')
+  async deleteSeason(@CurrentUser() user: User, @Param('id') id: string) {
+    ensureAdmin(user);
+    return this.adminService.deleteSeason(id);
+  }
+
+  /**
+   * Update an episode.
+   */
+  @Patch('episodes/:id')
+  async updateEpisode(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+    @Body() body: UpdateAdminEpisodeDto,
+  ) {
+    ensureAdmin(user);
+    const episode = await this.adminService.updateEpisode(id, body);
+    if (body.videoKey && !body.hlsKey) {
+      setImmediate(() => {
+        this.transcodeService
+          .transcodeEpisodeToHls(episode.id)
+          .catch((err) => console.error('[HLS] Transcode failed', err));
+      });
+    }
+    return episode;
+  }
+
+  /**
+   * Delete an episode.
+   */
+  @Delete('episodes/:id')
+  async deleteEpisode(@CurrentUser() user: User, @Param('id') id: string) {
+    ensureAdmin(user);
+    return this.adminService.deleteEpisode(id);
   }
 
   /**

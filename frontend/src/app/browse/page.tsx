@@ -15,6 +15,7 @@ type BrowseItem = {
   badge?: string;
   size?: "poster" | "wide";
   thumbnailUrl?: string | null;
+  bannerUrl?: string | null;
 };
 
 type BrowseRow = {
@@ -60,6 +61,7 @@ function toBrowseItem(item: ContentSummaryDto): BrowseItem {
     title: item.title,
     subtitle: formatSubtitle(item),
     thumbnailUrl: item.thumbnailUrl ?? null,
+    bannerUrl: item.bannerUrl ?? null,
   };
 }
 

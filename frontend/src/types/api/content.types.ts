@@ -35,6 +35,7 @@ export interface ContentSummaryDto {
   title: string;
   thumbnailUrl: string | null;
   posterUrl?: string | null;
+  bannerUrl?: string | null;
   type: ContentType;
   releaseYear: number;
   ageRating: string;
@@ -78,6 +79,7 @@ export interface ContentDetailDto {
   type: ContentType;
   thumbnailUrl: string | null;
   posterUrl?: string | null;
+  bannerUrl?: string | null;
   releaseYear: number;
   ageRating: string;
   duration?: string;
@@ -99,6 +101,7 @@ export interface CreateAdminContentRequestDto {
   type: ContentType;
   thumbnailKey: string;
   posterKey?: string;
+  bannerKey?: string;
   releaseYear: number;
   ageRating: string;
   duration?: string;
@@ -200,6 +203,7 @@ export interface CreateAdminTrailerRequestDto {
   description?: string;
   thumbnailKey: string;
   posterKey?: string;
+  bannerKey?: string;
   releaseYear: number;
   ageRating: string;
   duration: string;
@@ -215,11 +219,29 @@ export interface UpdateAdminContentRequestDto {
   type?: ContentType;
   thumbnailKey?: string;
   posterKey?: string;
+  bannerKey?: string;
   releaseYear?: number;
   ageRating?: string;
   duration?: string;
   categoryId?: string;
   category?: string;
+}
+
+export interface UpdateAdminSeasonRequestDto {
+  seasonNumber?: number;
+  title?: string;
+  description?: string;
+}
+
+export interface UpdateAdminEpisodeRequestDto {
+  seasonId?: string | null;
+  episodeNumber?: number;
+  title?: string;
+  description?: string;
+  duration?: string;
+  videoKey?: string;
+  hlsKey?: string;
+  thumbnailKey?: string;
 }
 
 /** Request body for PATCH /admin/content/:id/publish */

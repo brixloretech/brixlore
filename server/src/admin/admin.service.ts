@@ -32,6 +32,8 @@ import type { AdminSystemHealthDto, AdminSystemLogDto } from './dto/admin-system
 import type { SupportRequestDto, SupportReplyDto } from './dto/admin-support.dto';
 import type { UpdateSupportRequestDto } from './dto/update-support-request.dto';
 import type { ReplySupportRequestDto } from './dto/reply-support-request.dto';
+import { UpdateAdminSeasonDto } from './dto/update-admin-season.dto';
+import { UpdateAdminEpisodeDto } from './dto/update-admin-episode.dto';
 
 const ContentType = {
   MOVIE: 'MOVIE',
@@ -89,6 +91,7 @@ function toAdminContentItemDto(content: any): AdminContentItemDto {
     type: content.type,
     thumbnailUrl: content.thumbnailUrl,
     posterUrl: content.posterUrl ?? undefined,
+    bannerUrl: content.bannerUrl ?? undefined,
     releaseYear: content.releaseYear,
     ageRating: content.ageRating,
     duration,
@@ -117,6 +120,22 @@ function toAdminContentItemDto(content: any): AdminContentItemDto {
           duration: formatDurationSeconds(episode.duration),
           hlsReady: typeof episode.hlsUrl === 'string' && episode.hlsUrl.trim().length > 0,
         }))
+      : undefined,
+    trailer: content.trailer
+      ? {
+          id: content.trailer.id,
+          title: content.trailer.title,
+          duration:
+            typeof content.trailer.duration === 'number'
+              ? formatDurationSeconds(content.trailer.duration)
+              : '',
+          thumbnailUrl: content.trailer.thumbnailUrl,
+          posterUrl: content.trailer.posterUrl ?? undefined,
+          bannerUrl: content.trailer.bannerUrl ?? undefined,
+          episodeId: content.trailer.episodes?.[0]?.id,
+          videoUrl: content.trailer.episodes?.[0]?.videoUrl,
+          hlsUrl: content.trailer.episodes?.[0]?.hlsUrl ?? undefined,
+        }
       : undefined,
   };
 }
@@ -827,6 +846,7 @@ export class AdminService {
       type?: ContentType;
       thumbnailUrl?: string;
       posterUrl?: string | null;
+      bannerUrl?: string | null;
       releaseYear?: number;
       ageRating?: string;
       duration?: number | null;
@@ -851,6 +871,7 @@ export class AdminService {
     const incomingThumbnailKey =
       typeof dto.thumbnailKey === 'string' ? dto.thumbnailKey.trim() : undefined;
     const incomingPosterKey = typeof dto.posterKey === 'string' ? dto.posterKey.trim() : undefined;
+    const incomingBannerKey = typeof dto.bannerKey === 'string' ? dto.bannerKey.trim() : undefined;
 
     if (incomingThumbnailKey !== undefined) {
       data.thumbnailUrl = incomingThumbnailKey;
@@ -858,6 +879,10 @@ export class AdminService {
 
     if (incomingPosterKey !== undefined) {
       data.posterUrl = incomingPosterKey || null;
+    }
+
+    if (incomingBannerKey !== undefined) {
+      data.bannerUrl = incomingBannerKey || null;
     }
 
     const nextThumbnailKey = incomingThumbnailKey ?? content.thumbnailUrl;
@@ -892,7 +917,12 @@ export class AdminService {
     const updated = await (this.prisma as any).content.update({
       where: { id },
       data,
-      include: { category: true },
+      include: {
+        category: true,
+        seasons: { include: { _count: { select: { episodes: true } } } },
+        episodes: true,
+        trailer: { include: { episodes: true } },
+      },
     });
 
     return toAdminContentItemDto(updated);
@@ -935,6 +965,7 @@ export class AdminService {
           type: dto.type,
           thumbnailUrl,
           posterUrl: posterKey,
+          bannerUrl: dto.bannerKey?.trim() || null,
           releaseYear: dto.releaseYear,
           ageRating: dto.ageRating.trim(),
           duration: seconds ?? null,
@@ -992,6 +1023,7 @@ export class AdminService {
           type: ContentType.TRAILER,
           thumbnailUrl: dto.thumbnailKey.trim(),
           posterUrl: dto.posterKey?.trim() || null,
+          bannerUrl: dto.bannerKey?.trim() || null,
           releaseYear: dto.releaseYear,
           ageRating: dto.ageRating.trim(),
           duration: seconds,
@@ -1138,6 +1170,168 @@ export class AdminService {
         thumbnailUrl: dto.thumbnailKey?.trim() || null,
       },
     });
+  }
+
+  async updateSeason(id: string, dto: UpdateAdminSeasonDto) {
+    const season = await (this.prisma as any).season.findUnique({
+      where: { id },
+    });
+    if (!season) {
+      throw new NotFoundException('Season not found');
+    }
+
+    const data: any = {};
+
+    let nextSeasonNumber = season.seasonNumber;
+    if (dto.seasonNumber !== undefined) {
+      nextSeasonNumber = dto.seasonNumber;
+      data.seasonNumber = nextSeasonNumber;
+    }
+
+    if (dto.seasonNumber !== undefined && nextSeasonNumber !== season.seasonNumber) {
+      const existing = await (this.prisma as any).season.findFirst({
+        where: { contentId: season.contentId, seasonNumber: nextSeasonNumber },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new BadRequestException('Season number already exists for this content');
+      }
+    }
+
+    if (typeof dto.title === 'string') {
+      const title = dto.title.trim();
+      if (!title) throw new BadRequestException('Title is required');
+      data.title = title;
+    }
+
+    if (dto.description !== undefined) {
+      data.description = dto.description?.trim() || null;
+    }
+
+    return (this.prisma as any).season.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteSeason(id: string): Promise<{ success: boolean }> {
+    const season = await (this.prisma as any).season.findUnique({
+      where: { id },
+    });
+    if (!season) {
+      throw new NotFoundException('Season not found');
+    }
+
+    await this.prisma.$transaction(async (tx: any) => {
+      // Cascade-delete episodes of this season
+      await tx.episode.deleteMany({
+        where: { seasonId: id },
+      });
+      // Delete the season
+      await tx.season.delete({
+        where: { id },
+      });
+    });
+    return { success: true };
+  }
+
+  async updateEpisode(id: string, dto: UpdateAdminEpisodeDto) {
+    const episode = await (this.prisma as any).episode.findUnique({
+      where: { id },
+    });
+    if (!episode) {
+      throw new NotFoundException('Episode not found');
+    }
+
+    const data: any = {};
+
+    let resolvedSeasonId = episode.seasonId;
+    if (dto.seasonId !== undefined) {
+      if (dto.seasonId === null) {
+        resolvedSeasonId = null;
+      } else {
+        const season = await (this.prisma as any).season.findUnique({
+          where: { id: dto.seasonId },
+        });
+        if (!season || season.contentId !== episode.contentId) {
+          throw new BadRequestException('Season does not belong to the content item');
+        }
+        resolvedSeasonId = dto.seasonId;
+      }
+      data.seasonId = resolvedSeasonId;
+    }
+
+    let nextEpisodeNumber = episode.episodeNumber;
+    if (dto.episodeNumber !== undefined) {
+      nextEpisodeNumber = dto.episodeNumber;
+      data.episodeNumber = nextEpisodeNumber;
+    }
+
+    if (
+      (dto.seasonId !== undefined || dto.episodeNumber !== undefined) &&
+      (resolvedSeasonId !== episode.seasonId || nextEpisodeNumber !== episode.episodeNumber)
+    ) {
+      const existing = await (this.prisma as any).episode.findFirst({
+        where: {
+          contentId: episode.contentId,
+          seasonId: resolvedSeasonId,
+          episodeNumber: nextEpisodeNumber,
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new BadRequestException('Episode number already exists in this season');
+      }
+    }
+
+    if (typeof dto.title === 'string') {
+      const title = dto.title.trim();
+      if (!title) throw new BadRequestException('Title is required');
+      data.title = title;
+    }
+
+    if (dto.description !== undefined) {
+      data.description = dto.description?.trim() || null;
+    }
+
+    if (typeof dto.duration === 'string') {
+      const seconds = parseDurationToSeconds(dto.duration);
+      if (seconds <= 0) {
+        throw new BadRequestException('Invalid duration format');
+      }
+      data.duration = seconds;
+    }
+
+    if (typeof dto.videoKey === 'string') {
+      data.videoUrl = dto.videoKey.trim();
+      // Reset HLS URL so transcoding starts fresh unless an hlsKey is explicitly supplied
+      data.hlsUrl = dto.hlsKey !== undefined ? dto.hlsKey?.trim() || null : null;
+    } else if (dto.hlsKey !== undefined) {
+      data.hlsUrl = dto.hlsKey?.trim() || null;
+    }
+
+    if (dto.thumbnailKey !== undefined) {
+      data.thumbnailUrl = dto.thumbnailKey?.trim() || null;
+    }
+
+    return (this.prisma as any).episode.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async deleteEpisode(id: string): Promise<{ success: boolean }> {
+    const episode = await (this.prisma as any).episode.findUnique({
+      where: { id },
+    });
+    if (!episode) {
+      throw new NotFoundException('Episode not found');
+    }
+
+    await (this.prisma as any).episode.delete({
+      where: { id },
+    });
+    return { success: true };
   }
 
   async getPlans(): Promise<AdminPlanDto[]> {

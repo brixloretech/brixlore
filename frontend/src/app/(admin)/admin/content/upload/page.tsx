@@ -92,6 +92,7 @@ export default function AdminUploadPage() {
   const [trailerVideoFile, setTrailerVideoFile] = useState<File | null>(null);
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [posterFile, setPosterFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [primaryVideoProgress, setPrimaryVideoProgress] = useState<{
     uploadedBytes: number;
     totalBytes: number;
@@ -276,6 +277,10 @@ export default function AdminUploadPage() {
       setError("Poster must be JPEG, PNG, or WebP.");
       return false;
     }
+    if (bannerFile && !THUMBNAIL_TYPES.includes(bannerFile.type)) {
+      setError("Banner must be JPEG, PNG, or WebP.");
+      return false;
+    }
     setError(null);
     return true;
   }
@@ -359,9 +364,23 @@ export default function AdminUploadPage() {
           })
         : null;
 
+      const bannerPresign = bannerFile
+        ? await adminService.presignUpload({
+            kind: "thumbnail",
+            fileName: bannerFile.name,
+            contentType: bannerFile.type,
+            sizeBytes: bannerFile.size,
+          })
+        : null;
+
       if (posterPresign && posterPresign.key === thumbnailPresign.key) {
         throw new Error(
           "Poster and thumbnail resolved to the same storage key. Please retry upload.",
+        );
+      }
+      if (bannerPresign && (bannerPresign.key === thumbnailPresign.key || (posterPresign && bannerPresign.key === posterPresign.key))) {
+        throw new Error(
+          "Banner and other artwork resolved to the same storage key. Please retry upload.",
         );
       }
 
@@ -383,6 +402,16 @@ export default function AdminUploadPage() {
         );
       }
 
+      if (bannerPresign && bannerFile) {
+        uploads.push(
+          fetch(bannerPresign.url, {
+            method: "PUT",
+            headers: { "Content-Type": bannerFile.type },
+            body: bannerFile,
+          }),
+        );
+      }
+
       await Promise.all(uploads).then(async (responses) => {
         const failed = responses.find((res) => !res.ok);
         if (failed) {
@@ -397,6 +426,7 @@ export default function AdminUploadPage() {
         type: contentType,
         thumbnailKey: thumbnailPresign.key,
         posterKey: posterPresign?.key ?? undefined,
+        bannerKey: bannerPresign?.key ?? undefined,
         releaseYear: Number(releaseYear),
         ageRating: ageRating.trim(),
         duration: isEpisodic ? undefined : duration.trim() || undefined,
@@ -436,6 +466,7 @@ export default function AdminUploadPage() {
           description: description.trim() || undefined,
           thumbnailKey: thumbnailPresign.key,
           posterKey: posterPresign?.key ?? undefined,
+          bannerKey: bannerPresign?.key ?? undefined,
           releaseYear: Number(releaseYear),
           ageRating: ageRating.trim(),
           duration: trailerDuration.trim(),
@@ -466,6 +497,7 @@ export default function AdminUploadPage() {
       setTrailerVideoFile(null);
       setThumbnailFile(null);
       setPosterFile(null);
+      setBannerFile(null);
     } catch (err) {
       const message = getApiErrorUserMessage(err);
       const isNetwork =
@@ -969,6 +1001,28 @@ export default function AdminUploadPage() {
               <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
                 Optional portrait artwork for homepage poster grids (JPEG, PNG,
                 or WebP).
+              </p>
+            </div>
+            <div>
+              <label
+                htmlFor="banner-file"
+                className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300"
+              >
+                Banner image (Landscape)
+              </label>
+              <input
+                id="banner-file"
+                type="file"
+                accept={THUMBNAIL_TYPES.join(",")}
+                onChange={(e) => {
+                  const file = e.target.files?.[0] ?? null;
+                  setBannerFile(file);
+                  if (file) setError(null);
+                }}
+                className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-200 file:px-3 file:py-1.5 file:text-sm file:text-neutral-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:file:bg-neutral-700 dark:file:text-neutral-100"
+              />
+              <p className="mt-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                Optional widescreen landscape artwork for homepage slideshow banners (JPEG, PNG, or WebP).
               </p>
             </div>
             <div>

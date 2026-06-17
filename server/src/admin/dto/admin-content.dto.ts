@@ -5,6 +5,7 @@ export class AdminContentItemDto {
   type: string;
   thumbnailUrl: string;
   posterUrl?: string;
+  bannerUrl?: string;
   releaseYear: number;
   ageRating: string;
   duration?: string;
@@ -30,4 +31,15 @@ export class AdminContentItemDto {
     duration: string;
     hlsReady: boolean;
   }[];
+  trailer?: {
+    id: string;
+    title: string;
+    duration: string;
+    thumbnailUrl?: string;
+    posterUrl?: string;
+    bannerUrl?: string;
+    episodeId?: string;
+    videoUrl?: string;
+    hlsUrl?: string;
+  };
 }

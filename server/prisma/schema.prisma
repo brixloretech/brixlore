@@ -153,6 +153,7 @@ model Content {
   type         ContentType
   thumbnailUrl String
   posterUrl    String?
+  bannerUrl    String?
   releaseYear  Int
   ageRating    String
   duration     Int?

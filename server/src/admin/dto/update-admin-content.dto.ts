@@ -28,6 +28,10 @@ export class UpdateAdminContentDto {
   posterKey?: string;
 
   @IsOptional()
+  @IsString()
+  bannerKey?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(1900)
   releaseYear?: number;

@@ -24,6 +24,10 @@ export class CreateAdminContentDto {
   @IsString()
   posterKey?: string;
 
+  @IsOptional()
+  @IsString()
+  bannerKey?: string;
+
   @IsInt()
   @Min(1900)
   releaseYear: number;
