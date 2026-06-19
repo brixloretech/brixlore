@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { R2Service } from '../storage/r2.service';
 import { AuthService } from '../auth/auth.service';
 import { MailService } from '../mail/mail.service';
 import type { DashboardStatsDto } from './dto/dashboard-stats.dto';
@@ -71,7 +72,13 @@ function formatDurationSeconds(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function toAdminContentItemDto(content: any): AdminContentItemDto {
+function resolveR2Url(value: string | null | undefined, r2Service: R2Service): string | undefined {
+  if (!value) return undefined;
+  if (/^https?:\/\//i.test(value)) return value;
+  return r2Service.getPublicUrl(value) ?? value;
+}
+
+function toAdminContentItemDto(content: any, r2Service: R2Service): AdminContentItemDto {
   const duration =
     typeof content.duration === 'number' ? formatDurationSeconds(content.duration) : undefined;
   const episodes = Array.isArray(content.episodes) ? content.episodes : [];
@@ -89,9 +96,9 @@ function toAdminContentItemDto(content: any): AdminContentItemDto {
     title: content.title,
     description: content.description ?? undefined,
     type: content.type,
-    thumbnailUrl: content.thumbnailUrl,
-    posterUrl: content.posterUrl ?? undefined,
-    bannerUrl: content.bannerUrl ?? undefined,
+    thumbnailUrl: resolveR2Url(content.thumbnailUrl, r2Service) ?? '',
+    posterUrl: resolveR2Url(content.posterUrl, r2Service),
+    bannerUrl: resolveR2Url(content.bannerUrl, r2Service),
     releaseYear: content.releaseYear,
     ageRating: content.ageRating,
     duration,
@@ -119,6 +126,7 @@ function toAdminContentItemDto(content: any): AdminContentItemDto {
           title: episode.title,
           duration: formatDurationSeconds(episode.duration),
           hlsReady: typeof episode.hlsUrl === 'string' && episode.hlsUrl.trim().length > 0,
+          thumbnailUrl: resolveR2Url(episode.thumbnailUrl, r2Service),
         }))
       : undefined,
     trailer: content.trailer
@@ -129,9 +137,9 @@ function toAdminContentItemDto(content: any): AdminContentItemDto {
             typeof content.trailer.duration === 'number'
               ? formatDurationSeconds(content.trailer.duration)
               : '',
-          thumbnailUrl: content.trailer.thumbnailUrl,
-          posterUrl: content.trailer.posterUrl ?? undefined,
-          bannerUrl: content.trailer.bannerUrl ?? undefined,
+          thumbnailUrl: resolveR2Url(content.trailer.thumbnailUrl, r2Service),
+          posterUrl: resolveR2Url(content.trailer.posterUrl, r2Service),
+          bannerUrl: resolveR2Url(content.trailer.bannerUrl, r2Service),
           episodeId: content.trailer.episodes?.[0]?.id,
           videoUrl: content.trailer.episodes?.[0]?.videoUrl,
           hlsUrl: content.trailer.episodes?.[0]?.hlsUrl ?? undefined,
@@ -193,6 +201,7 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly mailService: MailService,
+    private readonly r2Service: R2Service,
   ) {}
 
   async getDashboardStats(): Promise<DashboardStatsDto> {
@@ -602,7 +611,7 @@ export class AdminService {
     const visibleContentItems = contentItems.filter(
       (content: any) => content.type !== ContentType.TRAILER && !linkedTrailerIds.has(content.id),
     );
-    return visibleContentItems.map((content: any) => toAdminContentItemDto(content));
+    return visibleContentItems.map((content: any) => toAdminContentItemDto(content, this.r2Service));
   }
 
   async getSubscriptions(page = 1, limit = 20): Promise<AdminSubscriptionsResponseDto> {
@@ -676,7 +685,7 @@ export class AdminService {
       },
     });
     if (!content) return null;
-    return toAdminContentItemDto(content);
+    return toAdminContentItemDto(content, this.r2Service);
   }
 
   async getCategories(): Promise<AdminCategoryDto[]> {
@@ -808,7 +817,7 @@ export class AdminService {
 
       return next;
     });
-    return toAdminContentItemDto(updated);
+    return toAdminContentItemDto(updated, this.r2Service);
   }
 
   async deleteContent(id: string): Promise<void> {
@@ -914,18 +923,38 @@ export class AdminService {
       data.categoryId = await this.resolveCategoryId(dto.categoryId, dto.category);
     }
 
-    const updated = await (this.prisma as any).content.update({
-      where: { id },
-      data,
-      include: {
-        category: true,
-        seasons: { include: { _count: { select: { episodes: true } } } },
-        episodes: true,
-        trailer: { include: { episodes: true } },
-      },
+    const updated = await this.prisma.$transaction(async (tx: any) => {
+      const mainUpdated = await tx.content.update({
+        where: { id },
+        data,
+        include: {
+          category: true,
+          seasons: { include: { _count: { select: { episodes: true } } } },
+          episodes: true,
+          trailer: { include: { episodes: true } },
+        },
+      });
+
+      if (content.trailerId) {
+        const trailerData: any = {};
+        if (data.thumbnailUrl) trailerData.thumbnailUrl = data.thumbnailUrl;
+        if (data.posterUrl !== undefined) trailerData.posterUrl = data.posterUrl;
+        if (data.bannerUrl !== undefined) trailerData.bannerUrl = data.bannerUrl;
+        if (data.releaseYear !== undefined) trailerData.releaseYear = data.releaseYear;
+        if (data.ageRating !== undefined) trailerData.ageRating = data.ageRating;
+
+        if (Object.keys(trailerData).length > 0) {
+          await tx.content.update({
+            where: { id: content.trailerId },
+            data: trailerData,
+          });
+        }
+      }
+
+      return mainUpdated;
     });
 
-    return toAdminContentItemDto(updated);
+    return toAdminContentItemDto(updated, this.r2Service);
   }
 
   async createContent(dto: CreateAdminContentDto): Promise<AdminContentItemDto> {
@@ -997,7 +1026,7 @@ export class AdminService {
       include: { category: true, seasons: true, episodes: true },
     });
     if (!full) throw new BadRequestException('Failed to load created content');
-    return toAdminContentItemDto(full);
+    return toAdminContentItemDto(full, this.r2Service);
   }
 
   async createTrailer(
@@ -1057,7 +1086,7 @@ export class AdminService {
       where: { id: created.id },
       include: { category: true, seasons: true, episodes: true },
     });
-    return full ? toAdminContentItemDto(full) : null;
+    return full ? toAdminContentItemDto(full, this.r2Service) : null;
   }
 
   async createSeason(dto: CreateAdminSeasonDto) {
