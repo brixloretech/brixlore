@@ -175,7 +175,8 @@ export class ContentService {
         description: content.description ?? undefined,
         type: content.type,
         thumbnailUrl: await this.resolveThumbnailUrl(content.thumbnailUrl),
-        posterUrl: content.posterUrl ?? undefined,
+        posterUrl: await this.resolveThumbnailUrl(content.posterUrl) ?? undefined,
+        bannerUrl: await this.resolveThumbnailUrl(content.bannerUrl) ?? undefined,
         releaseYear: content.releaseYear,
         ageRating: content.ageRating,
         duration:
@@ -288,18 +289,21 @@ export class ContentService {
     type: ContentType;
     thumbnailUrl: string;
     posterUrl?: string | null;
+    bannerUrl?: string | null;
     releaseYear: number;
     ageRating: string;
     category?: { name: string } | null;
   }): Promise<ContentSummaryDto> {
     const thumbnailUrl = await this.resolveThumbnailUrl(content.thumbnailUrl);
     const posterUrl = await this.resolveThumbnailUrl(content.posterUrl ?? null);
+    const bannerUrl = await this.resolveThumbnailUrl(content.bannerUrl ?? null);
     return {
       id: content.id,
       title: content.title,
       type: content.type,
       thumbnailUrl,
       posterUrl,
+      bannerUrl,
       releaseYear: content.releaseYear,
       ageRating: content.ageRating,
       category: content.category?.name ?? undefined,
