@@ -25,6 +25,7 @@ export interface AdminContentAnalyticsDto {
   totalContent: number;
   publishedContent: number;
   unpublishedContent: number;
+  totalEpisodes: number;
   totalViews: number;
   viewsLast30Days: number;
   topEpisodes: TopEpisodeDto[];

@@ -69,13 +69,21 @@ export default function AdminContentAnalyticsPage() {
         </p>
       </header>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <div className="rounded-xl border border-neutral-700/50 bg-neutral-900/50 px-4 py-4">
           <p className="text-xs uppercase tracking-wide text-neutral-500">
             Total content
           </p>
           <p className="mt-2 text-2xl font-semibold text-white">
             {data.totalContent}
+          </p>
+        </div>
+        <div className="rounded-xl border border-neutral-700/50 bg-neutral-900/50 px-4 py-4">
+          <p className="text-xs uppercase tracking-wide text-neutral-500">
+            Total episodes
+          </p>
+          <p className="mt-2 text-2xl font-semibold text-white">
+            {data.totalEpisodes}
           </p>
         </div>
         <div className="rounded-xl border border-neutral-700/50 bg-neutral-900/50 px-4 py-4">

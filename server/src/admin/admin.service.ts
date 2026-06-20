@@ -1649,26 +1649,35 @@ export class AdminService {
       isPublished: true,
     };
 
-    const [totalContent, publishedContent, totalViews, viewsLast30Days, contentRows, topViews, categories] =
-      await Promise.all([
-        (this.prisma as any).content.count({ where: contentWhere }),
-        (this.prisma as any).content.count({ where: publishedWhere }),
-        this.prisma.viewHistory.count(),
-        this.prisma.viewHistory.count({ where: { watchedAt: { gte: last30Days } } }),
-        (this.prisma as any).content.findMany({
-          where: contentWhere,
-          select: { categoryId: true },
-        }),
-        (this.prisma as any).viewHistory.groupBy({
-          by: ['episodeId'],
-          _count: { episodeId: true },
-          orderBy: { _count: { episodeId: 'desc' } },
-          take: 5,
-        }),
-        this.prisma.category.findMany({
-          select: { id: true, name: true, parentId: true },
-        }),
-      ]);
+    const [
+      totalContent,
+      publishedContent,
+      totalEpisodes,
+      totalViews,
+      viewsLast30Days,
+      contentRows,
+      topViews,
+      categories,
+    ] = await Promise.all([
+      (this.prisma as any).content.count({ where: contentWhere }),
+      (this.prisma as any).content.count({ where: publishedWhere }),
+      (this.prisma as any).episode.count({ where: { content: contentWhere } }),
+      this.prisma.viewHistory.count(),
+      this.prisma.viewHistory.count({ where: { watchedAt: { gte: last30Days } } }),
+      (this.prisma as any).content.findMany({
+        where: contentWhere,
+        select: { categoryId: true },
+      }),
+      (this.prisma as any).viewHistory.groupBy({
+        by: ['episodeId'],
+        _count: { episodeId: true },
+        orderBy: { _count: { episodeId: 'desc' } },
+        take: 5,
+      }),
+      this.prisma.category.findMany({
+        select: { id: true, name: true, parentId: true },
+      }),
+    ]);
 
     const categoryMap = new Map<string, { id: string; name: string; parentId: string | null }>();
     for (const cat of categories) {
@@ -1720,6 +1729,7 @@ export class AdminService {
       totalContent,
       publishedContent,
       unpublishedContent: Math.max(0, totalContent - publishedContent),
+      totalEpisodes,
       totalViews,
       viewsLast30Days,
       topEpisodes,
@@ -1776,11 +1786,24 @@ export class AdminService {
   async getSystemHealth(): Promise<AdminSystemHealthDto> {
     const checkedAt = new Date().toISOString();
     try {
+      const trailerLinkedRows = await (this.prisma as any).content.findMany({
+        where: { trailerId: { not: null } },
+        select: { trailerId: true },
+      });
+      const linkedTrailerIds = trailerLinkedRows
+        .map((row: any) => row.trailerId)
+        .filter((id: any): id is string => typeof id === 'string' && id.length > 0);
+
+      const contentWhere = {
+        type: { not: 'TRAILER' },
+        ...(linkedTrailerIds.length > 0 ? { id: { notIn: linkedTrailerIds } } : {}),
+      };
+
       const [users, content, episodes, subscriptions, downloads] = await Promise.all([
         this.prisma.user.count(),
-        (this.prisma as any).content.count(),
-        (this.prisma as any).episode.count(),
-        this.prisma.subscription.count(),
+        (this.prisma as any).content.count({ where: contentWhere }),
+        (this.prisma as any).episode.count({ where: { content: contentWhere } }),
+        this.prisma.subscription.count({ where: { status: 'ACTIVE' } }),
         this.prisma.download.count(),
       ]);
       return {
