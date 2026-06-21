@@ -429,7 +429,7 @@ export function AdOverlay({
         onPress={handleVideoTap}
       />
 
-      {/* Top bar: "Ad" badge + optional "Learn More" CTA */}
+      {/* Top bar: "Ad" badge */}
       <View style={styles.topBar}>
         <View style={styles.adBadge}>
           <Text style={styles.adBadgeText}>Ad</Text>
@@ -441,6 +441,18 @@ export function AdOverlay({
         style={[styles.controlsLayer, { opacity: controlsOpacity }]}
         pointerEvents={showControls ? 'box-none' : 'none'}
       >
+        {/* Center Play/Pause Button */}
+        <Pressable
+          style={styles.centerPlayButton}
+          onPress={handleAdPlayPause}
+        >
+          <Ionicons
+            name={adIsPlaying ? 'pause' : 'play'}
+            size={48}
+            color="#ffffff"
+          />
+        </Pressable>
+
         {/* Ad clip progress bar — thin track above the bottom controls */}
         <View style={styles.adProgressTrack}>
           <View style={[styles.adProgressFill, { width: `${adProgress}%` as any }]} />
@@ -546,6 +558,18 @@ const styles = StyleSheet.create({
   controlsLayer: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 4,
+  },
+  centerPlayButton: {
+    alignSelf: 'center',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: [{ translateX: -40 }, { translateY: -40 }],
   },
   tapCatcher: {
     ...StyleSheet.absoluteFillObject,

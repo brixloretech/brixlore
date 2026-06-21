@@ -162,7 +162,7 @@ export default function WatchScreen() {
   const watchedEpisodeIdRef = useRef<string | null>(null);
   const [savedProgress, setSavedProgress] = useState<number>(0);
   // expo-video player — source is loaded imperatively via player.replace()
-  const player = useVideoPlayer(null, () => {});
+  const player = useVideoPlayer(null, () => { });
   const playerMountedRef = useRef(true);
   // savedProgress ref so event listener callbacks always read the current value
   const savedProgressRef = useRef(0);
@@ -360,7 +360,7 @@ export default function WatchScreen() {
     useCallback(() => {
       return () => {
         safePlayerCall(() => player.pause(), "screenBlurPause");
-        stopAudio().catch(() => {});
+        stopAudio().catch(() => { });
       };
     }, [player, safePlayerCall]),
   );
@@ -1761,7 +1761,6 @@ export default function WatchScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={themeColors.accent} />
-          <Text style={styles.loadingText}>Loading video...</Text>
         </View>
       </SafeAreaView>
     );
@@ -2018,60 +2017,60 @@ export default function WatchScreen() {
                 fullscreen && styles.progressBarContainerFullscreen,
               ]}
             >
+              <View
+                ref={progressBarTouchAreaRef}
+                style={[
+                  styles.progressBarTouchArea,
+                  fullscreen && styles.progressBarTouchAreaFullscreen,
+                ]}
+                onLayout={(event) => {
+                  const width = event.nativeEvent.layout.width;
+                  progressBarWidthRef.current = width;
+                  setProgressBarWidth(width);
+                  requestAnimationFrame(updateProgressBarMetrics);
+                }}
+                onTouchStart={(event) =>
+                  handleProgressDragStart(
+                    event.nativeEvent.pageX,
+                    event.nativeEvent.locationX,
+                  )
+                }
+                onTouchMove={(event) =>
+                  handleProgressDragMove(
+                    event.nativeEvent.pageX,
+                    event.nativeEvent.locationX,
+                  )
+                }
+                onTouchEnd={handleProgressDragEnd}
+                onTouchCancel={handleProgressDragEnd}
+              >
                 <View
-                  ref={progressBarTouchAreaRef}
                   style={[
-                    styles.progressBarTouchArea,
-                    fullscreen && styles.progressBarTouchAreaFullscreen,
+                    styles.progressBar,
+                    fullscreen && styles.progressBarFullscreen,
                   ]}
-                  onLayout={(event) => {
-                    const width = event.nativeEvent.layout.width;
-                    progressBarWidthRef.current = width;
-                    setProgressBarWidth(width);
-                    requestAnimationFrame(updateProgressBarMetrics);
-                  }}
-                  onTouchStart={(event) =>
-                    handleProgressDragStart(
-                      event.nativeEvent.pageX,
-                      event.nativeEvent.locationX,
-                    )
-                  }
-                  onTouchMove={(event) =>
-                    handleProgressDragMove(
-                      event.nativeEvent.pageX,
-                      event.nativeEvent.locationX,
-                    )
-                  }
-                  onTouchEnd={handleProgressDragEnd}
-                  onTouchCancel={handleProgressDragEnd}
                 >
                   <View
                     style={[
-                      styles.progressBar,
-                      fullscreen && styles.progressBarFullscreen,
+                      styles.progressFill,
+                      {
+                        width: `${activeProgressPercent}%`,
+                      },
                     ]}
-                  >
+                  />
+                  {progressBarWidth > 0 && (
                     <View
                       style={[
-                        styles.progressFill,
+                        styles.seekThumb,
+                        styles.seekThumbFallback,
                         {
-                          width: `${activeProgressPercent}%`,
+                          left: (activeProgressPercent / 100) * progressBarWidth - 8,
                         },
                       ]}
                     />
-                    {progressBarWidth > 0 && (
-                      <View
-                        style={[
-                          styles.seekThumb,
-                          styles.seekThumbFallback,
-                          {
-                            left: (activeProgressPercent / 100) * progressBarWidth - 8,
-                          },
-                        ]}
-                      />
-                    )}
-                  </View>
+                  )}
                 </View>
+              </View>
             </View>
           </View>
         </Animated.View>
@@ -2527,10 +2526,10 @@ export default function WatchScreen() {
                             : {}),
                           ...(currentTimeRef.current > 0
                             ? {
-                                returnToResumeAt: String(
-                                  Math.floor(currentTimeRef.current),
-                                ),
-                              }
+                              returnToResumeAt: String(
+                                Math.floor(currentTimeRef.current),
+                              ),
+                            }
                             : {}),
                           fromGuestPreview: "1",
                         },
@@ -2552,10 +2551,10 @@ export default function WatchScreen() {
                             : {}),
                           ...(currentTimeRef.current > 0
                             ? {
-                                returnToResumeAt: String(
-                                  Math.floor(currentTimeRef.current),
-                                ),
-                              }
+                              returnToResumeAt: String(
+                                Math.floor(currentTimeRef.current),
+                              ),
+                            }
                             : {}),
                           fromGuestPreview: "1",
                         },
@@ -2665,11 +2664,82 @@ export default function WatchScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Bottom Navigation Bar */}
+      {!isFullscreen && (
+        <View style={[styles.tabBarContainer, { paddingBottom: Math.max(4, insets.bottom), height: 60 + Math.max(0, insets.bottom) }]}>
+          <Pressable
+            style={styles.tabBarItem}
+            onPress={() => {
+              safePlayerCall(() => player.pause(), "navHomePause");
+              stopAudio().catch(() => {});
+              router.replace("/(tabs)");
+            }}
+          >
+            <Ionicons name="home" size={22} color={themeColors.textSecondary} />
+            <Text style={styles.tabBarLabel}>Home</Text>
+          </Pressable>
+          <Pressable
+            style={styles.tabBarItem}
+            onPress={() => {
+              safePlayerCall(() => player.pause(), "navExplorePause");
+              stopAudio().catch(() => {});
+              router.replace("/(tabs)/explore");
+            }}
+          >
+            <Ionicons name="search" size={22} color={themeColors.textSecondary} />
+            <Text style={styles.tabBarLabel}>Explore</Text>
+          </Pressable>
+          <Pressable
+            style={styles.tabBarItem}
+            onPress={() => {
+              safePlayerCall(() => player.pause(), "navMyListPause");
+              stopAudio().catch(() => {});
+              router.replace("/(tabs)/my-list");
+            }}
+          >
+            <Ionicons name="bookmark" size={22} color={themeColors.textSecondary} />
+            <Text style={styles.tabBarLabel}>My List</Text>
+          </Pressable>
+          <Pressable
+            style={styles.tabBarItem}
+            onPress={() => {
+              safePlayerCall(() => player.pause(), "navProfilePause");
+              stopAudio().catch(() => {});
+              router.replace("/(tabs)/profile");
+            }}
+          >
+            <Ionicons name="person" size={22} color={themeColors.textSecondary} />
+            <Text style={styles.tabBarLabel}>Profile</Text>
+          </Pressable>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: themeColors.background },
+  tabBarContainer: {
+    flexDirection: "row",
+    backgroundColor: "#0b0b0e",
+    borderTopColor: "rgba(255, 255, 255, 0.08)",
+    borderTopWidth: 1,
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingTop: 8,
+  },
+  tabBarItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+  },
+  tabBarLabel: {
+    color: themeColors.textSecondary,
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.2,
+    marginTop: 2,
+  },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: spacing.xl },
   loadingContainer: {

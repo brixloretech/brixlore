@@ -225,7 +225,6 @@ export default function MyListScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={themeColors.accent} />
-          <Text style={styles.loadingText}>Loading your list...</Text>
         </View>
       </SafeAreaView>
     );

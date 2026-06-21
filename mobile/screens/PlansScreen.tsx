@@ -188,7 +188,6 @@ export default function PlansScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={themeColors.accent} />
-          <Text style={styles.loadingText}>Loading plans...</Text>
         </View>
       </SafeAreaView>
     );

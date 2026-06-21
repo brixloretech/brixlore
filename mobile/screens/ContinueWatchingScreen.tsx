@@ -157,7 +157,6 @@ export default function ContinueWatchingScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={themeColors.accent} />
-          <Text style={styles.loadingText}>Loading sessions...</Text>
         </View>
       </SafeAreaView>
     );

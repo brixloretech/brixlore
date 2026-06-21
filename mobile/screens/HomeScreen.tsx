@@ -269,7 +269,6 @@ export default function HomeScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={themeColors.accent} />
-          <Text style={styles.loadingText}>Loading home...</Text>
         </View>
       </SafeAreaView>
     );

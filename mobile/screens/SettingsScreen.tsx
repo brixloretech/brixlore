@@ -9,6 +9,7 @@ import {
   TextInput,
   Switch,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -290,7 +291,7 @@ export default function SettingsScreen() {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading settings...</Text>
+          <ActivityIndicator size="large" color={themeColors.accent} />
         </View>
       </SafeAreaView>
     );

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -505,7 +505,6 @@ export default function VideoPlayerScreen() {
         {isLoading && !error && (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={themeColors.accent} />
-            <Text style={styles.loadingText}>Loading video...</Text>
           </View>
         )}
 

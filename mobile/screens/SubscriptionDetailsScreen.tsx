@@ -120,7 +120,6 @@ export default function SubscriptionDetailsScreen() {
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={themeColors.accent} />
-          <Text style={styles.loadingText}>Loading subscription...</Text>
         </View>
       </SafeAreaView>
     );
