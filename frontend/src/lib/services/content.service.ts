@@ -21,7 +21,7 @@ function toSummaryFromVideo(v: Video | AdminVideo): ContentSummaryDto {
     title: v.title,
     thumbnailUrl: "thumbnailUrl" in v ? (v.thumbnailUrl ?? null) : null,
     posterUrl: null,
-    bannerUrl: "bannerUrl" in v ? ((v as any).bannerUrl ?? null) : null,
+    bannerUrl: "bannerUrl" in v ? ((v as Record<string, unknown>).bannerUrl as string ?? null) : null,
     type: "MOVIE",
     releaseYear: year,
     ageRating: "NR",
