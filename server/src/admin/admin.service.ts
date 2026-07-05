@@ -112,38 +112,38 @@ function toAdminContentItemDto(content: any, r2Service: R2Service): AdminContent
     updatedAt: content.updatedAt?.toISOString(),
     seasons: content.seasons
       ? content.seasons.map((season: any) => ({
-          id: season.id,
-          seasonNumber: season.seasonNumber,
-          title: season.title,
-          episodeCount: season._count?.episodes ?? 0,
-        }))
+        id: season.id,
+        seasonNumber: season.seasonNumber,
+        title: season.title,
+        episodeCount: season._count?.episodes ?? 0,
+      }))
       : undefined,
     episodes: content.episodes
       ? content.episodes.map((episode: any) => ({
-          id: episode.id,
-          seasonId: episode.seasonId ?? undefined,
-          episodeNumber: episode.episodeNumber,
-          title: episode.title,
-          duration: formatDurationSeconds(episode.duration),
-          hlsReady: typeof episode.hlsUrl === 'string' && episode.hlsUrl.trim().length > 0,
-          thumbnailUrl: resolveR2Url(episode.thumbnailUrl, r2Service),
-        }))
+        id: episode.id,
+        seasonId: episode.seasonId ?? undefined,
+        episodeNumber: episode.episodeNumber,
+        title: episode.title,
+        duration: formatDurationSeconds(episode.duration),
+        hlsReady: typeof episode.hlsUrl === 'string' && episode.hlsUrl.trim().length > 0,
+        thumbnailUrl: resolveR2Url(episode.thumbnailUrl, r2Service),
+      }))
       : undefined,
     trailer: content.trailer
       ? {
-          id: content.trailer.id,
-          title: content.trailer.title,
-          duration:
-            typeof content.trailer.duration === 'number'
-              ? formatDurationSeconds(content.trailer.duration)
-              : '',
-          thumbnailUrl: resolveR2Url(content.trailer.thumbnailUrl, r2Service),
-          posterUrl: resolveR2Url(content.trailer.posterUrl, r2Service),
-          bannerUrl: resolveR2Url(content.trailer.bannerUrl, r2Service),
-          episodeId: content.trailer.episodes?.[0]?.id,
-          videoUrl: content.trailer.episodes?.[0]?.videoUrl,
-          hlsUrl: content.trailer.episodes?.[0]?.hlsUrl ?? undefined,
-        }
+        id: content.trailer.id,
+        title: content.trailer.title,
+        duration:
+          typeof content.trailer.duration === 'number'
+            ? formatDurationSeconds(content.trailer.duration)
+            : '',
+        thumbnailUrl: resolveR2Url(content.trailer.thumbnailUrl, r2Service),
+        posterUrl: resolveR2Url(content.trailer.posterUrl, r2Service),
+        bannerUrl: resolveR2Url(content.trailer.bannerUrl, r2Service),
+        episodeId: content.trailer.episodes?.[0]?.id,
+        videoUrl: content.trailer.episodes?.[0]?.videoUrl,
+        hlsUrl: content.trailer.episodes?.[0]?.hlsUrl ?? undefined,
+      }
       : undefined,
   };
 }
@@ -202,7 +202,7 @@ export class AdminService {
     private readonly authService: AuthService,
     private readonly mailService: MailService,
     private readonly r2Service: R2Service,
-  ) {}
+  ) { }
 
   async getDashboardStats(): Promise<DashboardStatsDto> {
     const now = new Date();
@@ -1527,19 +1527,19 @@ export class AdminService {
     const makePopular = dto.isPopular === true;
     const plan = makePopular
       ? await this.prisma.$transaction(async (tx) => {
-          await (tx as any).plan.updateMany({
-            data: { isPopular: false },
-            where: { isPopular: true, id: { not: planId } },
-          });
-          return (tx as any).plan.update({
-            where: { id: planId },
-            data,
-          });
-        })
-      : await (this.prisma as any).plan.update({
+        await (tx as any).plan.updateMany({
+          data: { isPopular: false },
+          where: { isPopular: true, id: { not: planId } },
+        });
+        return (tx as any).plan.update({
           where: { id: planId },
           data,
         });
+      })
+      : await (this.prisma as any).plan.update({
+        where: { id: planId },
+        data,
+      });
 
     const now = new Date();
     const activeSubscribers = await this.prisma.subscription.count({
@@ -1931,12 +1931,12 @@ export class AdminService {
           userIdsWithThisPlan.length === 0
             ? 0
             : await db.download.count({
-                where: {
-                  userId: { in: userIdsWithThisPlan },
-                  status: { in: ['AUTHORIZED', 'DOWNLOADED'] },
-                  expiresAt: { gt: now },
-                },
-              });
+              where: {
+                userId: { in: userIdsWithThisPlan },
+                status: { in: ['AUTHORIZED', 'DOWNLOADED'] },
+                expiresAt: { gt: now },
+              },
+            });
 
         return {
           planId: plan.id,

@@ -1,4 +1,5 @@
 import { adminService } from "@/lib/services";
+import * as tus from "tus-js-client";
 
 export type VideoUploadStrategy = "cloudflare-stream";
 
@@ -58,32 +59,27 @@ export async function uploadVideoFileWithStrategy({
   onProgress?.(0, file.size);
   const directUpload = await adminService.createCloudflareDirectUpload();
   await new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", directUpload.uploadUrl);
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress?.(event.loaded, event.total || file.size);
-        return;
-      }
-      onProgress?.(Math.min(file.size, event.loaded), file.size);
-    };
-
-    xhr.onerror = () => {
-      reject(new Error("Cloudflare Stream upload failed"));
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
+    const upload = new tus.Upload(file, {
+      endpoint: directUpload.uploadUrl,
+      chunkSize: 50 * 1024 * 1024, // 50MB chunks
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      storeFingerprintForResuming: false,
+      metadata: {
+        filename: file.name,
+        filetype: file.type,
+      },
+      onError: (error) => {
+        reject(new Error(error.message || "Cloudflare Stream upload failed"));
+      },
+      onProgress: (bytesUploaded, bytesTotal) => {
+        onProgress?.(bytesUploaded, bytesTotal);
+      },
+      onSuccess: () => {
         resolve();
-        return;
-      }
-      reject(new Error(xhr.responseText || "Cloudflare Stream upload failed"));
-    };
+      },
+    });
 
-    const formData = new FormData();
-    formData.append("file", file, file.name);
-    xhr.send(formData);
+    upload.start();
   });
 
   onProgress?.(file.size, file.size);
