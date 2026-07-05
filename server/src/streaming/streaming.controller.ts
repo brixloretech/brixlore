@@ -19,6 +19,7 @@ import { PlayUrlResponseDto } from './dto/play-url-response.dto';
 import type { ContinueWatchingItemDto } from './dto/continue-watching-item.dto';
 import { UpdateProgressDto } from './dto/update-progress.dto';
 import type { CloudflareDirectUploadResponseDto } from './dto/cloudflare-direct-upload-response.dto';
+import { CreateCloudflareDirectUploadDto } from './dto/create-cloudflare-direct-upload.dto';
 
 function ensureAdminUploadAccess(user: User): void {
   const allowed = new Set(['admin', 'SUPER_ADMIN', 'CONTENT_MANAGER']);
@@ -46,9 +47,14 @@ export class StreamingController {
   @Post('cloudflare/direct-upload')
   async createCloudflareDirectUpload(
     @CurrentUser() user: User,
+    @Body() body: CreateCloudflareDirectUploadDto,
   ): Promise<CloudflareDirectUploadResponseDto> {
     ensureAdminUploadAccess(user);
-    return this.streamingService.createCloudflareDirectUploadUrl(user.id);
+    return this.streamingService.createCloudflareDirectUploadUrl(
+      user.id,
+      body.uploadLength,
+      body.filename,
+    );
   }
 
   /** Authenticated (admin): check Cloudflare Stream processing status for a UID. */

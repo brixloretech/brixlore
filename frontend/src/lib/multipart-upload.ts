@@ -57,10 +57,13 @@ export async function uploadVideoFileWithStrategy({
   }
 
   onProgress?.(0, file.size);
-  const directUpload = await adminService.createCloudflareDirectUpload();
+  const directUpload = await adminService.createCloudflareDirectUpload(
+    file.size,
+    file.name,
+  );
   await new Promise<void>((resolve, reject) => {
     const upload = new tus.Upload(file, {
-      endpoint: directUpload.uploadUrl,
+      uploadUrl: directUpload.uploadUrl,
       chunkSize: 50 * 1024 * 1024, // 50MB chunks
       retryDelays: [0, 3000, 5000, 10000, 20000],
       storeFingerprintForResuming: false,

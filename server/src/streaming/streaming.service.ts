@@ -56,40 +56,51 @@ export class StreamingService {
     };
   }
 
-  async createCloudflareDirectUploadUrl(createdByUserId?: string): Promise<{
+  async createCloudflareDirectUploadUrl(
+    createdByUserId: string | undefined,
+    uploadLength: number,
+    filename?: string,
+  ): Promise<{
     uploadUrl: string;
     uid: string;
   }> {
     const config = this.getCloudflareStreamConfig();
 
-    const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream/direct_upload`;
-    const payload = {
-      maxDurationSeconds: 60 * 60,
-      requireSignedURLs: false,
-      meta: {
-        source: 'brixlore',
-        ...(createdByUserId ? { createdByUserId } : {}),
-      },
-    };
+    const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream?direct_user=true`;
 
-    const response = await axios.post(endpoint, payload, {
+    const meta: string[] = [];
+    meta.push(`maxDurationSeconds ${Buffer.from('3600').toString('base64')}`);
+    meta.push(`source ${Buffer.from('brixlore').toString('base64')}`);
+    if (createdByUserId) {
+      meta.push(`createdByUserId ${Buffer.from(createdByUserId).toString('base64')}`);
+    }
+    if (filename) {
+      meta.push(`name ${Buffer.from(filename).toString('base64')}`);
+    }
+    const uploadMetadata = meta.join(',');
+
+    const response = await axios.post(endpoint, null, {
       headers: {
         Authorization: `Bearer ${config.apiToken}`,
-        'Content-Type': 'application/json',
+        'Tus-Resumable': '1.0.0',
+        'Upload-Length': uploadLength.toString(),
+        'Upload-Metadata': uploadMetadata,
       },
       timeout: 15_000,
     });
 
-    const result = response.data?.result as CloudflareDirectUploadResult | undefined;
-    if (!result?.uploadURL || !result?.uid) {
+    const uploadUrl = response.headers['location'];
+    const uid = response.headers['stream-media-id'];
+
+    if (!uploadUrl || !uid) {
       throw new InternalServerErrorException(
-        'Cloudflare Stream direct upload response is missing required fields',
+        'Cloudflare Stream direct upload response is missing required headers (Location or stream-media-id)',
       );
     }
 
     return {
-      uploadUrl: result.uploadURL,
-      uid: result.uid,
+      uploadUrl,
+      uid,
     };
   }
 

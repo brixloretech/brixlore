@@ -420,11 +420,14 @@ export const adminService = {
     );
   },
 
-  async createCloudflareDirectUpload(): Promise<CloudflareDirectUploadResponseDto> {
+  async createCloudflareDirectUpload(
+    uploadLength: number,
+    filename?: string,
+  ): Promise<CloudflareDirectUploadResponseDto> {
     return withAuthRetry((headers) =>
       post<CloudflareDirectUploadResponseDto>(
         "streaming/cloudflare/direct-upload",
-        {},
+        { uploadLength, filename },
         { headers },
       ),
     );
