@@ -69,7 +69,7 @@ export class StreamingService {
     const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream?direct_user=true`;
 
     const meta: string[] = [];
-    meta.push(`maxDurationSeconds ${Buffer.from('3600').toString('base64')}`);
+    meta.push(`maxDurationSeconds ${Buffer.from('86400').toString('base64')}`);
     meta.push(`source ${Buffer.from('brixlore').toString('base64')}`);
     if (createdByUserId) {
       meta.push(`createdByUserId ${Buffer.from(createdByUserId).toString('base64')}`);
