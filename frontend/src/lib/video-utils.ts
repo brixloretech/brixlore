@@ -79,3 +79,44 @@ export function formatDate(isoDate: string): string {
     return isoDate;
   }
 }
+
+/**
+ * Format total seconds to MM:SS or H:MM:SS.
+ */
+export function secondsToDuration(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = Math.round(totalSeconds % 60);
+
+  const mm = m.toString().padStart(2, "0");
+  const ss = s.toString().padStart(2, "0");
+
+  if (h > 0) {
+    return `${h}:${mm}:${ss}`;
+  }
+  return `${mm}:${ss}`;
+}
+
+/**
+ * Read the duration of a video file in seconds using HTML5 video metadata.
+ */
+export function getVideoDuration(file: File): Promise<number> {
+  return new Promise((resolve) => {
+    // Check if we are running in the browser
+    if (typeof window === "undefined" || !window.URL) {
+      resolve(0);
+      return;
+    }
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      window.URL.revokeObjectURL(video.src);
+      resolve(video.duration || 0);
+    };
+    video.onerror = () => {
+      resolve(0);
+    };
+    video.src = URL.createObjectURL(file);
+  });
+}
+

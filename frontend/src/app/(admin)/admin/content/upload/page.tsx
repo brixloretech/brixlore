@@ -20,6 +20,7 @@ import {
 } from "@/lib/multipart-upload";
 import { adminService } from "@/lib/services";
 import type { AdminCategoryDto, ContentType } from "@/types/api";
+import { getVideoDuration, secondsToDuration } from "@/lib/video-utils";
 import { useAdminContent, useAuth } from "@/contexts";
 
 const VIDEO_TYPES = ["video/mp4", "video/webm", "video/mkv"];
@@ -910,10 +911,14 @@ export default function AdminUploadPage() {
                     id="trailer-video-file"
                     type="file"
                     accept={VIDEO_TYPES.join(",")}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0] ?? null;
                       setTrailerVideoFile(file);
-                      if (file) setError(null);
+                      if (file) {
+                        setError(null);
+                        const dur = await getVideoDuration(file);
+                        if (dur > 0) setTrailerDuration(secondsToDuration(dur));
+                      }
                     }}
                     className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-200 file:px-3 file:py-1.5 file:text-sm file:text-neutral-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:file:bg-neutral-700 dark:file:text-neutral-100"
                   />
@@ -937,12 +942,20 @@ export default function AdminUploadPage() {
                   id="video-file"
                   type="file"
                   accept={VIDEO_TYPES.join(",")}
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0] ?? null;
                     if (canUploadEpisodeOnCreate) {
                       setEpisodeVideoFile(file);
+                      if (file) {
+                        const dur = await getVideoDuration(file);
+                        if (dur > 0) setEpisodeDuration(secondsToDuration(dur));
+                      }
                     } else {
                       setVideoFile(file);
+                      if (file) {
+                        const dur = await getVideoDuration(file);
+                        if (dur > 0) setDuration(secondsToDuration(dur));
+                      }
                     }
                     if (file) setError(null);
                   }}

@@ -21,6 +21,7 @@ import {
   uploadVideoFileWithStrategy,
 } from "@/lib/multipart-upload";
 import type { AdminCategoryDto, ContentType } from "@/types/api";
+import { getVideoDuration, secondsToDuration } from "@/lib/video-utils";
 
 const VIDEO_TYPES = ["video/mp4", "video/webm", "video/mkv"];
 const MAX_VIDEO_BYTES = 20 * 1024 * 1024 * 1024;
@@ -983,8 +984,15 @@ export default function AdminEditVideoPage() {
                     <input
                       type="file"
                       accept={VIDEO_TYPES.join(",")}
-                      onChange={(e) => setMovieVideoFile(e.target.files?.[0] ?? null)}
-                      className="w-full rounded-lg border border-neutral-600 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-700 file:px-3 file:py-1.5 file:text-sm file:text-neutral-100"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        setMovieVideoFile(file);
+                        if (file) {
+                          const dur = await getVideoDuration(file);
+                          if (dur > 0) setDuration(secondsToDuration(dur));
+                        }
+                      }}
+                      className="w-full rounded-lg border border-neutral-600 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-700 file:px-3 file:py-1.5 file:text-sm text-neutral-100"
                       disabled={isReadOnly || saving}
                     />
                     {movieVideoProgress && (
@@ -1240,7 +1248,14 @@ export default function AdminEditVideoPage() {
                 <input
                   type="file"
                   accept={VIDEO_TYPES.join(",")}
-                  onChange={(e) => setTrailerVideoFile(e.target.files?.[0] ?? null)}
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setTrailerVideoFile(file);
+                    if (file) {
+                      const dur = await getVideoDuration(file);
+                      if (dur > 0) setTrailerDuration(secondsToDuration(dur));
+                    }
+                  }}
                   className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-200 file:px-3 file:py-1.5 file:text-sm file:text-neutral-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:file:bg-neutral-700 dark:file:text-neutral-100"
                   disabled={isReadOnly || saving}
                 />
@@ -1426,9 +1441,14 @@ export default function AdminEditVideoPage() {
                     id="episode-file"
                     type="file"
                     accept={VIDEO_TYPES.join(",")}
-                    onChange={(e) =>
-                      setEpisodeFile(e.target.files?.[0] ?? null)
-                    }
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setEpisodeFile(file);
+                      if (file) {
+                        const dur = await getVideoDuration(file);
+                        if (dur > 0) setEpisodeDuration(secondsToDuration(dur));
+                      }
+                    }}
                     className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-200 file:px-3 file:py-1.5 file:text-sm file:text-neutral-900 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:file:bg-neutral-700 dark:file:text-neutral-100"
                     disabled={isReadOnly || episodeSubmitting}
                   />
@@ -1854,7 +1874,14 @@ export default function AdminEditVideoPage() {
                   <input
                     type="file"
                     accept={VIDEO_TYPES.join(",")}
-                    onChange={(e) => setEditEpisodeFile(e.target.files?.[0] ?? null)}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      setEditEpisodeFile(file);
+                      if (file) {
+                        const dur = await getVideoDuration(file);
+                        if (dur > 0) setEditEpisodeDuration(secondsToDuration(dur));
+                      }
+                    }}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-neutral-100 file:mr-3 file:rounded-md file:border-0 file:bg-neutral-700 file:px-3 file:py-1.5 file:text-sm file:text-neutral-100"
                   />
                   {editEpisodeVideoProgress && (
