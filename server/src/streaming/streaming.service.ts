@@ -69,7 +69,7 @@ export class StreamingService {
     const endpoint = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/stream?direct_user=true`;
 
     const meta: string[] = [];
-    meta.push(`maxDurationSeconds ${Buffer.from('86400').toString('base64')}`);
+    meta.push(`maxDurationSeconds ${Buffer.from('36000').toString('base64')}`);
     meta.push(`source ${Buffer.from('brixlore').toString('base64')}`);
     if (createdByUserId) {
       meta.push(`createdByUserId ${Buffer.from(createdByUserId).toString('base64')}`);
@@ -79,29 +79,42 @@ export class StreamingService {
     }
     const uploadMetadata = meta.join(',');
 
-    const response = await axios.post(endpoint, null, {
-      headers: {
-        Authorization: `Bearer ${config.apiToken}`,
-        'Tus-Resumable': '1.0.0',
-        'Upload-Length': uploadLength.toString(),
-        'Upload-Metadata': uploadMetadata,
-      },
-      timeout: 15_000,
-    });
+    try {
+      const response = await axios.post(endpoint, null, {
+        headers: {
+          Authorization: `Bearer ${config.apiToken}`,
+          'Tus-Resumable': '1.0.0',
+          'Upload-Length': uploadLength.toString(),
+          'Upload-Metadata': uploadMetadata,
+        },
+        timeout: 15_000,
+      });
 
-    const uploadUrl = response.headers['location'];
-    const uid = response.headers['stream-media-id'];
+      const uploadUrl = response.headers['location'];
+      const uid = response.headers['stream-media-id'];
 
-    if (!uploadUrl || !uid) {
-      throw new InternalServerErrorException(
-        'Cloudflare Stream direct upload response is missing required headers (Location or stream-media-id)',
-      );
+      if (!uploadUrl || !uid) {
+        throw new InternalServerErrorException(
+          'Cloudflare Stream direct upload response is missing required headers (Location or stream-media-id)',
+        );
+      }
+
+      return {
+        uploadUrl,
+        uid,
+      };
+    } catch (error: any) {
+      if (error.response) {
+        console.error('Cloudflare Stream direct-upload init failed:', {
+          status: error.response.status,
+          data: error.response.data,
+        });
+        throw new InternalServerErrorException(
+          `Cloudflare Stream direct-upload init failed: ${JSON.stringify(error.response.data)}`,
+        );
+      }
+      throw error;
     }
-
-    return {
-      uploadUrl,
-      uid,
-    };
   }
 
   /** Create or refresh view history when user starts an episode (upsert by user+episode). */
