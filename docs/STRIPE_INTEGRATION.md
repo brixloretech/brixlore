@@ -108,6 +108,21 @@ The webhook endpoint (`POST /subscriptions/webhook`) verifies signature authenti
 
 ---
 
+## 📱 Mobile Subscription Management (Stripe Users)
+
+The React Native / Expo mobile application provides integrated support for self-service subscription management for users who have subscribed via Stripe:
+
+- Subscription Details and Cancellation:
+  - Users with active Stripe subscriptions (where stripeSubscriptionId is not null) can cancel their subscriptions directly from the mobile app subscription details screen.
+  - A confirmation dialog displays the remaining period end date before confirming cancellation.
+  - Cancelled subscriptions display a warning banner indicating they are scheduled to cancel on their expiration date.
+- In-App Upgrades and Downgrades:
+  - Users with active Stripe subscriptions can change their plans or billing cycles directly from the plans screen.
+  - The plans screen dynamically shows 'Change Plan' on billing buttons for active Stripe users instead of 'Subscribe Now'.
+  - Confirming the plan change updates Stripe with proration and immediately refreshes the active client subscription state.
+
+---
+
 ## 🔒 User Subscriptions Management Summary
 
 | Action | Managed By | Backend Processing / DB Impacts |

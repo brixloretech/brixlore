@@ -229,7 +229,14 @@ export default function AdminSupportPage() {
 
                 {isOpen ? (
                   <div className="mt-6 space-y-5 border-t border-neutral-800 pt-5">
-                    <p className="text-sm text-neutral-300">{req.message}</p>
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">
+                        Customer Message
+                      </p>
+                      <p className="mt-2 text-sm text-neutral-350 bg-neutral-950/50 border border-neutral-800/80 rounded-xl p-4 whitespace-pre-wrap">
+                        {req.message}
+                      </p>
+                    </div>
 
                     <div className="grid gap-4 sm:grid-cols-3">
                       <div>
