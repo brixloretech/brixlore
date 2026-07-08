@@ -19,6 +19,9 @@ export type SubscriptionMeResponseDto = {
   planId?: string | null;
   currentPeriodEnd?: string | null;
   createdAt?: string | null;
+  status?: string;
+  billingCycle?: string;
+  stripeSubscriptionId?: string | null;
 };
 
 export interface BillingSummaryDto {
@@ -69,6 +72,22 @@ class SubscriptionService {
       },
     );
     return response.data ?? null;
+  }
+
+  async cancelSubscription(): Promise<unknown> {
+    const response = await api.post("/subscriptions/cancel");
+    return response.data;
+  }
+
+  async updatePlan(
+    planId: string,
+    billingCycle: "MONTHLY" | "YEARLY",
+  ): Promise<unknown> {
+    const response = await api.post("/subscriptions/update-plan", {
+      planId,
+      billingCycle,
+    });
+    return response.data;
   }
 }
 

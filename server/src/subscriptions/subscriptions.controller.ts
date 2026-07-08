@@ -74,6 +74,7 @@ export class SubscriptionsController {
       billingCycle,
       currentPeriodEnd: sub.endDate.toISOString(),
       createdAt: sub.createdAt.toISOString(),
+      stripeSubscriptionId: sub.stripeSubscriptionId,
     };
   }
 

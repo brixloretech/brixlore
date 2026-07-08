@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Linking,
   Pressable,
@@ -36,6 +37,7 @@ export default function SubscriptionDetailsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const [portalError, setPortalError] = useState<string | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   const loadSubscriptionData = useCallback(async () => {
     if (!isAuthenticated) {
@@ -115,6 +117,36 @@ export default function SubscriptionDetailsScreen() {
     return `${symbol}${(amount / 100).toFixed(2)}`;
   };
 
+  const handleCancelSubscription = async () => {
+    Alert.alert(
+      "Cancel Subscription",
+      `Are you sure you want to cancel your subscription? You will continue to have access to your subscription benefits until ${nextChargeLabel()}, at which point your plan will end and offline downloads will be revoked.`,
+      [
+        { text: "Keep Plan", style: "cancel" },
+        {
+          text: "Cancel Subscription",
+          style: "destructive",
+          onPress: async () => {
+            setIsCancelling(true);
+            try {
+              await subscriptionService.cancelSubscription();
+              Alert.alert(
+                "Subscription Cancelled",
+                "Your subscription cancellation has been scheduled successfully."
+              );
+              await loadSubscriptionData();
+            } catch (err: any) {
+              const msg = err?.response?.data?.message || err?.message || "Failed to cancel subscription.";
+              Alert.alert("Error", msg);
+            } finally {
+              setIsCancelling(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (isLoading && !isRefreshing) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
@@ -175,6 +207,15 @@ export default function SubscriptionDetailsScreen() {
             </View>
           </View>
 
+          {subscription?.status === "CANCELLED" && (
+            <View style={styles.cancelledBadgeBox}>
+              <Ionicons name="warning-outline" size={16} color="#FFA500" />
+              <Text style={styles.cancelledBadgeText}>
+                Scheduled to cancel on {nextChargeLabel()}
+              </Text>
+            </View>
+          )}
+
           <View style={styles.cardActions}>
             <Pressable
               style={styles.managePlanButton}
@@ -182,6 +223,18 @@ export default function SubscriptionDetailsScreen() {
             >
               <Text style={styles.managePlanText}>Manage plan</Text>
             </Pressable>
+
+            {isSubscribed && !!subscription?.stripeSubscriptionId && subscription?.status !== "CANCELLED" && (
+              <Pressable
+                style={[styles.cancelSubscriptionButton, isCancelling && styles.disabledButton]}
+                onPress={handleCancelSubscription}
+                disabled={isCancelling}
+              >
+                <Text style={styles.cancelSubscriptionText}>
+                  {isCancelling ? "Cancelling..." : "Cancel subscription"}
+                </Text>
+              </Pressable>
+            )}
           </View>
         </View>
 
@@ -531,5 +584,34 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  cancelSubscriptionButton: {
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: themeColors.error,
+    borderRadius: borderRadius.md,
+    paddingVertical: spacing.sm,
+    alignItems: "center",
+  },
+  cancelSubscriptionText: {
+    ...typography.body,
+    fontSize: 14,
+    fontWeight: "600",
+    color: themeColors.error,
+  },
+  cancelledBadgeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    backgroundColor: "rgba(255, 165, 0, 0.1)",
+    borderRadius: borderRadius.md,
+    padding: spacing.sm,
+    marginTop: spacing.md,
+  },
+  cancelledBadgeText: {
+    ...typography.caption,
+    color: "#FFA500",
+    fontWeight: "600",
+    fontSize: 12,
   },
 });

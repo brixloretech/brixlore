@@ -9,4 +9,5 @@ export class SubscriptionMeResponseDto {
   billingCycle?: string;
   currentPeriodEnd?: string;
   createdAt?: string;
+  stripeSubscriptionId?: string | null;
 }

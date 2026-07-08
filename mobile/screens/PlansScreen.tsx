@@ -148,6 +148,41 @@ export default function PlansScreen() {
   };
 
   const handleUpgrade = async (plan: PublicPlanDto) => {
+    // If the user has an active Stripe subscription, perform Stripe in-app update
+    if (subscription?.isSubscribed && subscription?.stripeSubscriptionId) {
+      Alert.alert(
+        "Change Subscription Plan",
+        "Your Stripe account will be updated immediately. Prorated charges or credits will be automatically calculated and applied.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Confirm Change",
+            onPress: async () => {
+              setProcessingPlanId(plan.id);
+              setError(null);
+              try {
+                await subscriptionService.updatePlan(plan.id, billingCycle);
+                await fetchSubscription();
+                Alert.alert(
+                  "Plan Updated",
+                  `Your subscription has been successfully updated to ${plan.name} (${billingCycle.toLowerCase()}).`
+                );
+              } catch (err: any) {
+                const message =
+                  err?.response?.data?.message ||
+                  err?.message ||
+                  "Failed to update subscription plan.";
+                Alert.alert("Error", message);
+              } finally {
+                setProcessingPlanId(null);
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
     if (Platform.OS === "android") {
       if (!playBillingService.isAvailable()) {
         setError(playBillingService.getSetupErrorMessage());
@@ -402,7 +437,9 @@ export default function PlansScreen() {
                             ? "Sign Up Free"
                             : isCurrentPlan
                               ? "Current Plan"
-                              : "Subscribe Now"}
+                              : (subscription?.isSubscribed && subscription?.stripeSubscriptionId)
+                                ? "Change Plan"
+                                : "Subscribe Now"}
                         </Text>
                       )}
                     </Pressable>
