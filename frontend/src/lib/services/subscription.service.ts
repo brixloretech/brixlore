@@ -294,4 +294,84 @@ export const subscriptionService = {
   getSubscribed(): boolean {
     return getMockSubscription();
   },
+
+  async cancelSubscription(): Promise<unknown> {
+    if (USE_MOCK_API) {
+      setMockSubscription(false);
+      clearSubscriptionCache();
+      return { status: "cancelled" };
+    }
+    const auth = getStoredAuth();
+    if (!auth?.accessToken) {
+      throw new Error("Not authenticated");
+    }
+    try {
+      const res = await post<unknown>(
+        "subscriptions/cancel",
+        {},
+        {
+          headers: { Authorization: `Bearer ${auth.accessToken}` },
+        },
+      );
+      clearSubscriptionCache();
+      return res;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        await authService.getSession().catch(() => null);
+        const refreshed = getStoredAuth();
+        if (refreshed?.accessToken) {
+          const res = await post<unknown>(
+            "subscriptions/cancel",
+            {},
+            {
+              headers: { Authorization: `Bearer ${refreshed.accessToken}` },
+            },
+          );
+          clearSubscriptionCache();
+          return res;
+        }
+      }
+      throw err;
+    }
+  },
+
+  async updatePlan(planId: string, billingCycle: "MONTHLY" | "YEARLY"): Promise<unknown> {
+    if (USE_MOCK_API) {
+      clearSubscriptionCache();
+      return { status: "updated" };
+    }
+    const auth = getStoredAuth();
+    if (!auth?.accessToken) {
+      throw new Error("Not authenticated");
+    }
+    const payload = { planId, billingCycle };
+    try {
+      const res = await post<unknown>(
+        "subscriptions/update-plan",
+        payload,
+        {
+          headers: { Authorization: `Bearer ${auth.accessToken}` },
+        },
+      );
+      clearSubscriptionCache();
+      return res;
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) {
+        await authService.getSession().catch(() => null);
+        const refreshed = getStoredAuth();
+        if (refreshed?.accessToken) {
+          const res = await post<unknown>(
+            "subscriptions/update-plan",
+            payload,
+            {
+              headers: { Authorization: `Bearer ${refreshed.accessToken}` },
+            },
+          );
+          clearSubscriptionCache();
+          return res;
+        }
+      }
+      throw err;
+    }
+  },
 };

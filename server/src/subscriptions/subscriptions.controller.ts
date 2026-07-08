@@ -11,6 +11,7 @@ import { PlanResponseDto } from './dto/plan-response.dto';
 import { BillingSummaryDto } from './dto/billing-summary.dto';
 import { SubscriptionMeResponseDto } from './dto/subscription-me-response.dto';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
+import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 
 @Controller('subscriptions')
 export class SubscriptionsController {
@@ -51,10 +52,26 @@ export class SubscriptionsController {
     if (!sub) {
       return { isSubscribed: false };
     }
+
+    let billingCycle = 'MONTHLY';
+    if (sub.stripeSubscriptionId) {
+      try {
+        const stripeSub = await this.stripeService.retrieveStripeSubscription(sub.stripeSubscriptionId);
+        const priceId = stripeSub.items.data[0]?.price?.id;
+        if (priceId && priceId === sub.plan.yearlyStripePriceId) {
+          billingCycle = 'YEARLY';
+        }
+      } catch (e) {
+        // Fallback to monthly if retrieve fails
+      }
+    }
+
     const isPaid = Number(sub.plan.price) > 0;
     return {
       isSubscribed: isPaid,
       planId: sub.plan.id,
+      status: sub.status,
+      billingCycle,
       currentPeriodEnd: sub.endDate.toISOString(),
       createdAt: sub.createdAt.toISOString(),
     };
@@ -150,5 +167,28 @@ export class SubscriptionsController {
       throw new BadRequestException('Missing stripe-signature header');
     }
     await this.stripeService.handleWebhookEvent(rawBody, signature);
+  }
+
+  /**
+   * Authenticated: cancel active subscription at the end of current period.
+   */
+  @Post('cancel')
+  async cancelSubscription(@CurrentUser() user: User) {
+    return this.stripeService.cancelSubscriptionAtPeriodEnd(user.id);
+  }
+
+  /**
+   * Authenticated: upgrade/downgrade subscription plan.
+   */
+  @Post('update-plan')
+  async updateSubscription(
+    @CurrentUser() user: User,
+    @Body() dto: UpdateSubscriptionPlanDto,
+  ) {
+    return this.stripeService.updateSubscriptionPlan(
+      user.id,
+      dto.planId,
+      dto.billingCycle,
+    );
   }
 }

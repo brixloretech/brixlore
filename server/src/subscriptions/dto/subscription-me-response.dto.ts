@@ -5,6 +5,8 @@
 export class SubscriptionMeResponseDto {
   isSubscribed: boolean;
   planId?: string;
+  status?: string;
+  billingCycle?: string;
   currentPeriodEnd?: string;
   createdAt?: string;
 }

@@ -4,12 +4,14 @@
  */
 
 /** Subscription plan identifier. */
-export type PlanId = "free" | "monthly" | "yearly";
+export type PlanId = "free" | "monthly" | "yearly" | string;
 
 /** Subscription status as returned by the API. */
 export interface SubscriptionStatusDto {
   isSubscribed: boolean;
   planId?: PlanId;
+  status?: string;
+  billingCycle?: string;
   /** ISO date string; when the current period ends. */
   currentPeriodEnd?: string;
   /** ISO date string; when the subscription was created. */

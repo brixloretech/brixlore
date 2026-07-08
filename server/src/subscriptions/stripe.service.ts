@@ -513,6 +513,11 @@ export class StripeService {
     await stripe.subscriptions.cancel(subscriptionId);
   }
 
+  async retrieveStripeSubscription(subscriptionId: string): Promise<Stripe.Subscription> {
+    const stripe = this.getStripe();
+    return stripe.subscriptions.retrieve(subscriptionId);
+  }
+
   /**
    * Manually sync all active Stripe subscriptions for a user to the DB.
    * Used when webhooks aren't reachable (e.g. localhost dev).
@@ -915,14 +920,31 @@ export class StripeService {
   }> {
     const stripeSubId = stripeSubscription.id;
     const userId = stripeSubscription.metadata?.userId as string | undefined;
-    const planId = stripeSubscription.metadata?.planId as string | undefined;
 
-    if (!userId || !planId) {
-      throw new BadRequestException('Stripe subscription missing metadata userId/planId');
+    if (!userId) {
+      throw new BadRequestException('Stripe subscription missing metadata userId');
     }
 
-    const plan = await (this.prisma as any).plan.findUnique({ where: { id: planId } });
-    if (!plan) throw new BadRequestException('Plan not found');
+    const priceId = stripeSubscription.items?.data?.[0]?.price?.id;
+    let plan = null;
+    if (priceId) {
+      plan = await (this.prisma as any).plan.findFirst({
+        where: {
+          OR: [{ stripePriceId: priceId }, { yearlyStripePriceId: priceId }],
+        },
+      });
+    }
+
+    const planId = stripeSubscription.metadata?.planId as string | undefined;
+    if (!plan && planId) {
+      plan = await (this.prisma as any).plan.findUnique({ where: { id: planId } });
+    }
+
+    if (!plan) {
+      throw new BadRequestException('Stripe subscription missing or invalid plan configuration');
+    }
+
+    const resolvedPlanId = plan.id;
 
     const resolvedPeriod = this.computePeriodFromStripeSubscription(
       stripeSubscription,
@@ -949,7 +971,7 @@ export class StripeService {
       await (this.prisma as any).subscription.update({
         where: { id: existing.id },
         // Keep DB ownership/plan aligned with Stripe metadata on every sync.
-        data: { userId, planId, status, startDate, endDate },
+        data: { userId, planId: resolvedPlanId, status, startDate, endDate },
       });
       if (wasActive && !isActive) {
         await this.revokeOfflineAccess(userId);
@@ -982,7 +1004,7 @@ export class StripeService {
     const created = await (this.prisma as any).subscription.create({
       data: {
         userId,
-        planId,
+        planId: resolvedPlanId,
         stripeSubscriptionId: stripeSubId,
         status,
         startDate,
@@ -1061,5 +1083,85 @@ export class StripeService {
         // Ignore other events
         break;
     }
+  }
+
+  /**
+   * Update active subscription to a new plan or billing cycle.
+   */
+  async updateSubscriptionPlan(
+    userId: string,
+    planId: string,
+    billingCycle: 'MONTHLY' | 'YEARLY',
+  ): Promise<any> {
+    const user = await (this.prisma as any).user.findUnique({
+      where: { id: userId },
+      select: { stripeCustomerId: true },
+    });
+    if (!user || !user.stripeCustomerId) {
+      throw new BadRequestException('No billing account found for this user.');
+    }
+
+    const plan = await (this.prisma as any).plan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('Plan not found');
+
+    let priceId = billingCycle === 'YEARLY' ? plan.yearlyStripePriceId : plan.stripePriceId;
+    if (!priceId) {
+      console.log(`[Stripe Self-Healing] No price ID found for plan "${plan.name}" during update. Registering...`);
+      priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
+    }
+
+    const dbSub = await (this.prisma as any).subscription.findFirst({
+      where: { userId, status: { in: ['ACTIVE', 'CANCELLED'] } },
+      orderBy: { endDate: 'desc' },
+    });
+    if (!dbSub || !dbSub.stripeSubscriptionId) {
+      throw new BadRequestException('No active subscription found to update.');
+    }
+
+    const stripe = this.getStripe();
+    const stripeSub = await stripe.subscriptions.retrieve(dbSub.stripeSubscriptionId);
+    const subscriptionItemId = stripeSub.items.data[0]?.id;
+    if (!subscriptionItemId) {
+      throw new BadRequestException('Stripe subscription items are invalid.');
+    }
+
+    const updatedSub = await stripe.subscriptions.update(dbSub.stripeSubscriptionId, {
+      cancel_at_period_end: false,
+      items: [
+        {
+          id: subscriptionItemId,
+          price: priceId,
+        },
+      ],
+      proration_behavior: 'create_prorations',
+      metadata: {
+        userId,
+        planId,
+        billingCycle,
+      },
+    });
+
+    await this.syncSubscriptionFromStripe(updatedSub);
+    return updatedSub;
+  }
+
+  /**
+   * Cancel subscription at period end.
+   */
+  async cancelSubscriptionAtPeriodEnd(userId: string): Promise<any> {
+    const dbSub = await (this.prisma as any).subscription.findFirst({
+      where: { userId, status: 'ACTIVE' },
+    });
+    if (!dbSub || !dbSub.stripeSubscriptionId) {
+      throw new BadRequestException('No active subscription found to cancel.');
+    }
+
+    const stripe = this.getStripe();
+    const updatedSub = await stripe.subscriptions.update(dbSub.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    await this.syncSubscriptionFromStripe(updatedSub);
+    return updatedSub;
   }
 }

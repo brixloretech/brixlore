@@ -38,7 +38,7 @@ export class SubscriptionsService {
     return this.prisma.subscription.findFirst({
       where: {
         userId,
-        status: 'ACTIVE',
+        status: { in: ['ACTIVE', 'CANCELLED'] },
         endDate: { gte: now },
       },
       include: { plan: true },

@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
-import type { PublicPlanDto } from "@/types/api";
+import type { PublicPlanDto, SubscriptionStatusDto } from "@/types/api";
 import { PlanActionButtons } from "@/components/content/PlanActionButtons";
+import { useAuth } from "@/contexts";
+import { subscriptionService } from "@/lib/services";
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -150,7 +152,18 @@ export function SubscriptionPlansClient({
   plans: PublicPlanDto[];
   initialCycle?: BillingCycle;
 }) {
+  const { isAuthenticated } = useAuth();
+  const [userSubscription, setUserSubscription] = useState<SubscriptionStatusDto | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>(initialCycle);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      subscriptionService.getSubscription(true)
+        .then(sub => setUserSubscription(sub))
+        .catch(() => setUserSubscription(null));
+    }
+  }, [isAuthenticated]);
+
   const plansByCycle = useMemo(() => buildUiPlansByCycle(plans), [plans]);
   const visiblePlans = plansByCycle[billingCycle];
   const yearlySave = useMemo(() => {
@@ -272,6 +285,13 @@ export function SubscriptionPlansClient({
                     isFreeTier={plan.isFreeTier}
                     featured={plan.featured}
                     billingCycle={billingCycle}
+                    userSubscription={userSubscription}
+                    onRefreshSub={() => {
+                      if (isAuthenticated) {
+                        subscriptionService.getSubscription(true)
+                          .then(sub => setUserSubscription(sub));
+                      }
+                    }}
                   />
 
                   <ul

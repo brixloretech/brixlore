@@ -39,6 +39,10 @@ export default function SubscriptionPage() {
   const [billingSummaryLoading, setBillingSummaryLoading] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [isCanceling, setIsCanceling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
   useEffect(() => {
     let active = true;
     Promise.all([
@@ -89,6 +93,21 @@ export default function SubscriptionPage() {
       setBillingError(getApiErrorMessage(err));
     } finally {
       setBillingLoading(false);
+    }
+  }
+
+  async function handleCancelSubscription() {
+    setCancelError(null);
+    setIsCanceling(true);
+    try {
+      await subscriptionService.cancelSubscription();
+      const updatedSub = await subscriptionService.getSubscription(true);
+      setSubscription(updatedSub ?? null);
+      setCancelModalOpen(false);
+    } catch (err) {
+      setCancelError(getApiErrorMessage(err));
+    } finally {
+      setIsCanceling(false);
     }
   }
 
@@ -248,10 +267,25 @@ export default function SubscriptionPage() {
                 <p className="text-xs text-neutral-500">{priceLabel}</p>
               </div>
             </div>
-            <div className="mt-6 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-wrap gap-3 items-center">
               <Link href="/subscription">
                 <Button type="button">Manage plan</Button>
               </Link>
+              {subscription?.isSubscribed && subscription?.status !== "CANCELLED" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  onClick={() => setCancelModalOpen(true)}
+                >
+                  Cancel subscription
+                </Button>
+              )}
+              {subscription?.isSubscribed && subscription?.status === "CANCELLED" && (
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-amber-400 ring-1 ring-inset ring-amber-500/20">
+                  Scheduled to cancel on {formatNextChargeDate(subscription.currentPeriodEnd)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -468,6 +502,50 @@ export default function SubscriptionPage() {
             </Button>
           </ModalFooter>
         </form>
+      </Modal>
+
+      <Modal
+        isOpen={cancelModalOpen}
+        onClose={() => {
+          if (!isCanceling) setCancelModalOpen(false);
+        }}
+        title="Cancel Subscription"
+      >
+        <ModalContent>
+          <div className="text-neutral-300">
+            <p>
+              Are you sure you want to cancel your subscription?
+            </p>
+            <p className="mt-2 text-sm text-neutral-400">
+              You will continue to have access to your subscription benefits until{" "}
+              <span className="font-semibold text-white">
+                {formatNextChargeDate(subscription?.currentPeriodEnd)}
+              </span>
+              , at which point your plan will end and offline downloads will be revoked.
+            </p>
+            {cancelError && (
+              <p className="mt-4 text-sm font-medium text-red-500" role="alert">
+                {cancelError}
+              </p>
+            )}
+          </div>
+        </ModalContent>
+        <ModalFooter>
+          <Button
+            variant="outline"
+            disabled={isCanceling}
+            onClick={() => setCancelModalOpen(false)}
+          >
+            Keep Subscription
+          </Button>
+          <Button
+            disabled={isCanceling}
+            className="bg-red-600 hover:bg-red-700 text-white"
+            onClick={handleCancelSubscription}
+          >
+            {isCanceling ? "Canceling..." : "Cancel Subscription"}
+          </Button>
+        </ModalFooter>
       </Modal>
     </div>
   );
