@@ -801,7 +801,8 @@ type HomeProps = {
   searchParams: Promise<{ cycle?: string }>;
 };
 
-export default async function Home({ searchParams }: HomeProps) {
+// export default async function Home({ searchParams }: HomeProps) {
+async function OldHome({ searchParams }: HomeProps) {
   const { cycle } = await searchParams;
   const homeBillingCycle =
     cycle?.toLowerCase() === "yearly" ? "yearly" : "monthly";
@@ -1239,5 +1240,23 @@ export default async function Home({ searchParams }: HomeProps) {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'center',
+      alignItems: 'center',
+      minHeight: '100vh',
+      backgroundColor: '#0b0b0e',
+      color: '#ffffff',
+      fontFamily: 'sans-serif'
+    }}>
+      <h1 style={{ fontSize: '3rem', marginBottom: '1rem' }}>We are under maintenance</h1>
+      <p style={{ fontSize: '1.25rem', color: '#a3a3a3' }}>We will be back shortly.</p>
+    </div>
   );
 }
