@@ -802,6 +802,7 @@ type HomeProps = {
 };
 
 // export default async function Home({ searchParams }: HomeProps) {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function OldHome({ searchParams }: HomeProps) {
   const { cycle } = await searchParams;
   const homeBillingCycle =
