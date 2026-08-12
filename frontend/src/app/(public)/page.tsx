@@ -636,6 +636,7 @@ import {
   siteService,
   subscriptionService,
 } from "@/lib/services";
+import WaitlistLanding from "@/components/waitlist/WaitlistLanding";
 
 export const metadata: Metadata = {
   title: SITE_TAGLINE,
@@ -1245,19 +1246,5 @@ async function OldHome({ searchParams }: HomeProps) {
 }
 
 export default function Home() {
-  return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      backgroundColor: '#0b0b0e',
-      color: '#ffffff',
-      fontFamily: 'sans-serif'
-    }}>
-      <h1 style={{ fontSize: '3rem', marginBottom: '1rem' }}>We are under maintenance</h1>
-      <p style={{ fontSize: '1.25rem', color: '#a3a3a3' }}>We will be back shortly.</p>
-    </div>
-  );
+  return <WaitlistLanding />;
 }
