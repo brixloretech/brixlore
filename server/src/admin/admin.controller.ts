@@ -13,7 +13,7 @@ import {
 import type { User } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AdminService } from './admin.service';
-import type { OfflineAnalyticsDto } from './admin.service';
+import type { OfflineAnalyticsDto, AdminWaitlistEntryDto } from './admin.service';
 import { UsersService } from '../users/users.service';
 import type { DashboardStatsDto } from './dto/dashboard-stats.dto';
 import type { AdminUserDto } from './dto/admin-user.dto';
@@ -157,6 +157,18 @@ export class AdminController {
     const pageNum = Math.max(1, parseInt(String(page || '1'), 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(String(limit || '20'), 10) || 20));
     return this.adminService.getUsers(pageNum, limitNum);
+  }
+
+  @Get('waitlist')
+  async getWaitlist(
+    @CurrentUser() user: User,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<{ entries: AdminWaitlistEntryDto[]; total: number }> {
+    ensureAdmin(user);
+    const pageNum = Math.max(1, parseInt(String(page || '1'), 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(String(limit || '20'), 10) || 20));
+    return this.adminService.getWaitlist(pageNum, limitNum);
   }
 
   /**

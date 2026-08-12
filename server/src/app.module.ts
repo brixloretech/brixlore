@@ -17,6 +17,7 @@ import { AdminModule } from './admin/admin.module';
 import { SiteModule } from './site/site.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdConfigModule } from './ad-config/ad-config.module';
+import { WaitlistModule } from './waitlist/waitlist.module';
 
 @Module({
   controllers: [AppController],
@@ -36,6 +37,7 @@ import { AdConfigModule } from './ad-config/ad-config.module';
     SiteModule,
     NotificationsModule,
     AdConfigModule,
+    WaitlistModule,
   ],
   providers: [
     {

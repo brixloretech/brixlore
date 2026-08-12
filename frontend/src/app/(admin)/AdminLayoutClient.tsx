@@ -362,6 +362,12 @@ const NAV_SECTIONS: {
         icon: IconUsers,
         roles: ["admin", "SUPER_ADMIN", "CUSTOMER_SUPPORT"],
       },
+      {
+        href: "/admin/waitlist",
+        label: "Waitlist",
+        icon: IconUsers,
+        roles: ["admin", "SUPER_ADMIN", "CUSTOMER_SUPPORT"],
+      },
     ],
   },
   {

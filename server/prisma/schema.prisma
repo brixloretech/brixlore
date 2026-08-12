@@ -33,6 +33,18 @@ model User {
   @@index([email])
 }
 
+model WaitlistEntry {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  phone      String
+  smsConsent Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
 model UserPreferences {
   id                  String   @id @default(cuid())
   userId              String   @unique

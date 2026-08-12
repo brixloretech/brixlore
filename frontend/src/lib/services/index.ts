@@ -25,3 +25,4 @@ export type {
 } from "./admin.service";
 export { siteService } from "./site.service";
 export { accountService } from "./account.service";
+export { waitlistService } from "./waitlist.service";

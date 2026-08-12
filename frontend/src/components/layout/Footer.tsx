@@ -75,7 +75,7 @@ export function Footer() {
               />
             ) : (
               <Image
-                src="/logo.png"
+                src="/logo-2.png"
                 alt="BRIXLORE"
                 width={136}
                 height={34}

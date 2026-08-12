@@ -64,6 +64,15 @@ export interface OfflineAnalyticsDto {
   downloadsPerPlan: DownloadsPerPlanDto[];
 }
 
+export interface AdminWaitlistEntryDto {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  smsConsent: boolean;
+  createdAt: string;
+}
+
 function formatDurationSeconds(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -389,6 +398,26 @@ export class AdminService {
         createdAt: u.createdAt.toISOString(),
       })),
       total,
+    };
+  }
+
+  async getWaitlist(page = 1, limit = 20): Promise<{ entries: AdminWaitlistEntryDto[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const model = (this.prisma as any).waitlistEntry;
+    const [entries, total] = await Promise.all([
+      model.findMany({ skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      model.count(),
+    ]);
+    return {
+      total,
+      entries: entries.map((entry: any) => ({
+        id: entry.id,
+        name: entry.name,
+        email: entry.email,
+        phone: entry.phone,
+        smsConsent: entry.smsConsent,
+        createdAt: entry.createdAt.toISOString(),
+      })),
     };
   }
 

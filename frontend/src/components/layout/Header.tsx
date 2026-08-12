@@ -83,7 +83,7 @@ export function Header() {
           : "sticky top-0 z-50 border-b border-white/10 bg-transparent backdrop-blur-sm"
       }
     >
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between pl-0 pr-4 sm:pr-6 lg:pr-8">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between pl-4 pr-4 sm:pr-6 lg:pr-8">
         <Link
           href="/"
           className="-ml-1 flex shrink-0 items-center gap-2 text-white sm:-ml-2"
@@ -100,7 +100,7 @@ export function Header() {
             />
           ) : (
             <Image
-              src="/logo.png"
+              src="/logo-2.png"
               alt="BRIXLORE.TV"
               width={LOGO_WIDTH}
               height={LOGO_HEIGHT}

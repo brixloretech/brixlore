@@ -42,6 +42,7 @@ import type {
   SupportRequestDto,
   SupportRequestsResponseDto,
   UpdateSupportRequestDto,
+  AdminWaitlistResponseDto,
 } from "@/types/api";
 import type { AccountExportDto } from "@/types/api";
 
@@ -171,6 +172,15 @@ export const adminService = {
   ): Promise<{ users: AdminUserDto[]; total: number }> {
     return withAuthRetry((headers) =>
       get<{ users: AdminUserDto[]; total: number }>("admin/users", {
+        params: { page: String(page), limit: String(limit) },
+        headers,
+      }),
+    );
+  },
+
+  async getWaitlist(page = 1, limit = 20): Promise<AdminWaitlistResponseDto> {
+    return withAuthRetry((headers) =>
+      get<AdminWaitlistResponseDto>("admin/waitlist", {
         params: { page: String(page), limit: String(limit) },
         headers,
       }),
