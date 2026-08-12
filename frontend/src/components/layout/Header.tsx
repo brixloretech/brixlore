@@ -43,11 +43,12 @@ function NavContent({
           ) : null}
         </>
       ) : (
-        <Link href="/login">
-          <Button variant="outline" size="sm" type="button">
-            Log in
-          </Button>
-        </Link>
+        <></>
+        // <Link href="/login">
+        //   <Button variant="outline" size="sm" type="button">
+        //     Log in
+        //   </Button>
+        // </Link>
       )}
     </div>
   );

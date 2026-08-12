@@ -85,12 +85,13 @@ export function Footer() {
           </div>
 
           {!isAuthenticated ? (
-            <Link
-              href="/login"
-              className="inline-flex h-10 items-center justify-center rounded-full border border-neutral-500 px-6 text-sm font-semibold tracking-wide text-neutral-100 transition-colors hover:border-neutral-300 hover:text-white"
-            >
-              LOG IN
-            </Link>
+            <></>
+            // <Link
+            //   href="/login"
+            //   className="inline-flex h-10 items-center justify-center rounded-full border border-neutral-500 px-6 text-sm font-semibold tracking-wide text-neutral-100 transition-colors hover:border-neutral-300 hover:text-white"
+            // >
+            //   LOG IN
+            // </Link>
           ) : null}
         </div>
 
