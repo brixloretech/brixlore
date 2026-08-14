@@ -94,7 +94,7 @@ export default function AdminUsersAnalyticsPage() {
   ];
 
   return (
-    <div className="font-[var(--font-geist-sans)] space-y-8">
+    <div className="font-sans space-y-8">
       {/* Hero header */}
       <section className="relative overflow-hidden rounded-2xl border border-neutral-800/70 bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-950 px-6 py-8 shadow-[0_0_0_1px_rgba(255,231,0,0.05)] sm:px-10">
         <div className="pointer-events-none absolute inset-0 opacity-60">

@@ -32,7 +32,7 @@ export default function AdminWaitlistPage() {
   const totalPages = Math.max(1, Math.ceil(total / limit));
 
   return (
-    <div className="font-[var(--font-geist-sans)]">
+    <div className="font-sans">
       <div className="mb-8 flex items-end justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">Audience</p>

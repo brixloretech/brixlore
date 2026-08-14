@@ -92,7 +92,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="font-[var(--font-geist-sans)]">
+    <div className="font-sans">
       <header className="relative overflow-hidden rounded-2xl border border-neutral-700/60 bg-neutral-900/60 p-6 sm:p-8">
         <div
           className="absolute -left-24 top-8 h-48 w-48 rounded-full bg-white/5 blur-3xl"

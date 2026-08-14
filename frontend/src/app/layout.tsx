@@ -1,21 +1,17 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import Script from "next/script";
 import "./globals.css";
 import "video.js/dist/video-js.css";
 import { Providers } from "@/components/Providers";
 import { SITE_NAME, SITE_DESCRIPTION, SITE_TAGLINE } from "@/lib/seo";
 import { getAppUrl, getMatomoUrl, getMatomoSiteId } from "@/lib/env";
+import { Noto_Sans } from "next/font/google";
+import { cn } from "@/lib/utils";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
+const notoSans = Noto_Sans({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
 });
 
 const baseUrl = getAppUrl();
@@ -69,10 +65,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} min-w-0 overflow-x-hidden antialiased`}
-      >
+    <html lang="en" className={cn("dark", "font-sans", notoSans.variable)}>
+      <body className="min-w-0 overflow-x-hidden antialiased">
         {matomoUrl && matomoSiteId && (
           <Script
             id="matomo-init"

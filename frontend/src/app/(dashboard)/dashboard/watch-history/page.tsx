@@ -46,7 +46,7 @@ export default function WatchHistoryPage() {
 
   const hasItems = items.length > 0;
   return (
-    <div className="font-[var(--font-geist-sans)]">
+    <div className="font-sans">
       <header className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-neutral-500">
           History

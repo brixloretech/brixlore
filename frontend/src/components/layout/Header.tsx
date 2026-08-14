@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/contexts";
 import { fetchBranding } from "@/lib/branding";
 import { Button } from "@/components/ui";
-import { useState } from "react";
 
 const LOGO_HEIGHT = 80;
 const LOGO_WIDTH = 140;
@@ -59,6 +58,9 @@ export function Header() {
   const isHome = pathname === "/";
   const { user, isAuthenticated, isSubscribed, isAdmin } = useAuth();
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [isVisible, setIsVisible] = useState(true);
+  const lastScrollY = useRef(0);
+  const visibilityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -76,15 +78,37 @@ export function Header() {
     };
   }, []);
 
+  useEffect(() => {
+    lastScrollY.current = window.scrollY;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const delta = currentScrollY - lastScrollY.current;
+      const shouldShow = currentScrollY < 24 || delta < -4;
+
+      if (Math.abs(delta) < 4) return;
+      lastScrollY.current = currentScrollY;
+
+      if (visibilityTimer.current) clearTimeout(visibilityTimer.current);
+      visibilityTimer.current = setTimeout(() => {
+        setIsVisible(shouldShow);
+      }, 140);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (visibilityTimer.current) clearTimeout(visibilityTimer.current);
+    };
+  }, []);
+
   return (
     <header
       className={
-        isHome
-          ? "fixed inset-x-0 top-0 z-50 border-b border-white/10 bg-transparent backdrop-blur-sm"
-          : "sticky top-0 z-50 border-b border-white/10 bg-transparent backdrop-blur-sm"
+        `${isHome ? "fixed inset-x-0 top-0" : "sticky top-0"} z-50 bg-transparent backdrop-blur-sm transition-transform duration-300 ease-out ${isVisible ? "translate-y-0" : "-translate-y-full"}`
       }
     >
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between pl-4 pr-4 sm:pr-6 lg:pr-8">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-center pl-4 pr-4 sm:pr-6 lg:pr-8">
         <Link
           href="/"
           className="-ml-1 flex shrink-0 items-center gap-2 text-white sm:-ml-2"

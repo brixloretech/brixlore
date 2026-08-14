@@ -637,6 +637,12 @@ import {
   subscriptionService,
 } from "@/lib/services";
 import WaitlistLanding from "@/components/waitlist/WaitlistLanding";
+import { MovieCarousel } from "@/components/content/MovieCarousel";
+import {
+  ScrollVelocityContainer,
+  ScrollVelocityRow,
+} from "@/components/ui/scroll-based-velocity";
+import { TextAnimate } from "@/components/ui/text-animate";
 
 export const metadata: Metadata = {
   title: SITE_TAGLINE,
@@ -1246,5 +1252,230 @@ async function OldHome({ searchParams }: HomeProps) {
 }
 
 export default function Home() {
-  return <WaitlistLanding />;
+  return (
+    <>
+      <WaitlistLanding />
+      <div className="relative flex w-full flex-col items-center justify-center overflow-hidden bg-[#07070a] pb-8 ">
+        <ScrollVelocityContainer className="space-y-2 text-4xl font-bold leading-none tracking-[-0.02em] text-white sm:text-6xl md:text-7xl">
+          <ScrollVelocityRow baseVelocity={2} direction={1}>
+            <span className="mx-4 inline-block">BRIXLORE BUILT FROM CULTURE</span>
+          </ScrollVelocityRow>
+          <ScrollVelocityRow baseVelocity={2} direction={-1}>
+            <span className="mx-4 inline-block">BRIXLORE STORIES WITHOUT LIMITS</span>
+          </ScrollVelocityRow>
+        </ScrollVelocityContainer>
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-1/4 bg-gradient-to-r from-[#07070a] to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/4 bg-gradient-to-l from-[#07070a] to-transparent" />
+      </div>
+      <div className="relative bg-[#000000] pt-8">
+        <div className="mb-14 text-center">
+          <div className="mx-auto mb-7 h-px w-20 div-line" />
+          <TextAnimate
+          once
+            animation="blurInUp"
+            by="character"
+            as="h4"
+            delay={0}
+            className="text-3xl font-black tracking-tight text-white sm:text-4xl lg:text-4xl"
+          >
+            Be the First to Watch
+          </TextAnimate>
+
+          <p className="mt-3 text-neutral-500">
+            Sign up for early access to Brixlore.TV and discover exclusive
+            content, originals, and documentaries.
+          </p>
+        </div>
+
+        {/* Movie carousel */}
+        <MovieCarousel
+          movies={[
+            { title: "Luca", type: "Comedy", image: "/movies/luca.jpg" },
+            {
+              title: "Primetime",
+              type: "Crime",
+              image: "/movies/Primetime.jpg",
+            },
+            {
+              title: "Hotel Transylvania",
+              type: "Dark Fantasy",
+              image: "/movies/HotelTransylvania.jpg",
+            },
+            {
+              title: "Elemental",
+              type: "Romantic Comedy",
+              image: "/movies/Elemental.jpg",
+            },
+            {
+              title: "The End of Oak Street",
+              type: "Action",
+              image: "/movies/TheEndofOakStreet.jpg",
+            },
+          ]}
+        />
+      </div>
+      <div className="relative bg-[#000000] pt-8">
+        <div className="mb-14 text-center">
+          <TextAnimate
+          once
+            animation="blurInUp"
+            by="character"
+            as="h4"
+            delay={0}
+            className="text-3xl font-black tracking-tight text-white sm:text-4xl lg:text-4xl"
+          >
+            Get More with Premium
+          </TextAnimate>
+          <p className="mx-auto mt-3 max-w-2xl text-neutral-500">
+            Enjoy more ways to discover, save, and keep watching the stories you
+            love.
+          </p>
+        </div>
+
+        {/* Premium benefits */}
+        <div className="mx-auto max-w-7xl overflow-hidden px-3 pb-12 sm:px-8 sm:pb-20">
+          <div className="grid grid-cols-2 gap-x-2 gap-y-6 pb-4 text-center sm:grid-cols-3 sm:gap-x-6 sm:gap-y-12 lg:grid-cols-3 lg:gap-x-8">
+            {[
+              [
+                "Explore the library",
+                "Find original series, documentaries, and independent stories in one place.",
+                "library",
+              ],
+              [
+                "Build your watchlist",
+                "Save the titles you want to come back to with My List.",
+                "early",
+              ],
+              [
+                "Continue watching",
+                "Pick up where you left off whenever you return.",
+                "devices",
+              ],
+              [
+                "Keep your history in sync",
+                "Your viewing activity stays organized across your account.",
+                "bonus",
+              ],
+              [
+                "Watch across devices",
+                "Enjoy Brixlore from your phone, tablet, desktop, or TV.",
+                "events",
+              ],
+              [
+                "Choose your membership",
+                "Compare the available plans and find the right fit for you.",
+                "discount",
+              ],
+            ].map(([title, detail, icon]) => (
+              <article
+                key={title}
+                className="min-w-0 px-1 py-2 sm:px-3 sm:py-4"
+              >
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center text-accent sm:mb-6 sm:h-20 sm:w-20">
+                  <div className="scale-[1.45] sm:scale-[2.2]">
+                    <PerkIcon kind={icon} />
+                  </div>
+                </div>
+                <h5 className="text-sm font-semibold leading-tight text-white sm:text-lg sm:leading-snug">
+                  {title}
+                </h5>
+                <p className="mt-1 text-xs leading-5 text-neutral-400 sm:mt-2 sm:text-sm sm:leading-6">
+                  {detail}
+                </p>
+              </article>
+            ))}
+          </div>
+        </div>
+      </div>
+      {/* FAQ */}
+      <section
+        className="relative bg-[#000000] px-4 py-20 sm:px-8 sm:py-8"
+        aria-labelledby="waitlist-faq-heading"
+      >
+        <div className="mx-auto max-w-3xl">
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.28em] text-neutral-500">
+            Support
+          </p>
+          <TextAnimate
+            once
+            animation="blurInUp"
+            by="character"
+            as="h4"
+            delay={0}
+            className="mt-3 text-center text-3xl font-bold tracking-tight text-white sm:text-4xl"
+          >
+            FAQ
+          </TextAnimate>
+
+          <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-neutral-400 sm:text-base">
+            Everything you need to know about Brixlore, memberships, and
+            watching your favorite stories.
+          </p>
+
+          <div className="mt-10 space-y-3">
+            {[
+              [
+                "What is Brixlore?",
+                "Brixlore is a home for bold, independent stories, original series, and documentaries.",
+              ],
+              [
+                "Do I need an account to watch?",
+                "Some content may be available to browse publicly, while an account gives you access to personalized features and membership options.",
+              ],
+              [
+                "What does a membership include?",
+                "Membership benefits depend on the plan you choose and may include access to premium content and additional viewing features.",
+              ],
+              [
+                "Can I watch on multiple devices?",
+                "Yes. You can access Brixlore from supported phones, tablets, desktop browsers, and TV devices. Device limits depend on your plan.",
+              ],
+              [
+                "How do I get help with my account or billing?",
+                "Visit the contact page and our support team will help with account access, billing, and other questions.",
+              ],
+            ].map(([question, answer]) => (
+              <details
+                key={question}
+                className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors open:border-white/20 open:bg-white/[0.06]"
+              >
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-white marker:content-none sm:px-6 sm:py-5 sm:text-base">
+                  {question}
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-normal text-neutral-300 transition-transform group-open:rotate-45">
+                    +
+                  </span>
+                </summary>
+                <p className="border-t border-white/10 px-5 pb-5 pt-4 text-sm leading-6 text-neutral-400 sm:px-6">
+                  {answer}
+                </p>
+              </details>
+            ))}
+          </div>
+        </div>
+        {/* support */}
+        <div className="mx-auto mt-10 max-w-3xl   px-5 py-8 pb-12 text-center sm:px-8">
+          <TextAnimate
+            animation="blurInUp"
+            by="character"
+            as="p"
+            delay={0}
+            className="text-xl font-semibold text-white sm:text-2xl"
+          >
+            Questions?
+          </TextAnimate>
+
+          <p className="mt-2 text-sm text-neutral-400 sm:text-base">
+            Visit our{" "}
+            <Link
+              href="/help-center"
+              className="font-semibold text-white underline decoration-neutral-500 underline-offset-4 transition-colors hover:decoration-white"
+            >
+              Help Center
+            </Link>{" "}
+            to learn more.
+          </p>
+        </div>
+      </section>
+    </>
+  );
 }
