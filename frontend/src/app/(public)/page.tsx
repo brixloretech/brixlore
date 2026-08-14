@@ -1255,7 +1255,7 @@ export default function Home() {
   return (
     <>
       <WaitlistLanding />
-      <div className="relative flex w-full flex-col items-center justify-center overflow-hidden bg-[#07070a] pb-8 ">
+      <div className="relative flex w-full flex-col items-center justify-center overflow-hidden bg-[#000000] pb-8 ">
         <ScrollVelocityContainer className="space-y-2 text-4xl font-bold leading-none tracking-[-0.02em] text-white sm:text-6xl md:text-7xl">
           <ScrollVelocityRow baseVelocity={2} direction={1}>
             <span className="mx-4 inline-block">BRIXLORE BUILT FROM CULTURE</span>
