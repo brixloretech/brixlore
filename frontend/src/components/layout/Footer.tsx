@@ -86,13 +86,13 @@ export function Footer() {
 
           {!isAuthenticated ? (
             <></>
-            // <Link
-            //   href="/login"
-            //   className="inline-flex h-10 items-center justify-center rounded-full border border-neutral-500 px-6 text-sm font-semibold tracking-wide text-neutral-100 transition-colors hover:border-neutral-300 hover:text-white"
-            // >
-            //   LOG IN
-            // </Link>
-          ) : null}
+          ) : // <Link
+          //   href="/login"
+          //   className="inline-flex h-10 items-center justify-center rounded-full border border-neutral-500 px-6 text-sm font-semibold tracking-wide text-neutral-100 transition-colors hover:border-neutral-300 hover:text-white"
+          // >
+          //   LOG IN
+          // </Link>
+          null}
         </div>
 
         <div className="border-b border-neutral-800/90 py-8 lg:py-9">
@@ -117,7 +117,7 @@ export function Footer() {
               </nav>
             </section>
 
-            <section className="border-t border-neutral-800/80 pt-6 lg:col-span-3 lg:border-t-0 lg:pt-0">
+            {/* <section className="border-t border-neutral-800/80 pt-6 lg:col-span-3 lg:border-t-0 lg:pt-0">
               <h3 className="mb-4 text-base font-semibold leading-tight text-neutral-100">
                 Account
               </h3>
@@ -132,7 +132,7 @@ export function Footer() {
                   </Link>
                 ))}
               </nav>
-            </section>
+            </section> */}
 
             <section className="border-t border-neutral-800/80 pt-6 lg:col-span-3 lg:border-t-0 lg:pt-0">
               <h3 className="mb-4 text-base font-semibold leading-tight text-neutral-100">
