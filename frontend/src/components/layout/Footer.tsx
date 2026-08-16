@@ -23,11 +23,11 @@ export function Footer() {
     { label: "Get the App", href: "/get-the-app" },
   ];
 
-  const accountLinks = [
-    { label: "Create Account", href: "/signup" },
-    { label: "Log In", href: "/login" },
-    { label: "Start Premium", href: "/subscription" },
-  ];
+  // const accountLinks = [
+  //   { label: "Create Account", href: "/signup" },
+  //   { label: "Log In", href: "/login" },
+  //   { label: "Start Premium", href: "/subscription" },
+  // ];
 
   const socialLinks = [
     {
