@@ -120,10 +120,12 @@ export default function WaitlistLanding() {
             Where urban media
           </h1>
 
-          <MorphingText texts={["connects", "unfolds", "evolves" , "breaks" , "streams"]} />
+          <MorphingText
+            texts={["connects", "unfolds", "evolves", "breaks", "streams"]}
+          />
           <p className="mx-auto mt-7 max-w-xl text-base leading-7 text-neutral-200/85 sm:text-lg">
-            We are building a new home for bold, independent stories. Be the
-            first to know when the doors open.
+            Where authentic culture meets prestige broadcast. Be the first to
+            experience the next evolution of urban media.
           </p>
           <ShimmerButton
             onClick={start}
