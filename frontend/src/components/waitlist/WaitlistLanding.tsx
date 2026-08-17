@@ -117,10 +117,10 @@ export default function WaitlistLanding() {
       <div className="relative flex min-h-screen items-center justify-center px-6 py-28 sm:px-10">
         <div className="max-w-3xl text-center">
           <h1 className="text-5xl font-semibold tracking-[-0.05em] text-white sm:text-7xl lg:text-8xl">
-            Where urban storytelling
+            Where urban media
           </h1>
 
-          <MorphingText texts={["unfolds", "inspires", "connects"]} />
+          <MorphingText texts={["connects", "unfolds", "evolves" , "breaks" , "streams"]} />
           <p className="mx-auto mt-7 max-w-xl text-base leading-7 text-neutral-200/85 sm:text-lg">
             We are building a new home for bold, independent stories. Be the
             first to know when the doors open.
@@ -276,10 +276,8 @@ export default function WaitlistLanding() {
               </div>
             )}
             <BorderBeam
-              
               colorFrom="#ffffff"
               colorTo="#9ca3af"
-           
               duration={6}
               delay={3}
               size={400}
