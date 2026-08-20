@@ -2,6 +2,7 @@ export interface CreateWaitlistEntryRequestDto {
   name: string;
   email: string;
   phone: string;
+  emailConsent: boolean;
   smsConsent: boolean;
 }
 
@@ -10,6 +11,7 @@ export interface AdminWaitlistEntryDto {
   name: string;
   email: string;
   phone: string;
+  emailConsent: boolean;
   smsConsent: boolean;
   createdAt: string;
 }

@@ -44,12 +44,12 @@ export default function AdminWaitlistPage() {
       {loading ? <div className="flex justify-center py-16"><Loader size="lg" label="Loading waitlist…" /></div> : error ? <p className="rounded-xl border border-red-900/50 bg-red-950/20 p-4 text-sm text-red-300">{error}</p> : (
         <div className="overflow-hidden rounded-2xl border border-neutral-800/70 bg-neutral-950/70">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-left text-sm">
+            <table className="w-full min-w-[820px] text-left text-sm">
               <thead className="border-b border-neutral-800 bg-neutral-900/70 text-xs uppercase tracking-[0.16em] text-neutral-500">
-                <tr><th className="px-5 py-4">Name</th><th className="px-5 py-4">Email</th><th className="px-5 py-4">Phone</th><th className="px-5 py-4">SMS</th><th className="px-5 py-4">Joined</th></tr>
+                <tr><th className="px-5 py-4">Name</th><th className="px-5 py-4">Email</th><th className="px-5 py-4">Phone</th><th className="px-5 py-4">Email updates</th><th className="px-5 py-4">SMS</th><th className="px-5 py-4">Joined</th></tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/70">
-                {entries.length === 0 ? <tr><td colSpan={5} className="px-5 py-12 text-center text-neutral-500">No waitlist entries yet.</td></tr> : entries.map((entry) => <tr key={entry.id} className="text-neutral-300"><td className="px-5 py-4 font-medium text-white">{entry.name}</td><td className="px-5 py-4">{entry.email}</td><td className="px-5 py-4">{entry.phone}</td><td className="px-5 py-4">{entry.smsConsent ? "Opted in" : "—"}</td><td className="whitespace-nowrap px-5 py-4 text-neutral-500">{new Date(entry.createdAt).toLocaleDateString()}</td></tr>)}
+                {entries.length === 0 ? <tr><td colSpan={6} className="px-5 py-12 text-center text-neutral-500">No waitlist entries yet.</td></tr> : entries.map((entry) => <tr key={entry.id} className="text-neutral-300"><td className="px-5 py-4 font-medium text-white">{entry.name}</td><td className="px-5 py-4">{entry.email}</td><td className="px-5 py-4">{entry.phone}</td><td className="px-5 py-4">{entry.emailConsent ? "Opted in" : "—"}</td><td className="px-5 py-4">{entry.smsConsent ? "Opted in" : "—"}</td><td className="whitespace-nowrap px-5 py-4 text-neutral-500">{new Date(entry.createdAt).toLocaleDateString()}</td></tr>)}
               </tbody>
             </table>
           </div>

@@ -20,6 +20,10 @@ In Vercel → Project Settings → **Environment Variables**, add at least:
 | `JWT_REFRESH_SECRET` | Yes         | Min 32 characters.                                                 |
 | `FRONTEND_URL`       | Yes         | Your frontend URL, e.g. `https://brick-tales-web-j89i.vercel.app`. |
 | `CORS_ORIGIN`        | Recommended | Same as `FRONTEND_URL` or comma-separated origins.                 |
+| `BREVO_API`          | Waitlist    | Brevo API key used to create or update waitlist contacts.          |
+| `BREVO_WAITLIST_LIST_ID` | Waitlist | Brevo list ID for every waitlist contact.                          |
+| `BREVO_WAITLIST_EMAIL_LIST_ID` | Waitlist | Brevo list ID for contacts opting in to email updates.             |
+| `BREVO_WAITLIST_SMS_LIST_ID` | Waitlist | Brevo list ID for contacts opting in to SMS updates.               |
 
 **Important:** `DATABASE_URL` must point to a **cloud** PostgreSQL instance (e.g. Neon, Supabase, Railway). Do not use `localhost` — the Vercel runtime cannot reach your machine.
 
@@ -31,6 +35,8 @@ In Vercel → Project Settings → **Environment Variables**, add at least:
 4. Run migrations with that same URL: `npx prisma migrate deploy` (see section 3 below).
 
 Optional but useful: `SMTP_*` (for password reset emails), `STRIPE_*` (for subscriptions).
+
+The waitlist IDs must be positive numeric Brevo list IDs. Keep these values server-side only; never expose the Brevo API key in the frontend environment.
 
 ## 3. Database migrations
 

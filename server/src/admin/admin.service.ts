@@ -69,6 +69,7 @@ export interface AdminWaitlistEntryDto {
   name: string;
   email: string;
   phone: string;
+  emailConsent: boolean;
   smsConsent: boolean;
   createdAt: string;
 }
@@ -415,6 +416,7 @@ export class AdminService {
         name: entry.name,
         email: entry.email,
         phone: entry.phone,
+        emailConsent: entry.emailConsent,
         smsConsent: entry.smsConsent,
         createdAt: entry.createdAt.toISOString(),
       })),

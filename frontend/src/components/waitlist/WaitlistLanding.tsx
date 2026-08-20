@@ -7,14 +7,15 @@ import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { MorphingText } from "@/components/ui/morphing-text";
 import { BorderBeam } from "../ui/border-beam";
 
-type Step = "name" | "email" | "phone" | "consent";
-const steps: Step[] = ["name", "email", "phone", "consent"];
+type Step = "name" | "email" | "phone" | "emailConsent" | "smsConsent";
+const steps: Step[] = ["name", "email", "phone", "emailConsent", "smsConsent"];
 
 const labels: Record<Step, string> = {
   name: "What should we call you?",
   email: "Where can we reach you?",
   phone: "Your phone number",
-  consent: "Want updates by text?",
+  emailConsent: "Want launch updates by email?",
+  smsConsent: "Want updates by text?",
 };
 
 export default function WaitlistLanding() {
@@ -24,6 +25,7 @@ export default function WaitlistLanding() {
     name: "",
     email: "",
     phone: "",
+    emailConsent: false,
     smsConsent: false,
   });
   const [error, setError] = useState("");
@@ -57,8 +59,8 @@ export default function WaitlistLanding() {
       return "Please enter your name.";
     if (step === "email" && !/^\S+@\S+\.\S+$/.test(form.email))
       return "Please enter a valid email.";
-    if (step === "phone" && form.phone.trim().length < 7)
-      return "Please enter a valid phone number.";
+    if (step === "phone" && !/^\+[1-9]\d{6,14}$/.test(form.phone.trim()))
+      return "Enter an international phone number, for example +14155552671.";
     return "";
   }
 
@@ -71,7 +73,7 @@ export default function WaitlistLanding() {
     }
     setError("");
     const currentIndex = steps.indexOf(step);
-    if (step !== "consent") {
+    if (step !== "smsConsent") {
       setStep(steps[currentIndex + 1]);
       return;
     }
@@ -186,7 +188,7 @@ export default function WaitlistLanding() {
                   A few quick details and you are in.
                 </p>
                 <form onSubmit={advance} className="mt-8">
-                  {step !== "consent" ? (
+                  {step !== "emailConsent" && step !== "smsConsent" ? (
                     <input
                       ref={inputRef}
                       value={form[step]}
@@ -214,15 +216,16 @@ export default function WaitlistLanding() {
                     <label className="flex cursor-pointer gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-neutral-300 transition hover:border-white/25">
                       <input
                         type="checkbox"
-                        checked={form.smsConsent}
+                        checked={form[step]}
                         onChange={(event) =>
-                          setForm({ ...form, smsConsent: event.target.checked })
+                          setForm({ ...form, [step]: event.target.checked })
                         }
                         className="mt-1 h-4 w-4 accent-white"
                       />
                       <span>
-                        Yes, send me occasional text updates about launch news.
-                        Message rates may apply. You can opt out anytime.
+                        {step === "emailConsent"
+                          ? "Yes, send me occasional email updates about launch news and Brixlore. You can unsubscribe anytime."
+                          : "Yes, send me occasional text updates about launch news. Message rates may apply. You can opt out anytime."}
                       </span>
                     </label>
                   )}
@@ -247,7 +250,7 @@ export default function WaitlistLanding() {
                     >
                       {submitting
                         ? "Joining…"
-                        : step === "consent"
+                        : step === "smsConsent"
                           ? "Join the waitlist"
                           : "Continue"}
                     </button>

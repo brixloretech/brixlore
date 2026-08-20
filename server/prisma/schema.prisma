@@ -38,6 +38,7 @@ model WaitlistEntry {
   name       String
   email      String   @unique
   phone      String
+  emailConsent Boolean @default(false)
   smsConsent Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
