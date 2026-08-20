@@ -7,8 +7,9 @@ export const SITE_NAME = "Brixlore.TV";
 /** Full branding with .TV suffix (e.g. footer, hero). */
 export const SITE_BRAND = "Brixlore.TV";
 export const SITE_TAGLINE =
-  "Streaming the Stories Shaping Culture | Brixlore.TV";
-export const SITE_DESCRIPTION = SITE_TAGLINE;
+  "Brixlore | Media On Our Terms";
+export const SITE_DESCRIPTION =
+  "Where urban media unfolds. Stream original content, cinema, real-time news, and raw culture.";
 export const SITE_KEYWORDS = [
   "Urban",
   "culture",
