@@ -32,19 +32,6 @@ export function Footer() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const { isAuthenticated } = useAuth();
 
-  const companyLinks = [
-    { label: "About", href: "/about" },
-    { label: "Help Center", href: "/help-center" },
-    { label: "Account Deletion", href: "/account-deletion" },
-    { label: "Terms of Use", href: "/terms-of-use" },
-    { label: "Privacy Policy", href: "/privacy-policy" },
-    { label: "Cookie Preferences", href: "/cookie-consent" },
-    { label: "Press Inquiries", href: "/press-inquiries" },
-    { label: "Partnerships", href: "/partners" },
-    { label: "Distribute With Brixlore", href: "/distribute" },
-    { label: "Get the App", href: "/get-the-app" },
-  ];
-
   // const accountLinks = [
   //   { label: "Create Account", href: "/signup" },
   //   { label: "Log In", href: "/login" },

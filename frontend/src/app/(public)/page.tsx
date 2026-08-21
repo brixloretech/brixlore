@@ -637,7 +637,6 @@ import {
   subscriptionService,
 } from "@/lib/services";
 import WaitlistLanding from "@/components/waitlist/WaitlistLanding";
-import { MovieCarousel } from "@/components/content/MovieCarousel";
 import {
   ScrollVelocityContainer,
   ScrollVelocityRow,
