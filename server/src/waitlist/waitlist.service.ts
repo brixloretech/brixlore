@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateWaitlistEntryDto } from './dto/create-waitlist-entry.dto';
 import { BrevoWaitlistService } from './brevo-waitlist.service';
@@ -12,10 +13,11 @@ export class WaitlistService {
 
   async create(dto: CreateWaitlistEntryDto): Promise<{ message: string }> {
     const email = dto.email.trim().toLowerCase();
+    const phone = parsePhoneNumberFromString(dto.phone.trim())!.number;
     const entry = {
       name: dto.name.trim(),
       email,
-      phone: dto.phone.trim(),
+      phone,
       emailConsent: dto.emailConsent,
       smsConsent: dto.smsConsent,
     };

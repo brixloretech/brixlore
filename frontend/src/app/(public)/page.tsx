@@ -1258,20 +1258,24 @@ export default function Home() {
       <div className="relative flex w-full flex-col items-center justify-center overflow-hidden bg-[#000000] pb-8 ">
         <ScrollVelocityContainer className="space-y-2 text-4xl font-bold leading-none tracking-[-0.02em] text-white sm:text-6xl md:text-7xl">
           <ScrollVelocityRow baseVelocity={2} direction={1}>
-            <span className="mx-4 inline-block">BRIXLORE BUILT FROM CULTURE</span>
+            <span className="mx-4 inline-block">
+              BRIXLORE BUILT FROM CULTURE
+            </span>
           </ScrollVelocityRow>
           <ScrollVelocityRow baseVelocity={2} direction={-1}>
-            <span className="mx-4 inline-block">BRIXLORE STORIES WITHOUT LIMITS</span>
+            <span className="mx-4 inline-block">
+              BRIXLORE STORIES WITHOUT LIMITS
+            </span>
           </ScrollVelocityRow>
         </ScrollVelocityContainer>
         <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-1/4 bg-gradient-to-r from-[#07070a] to-transparent" />
         <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-1/4 bg-gradient-to-l from-[#07070a] to-transparent" />
       </div>
-      <div className="relative bg-[#000000] pt-8">
+      {/* <div className="relative bg-[#000000] pt-8">
         <div className="mb-14 text-center">
           <div className="mx-auto mb-7 h-px w-20 div-line" />
           <TextAnimate
-          once
+            once
             animation="blurInUp"
             by="character"
             as="h4"
@@ -1287,7 +1291,6 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Movie carousel */}
         <MovieCarousel
           movies={[
             { title: "Luca", type: "Comedy", image: "/movies/luca.jpg" },
@@ -1313,11 +1316,11 @@ export default function Home() {
             },
           ]}
         />
-      </div>
-      <div className="relative bg-[#000000] pt-8">
+      </div> */}
+      <div className="relative bg-[#000000] pt-20">
         <div className="mb-14 text-center">
           <TextAnimate
-          once
+            once
             animation="blurInUp"
             by="character"
             as="h4"

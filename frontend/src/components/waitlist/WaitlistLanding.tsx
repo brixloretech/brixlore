@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { parsePhoneNumberFromString } from "libphonenumber-js/max";
 import { waitlistService } from "@/lib/services";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
@@ -59,8 +60,12 @@ export default function WaitlistLanding() {
       return "Please enter your name.";
     if (step === "email" && !/^\S+@\S+\.\S+$/.test(form.email))
       return "Please enter a valid email.";
-    if (step === "phone" && !/^\+[1-9]\d{6,14}$/.test(form.phone.trim()))
-      return "Enter an international phone number, for example +14155552671.";
+    if (step === "phone") {
+      const phone = parsePhoneNumberFromString(form.phone.trim());
+      if (!phone?.isValid()) {
+        return "Enter a valid international phone number, for example +14155552671.";
+      }
+    }
     return "";
   }
 
@@ -73,6 +78,10 @@ export default function WaitlistLanding() {
     }
     setError("");
     const currentIndex = steps.indexOf(step);
+    if (step === "phone") {
+      const normalizedPhone = parsePhoneNumberFromString(form.phone.trim())!.number;
+      setForm((currentForm) => ({ ...currentForm, phone: normalizedPhone }));
+    }
     if (step !== "smsConsent") {
       setStep(steps[currentIndex + 1]);
       return;
@@ -83,7 +92,7 @@ export default function WaitlistLanding() {
         ...form,
         name: form.name.trim(),
         email: form.email.trim(),
-        phone: form.phone.trim(),
+        phone: parsePhoneNumberFromString(form.phone.trim())!.number,
       });
       setSubmitted(true);
     } catch (submissionError) {
