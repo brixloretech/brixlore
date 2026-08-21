@@ -36,3 +36,8 @@ requirements.txt
 # knowledgebase files
 VIDEO_PREVIEW_SETTINGS.md
 mobile/VIDEO_PLAYER_MIGRATION_GUIDE.md
+
+
+waitlist/*
+
+.gitignore
