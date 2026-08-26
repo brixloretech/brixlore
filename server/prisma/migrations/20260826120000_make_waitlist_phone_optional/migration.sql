@@ -1,0 +1,2 @@
+ALTER TABLE "WaitlistEntry"
+ALTER COLUMN "phone" DROP NOT NULL;

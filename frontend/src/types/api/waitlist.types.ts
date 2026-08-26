@@ -1,7 +1,7 @@
 export interface CreateWaitlistEntryRequestDto {
   name: string;
   email: string;
-  phone: string;
+  phone?: string;
   emailConsent: boolean;
   smsConsent: boolean;
 }

@@ -1,23 +1,27 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { parsePhoneNumberFromString } from "libphonenumber-js/max";
 import { waitlistService } from "@/lib/services";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { MorphingText } from "@/components/ui/morphing-text";
 import { BorderBeam } from "../ui/border-beam";
 
-type Step = "name" | "email" | "phone" | "emailConsent" | "smsConsent";
-const steps: Step[] = ["name", "email", "phone", "emailConsent", "smsConsent"];
+type Step = "name" | "email" | "phone";
+const steps: Step[] = ["name", "email", "phone"];
 
 const labels: Record<Step, string> = {
   name: "What should we call you?",
   email: "Where can we reach you?",
-  phone: "Your phone number",
-  emailConsent: "Want launch updates by email?",
-  smsConsent: "Want updates by text?",
+  phone: "Your phone number (optional)",
 };
+
+const socialLinks = [
+  { label: "YouTube", href: "https://youtube.com/@brixlore?si=0SyB5xL99PWqSCnW", icon: "▶" },
+  { label: "Facebook", href: "https://www.facebook.com/share/18RtyTkRXA/", icon: "f" },
+  { label: "X", href: "https://x.com/Brixlore", icon: "𝕏" },
+  { label: "TikTok", href: "https://www.tiktok.com/@brixloretv?_r=1&_t=ZT-94mHGk4okzV", icon: "♪" },
+];
 
 export default function WaitlistLanding() {
   const [open, setOpen] = useState(false);
@@ -60,10 +64,10 @@ export default function WaitlistLanding() {
       return "Please enter your name.";
     if (step === "email" && !/^\S+@\S+\.\S+$/.test(form.email))
       return "Please enter a valid email.";
-    if (step === "phone") {
-      const phone = parsePhoneNumberFromString(form.phone.trim());
-      if (!phone?.isValid()) {
-        return "Enter a valid international phone number, for example +14155552671.";
+    if (step === "phone" && form.phone.trim()) {
+      const digits = form.phone.replace(/\D/g, "");
+      if (digits.length < 7 || digits.length > 15) {
+        return "Please enter a valid phone number or skip this step.";
       }
     }
     return "";
@@ -78,11 +82,7 @@ export default function WaitlistLanding() {
     }
     setError("");
     const currentIndex = steps.indexOf(step);
-    if (step === "phone") {
-      const normalizedPhone = parsePhoneNumberFromString(form.phone.trim())!.number;
-      setForm((currentForm) => ({ ...currentForm, phone: normalizedPhone }));
-    }
-    if (step !== "smsConsent") {
+    if (step !== "phone") {
       setStep(steps[currentIndex + 1]);
       return;
     }
@@ -92,7 +92,7 @@ export default function WaitlistLanding() {
         ...form,
         name: form.name.trim(),
         email: form.email.trim(),
-        phone: parsePhoneNumberFromString(form.phone.trim())!.number,
+        phone: form.phone.trim(),
       });
       setSubmitted(true);
     } catch (submissionError) {
@@ -197,46 +197,27 @@ export default function WaitlistLanding() {
                   A few quick details and you are in.
                 </p>
                 <form onSubmit={advance} className="mt-8">
-                  {step !== "emailConsent" && step !== "smsConsent" ? (
-                    <input
-                      ref={inputRef}
-                      value={form[step]}
-                      onChange={(event) =>
-                        setForm({ ...form, [step]: event.target.value })
-                      }
-                      type={
-                        step === "email"
-                          ? "email"
-                          : step === "phone"
-                            ? "tel"
-                            : "text"
-                      }
-                      placeholder={
-                        step === "name"
-                          ? "Your name"
-                          : step === "email"
-                            ? "you@example.com"
-                            : "+1 555 000 0000"
-                      }
-                      autoComplete={step}
-                      className="h-14 w-full rounded-2xl border border-white/15 bg-white/[0.06] px-4 text-base text-white outline-none transition placeholder:text-neutral-500 focus:border-white/50 focus:bg-white/[0.1]"
-                    />
-                  ) : (
-                    <label className="flex cursor-pointer gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4 text-sm leading-6 text-neutral-300 transition hover:border-white/25">
-                      <input
-                        type="checkbox"
-                        checked={form[step]}
-                        onChange={(event) =>
-                          setForm({ ...form, [step]: event.target.checked })
-                        }
-                        className="mt-1 h-4 w-4 accent-white"
-                      />
-                      <span>
-                        {step === "emailConsent"
-                          ? "Yes, send me occasional email updates about launch news and Brixlore. You can unsubscribe anytime."
-                          : "Yes, send me occasional text updates about launch news. Message rates may apply. You can opt out anytime."}
-                      </span>
-                    </label>
+                  <input
+                    ref={inputRef}
+                    value={form[step]}
+                    onChange={(event) =>
+                      setForm({ ...form, [step]: event.target.value })
+                    }
+                    type={step === "email" ? "email" : step === "phone" ? "tel" : "text"}
+                    placeholder={
+                      step === "name"
+                        ? "Your name"
+                        : step === "email"
+                          ? "you@example.com"
+                          : "773 253 1216"
+                    }
+                    autoComplete={step === "phone" ? "tel" : step}
+                    className="h-14 w-full rounded-2xl border border-white/15 bg-white/[0.06] px-4 text-base text-white outline-none transition placeholder:text-neutral-500 focus:border-white/50 focus:bg-white/[0.1]"
+                  />
+                  {step === "phone" && (
+                    <p className="mt-3 text-sm text-neutral-400">
+                      Country code is optional. Leave this blank to skip.
+                    </p>
                   )}
                   {error && (
                     <p className="mt-3 text-sm text-red-300" role="alert">
@@ -259,7 +240,7 @@ export default function WaitlistLanding() {
                     >
                       {submitting
                         ? "Joining…"
-                        : step === "smsConsent"
+                        : step === "phone"
                           ? "Join the waitlist"
                           : "Continue"}
                     </button>
@@ -281,6 +262,26 @@ export default function WaitlistLanding() {
                   Thanks, {form.name.split(" ")[0]}. We will be in touch when
                   Brixlore is ready.
                 </p>
+                <div className="mt-7">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-neutral-500">
+                    Follow along
+                  </p>
+                  <div className="mt-4 flex justify-center gap-3">
+                    {socialLinks.map((social) => (
+                      <a
+                        key={social.label}
+                        href={social.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`Follow Brixlore on ${social.label}`}
+                        title={social.label}
+                        className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-base font-semibold text-white transition hover:border-white/45 hover:bg-white/10"
+                      >
+                        {social.icon}
+                      </a>
+                    ))}
+                  </div>
+                </div>
                 <button
                   onClick={close}
                   className="mt-8 rounded-full border border-white/20 px-6 py-3 text-sm font-medium text-white transition hover:bg-white/10"

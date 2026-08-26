@@ -1316,7 +1316,7 @@ export default function Home() {
           ]}
         />
       </div> */}
-      <div className="relative bg-[#000000] pt-20">
+      {/* <div className="relative bg-[#000000] pt-20">
         <div className="mb-14 text-center">
           <TextAnimate
             once
@@ -1332,10 +1332,10 @@ export default function Home() {
             Enjoy more ways to discover, save, and keep watching the stories you
             love.
           </p>
-        </div>
+        </div> */}
 
         {/* Premium benefits */}
-        <div className="mx-auto max-w-7xl overflow-hidden px-3 pb-12 sm:px-8 sm:pb-20">
+        {/* <div className="mx-auto max-w-7xl overflow-hidden px-3 pb-12 sm:px-8 sm:pb-20">
           <div className="grid grid-cols-2 gap-x-2 gap-y-6 pb-4 text-center sm:grid-cols-3 sm:gap-x-6 sm:gap-y-12 lg:grid-cols-3 lg:gap-x-8">
             {[
               [
@@ -1387,11 +1387,11 @@ export default function Home() {
               </article>
             ))}
           </div>
-        </div>
-      </div>
+        </div> */}
+      {/* </div> */}
       {/* FAQ */}
       <section
-        className="relative bg-[#000000] px-4 py-20 sm:px-8 sm:py-8"
+        className="relative bg-[#000000] px-4 py-20 !pt-44 sm:px-8 sm:py-8"
         aria-labelledby="waitlist-faq-heading"
       >
         <div className="mx-auto max-w-3xl">

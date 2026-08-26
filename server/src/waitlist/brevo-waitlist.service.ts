@@ -1,4 +1,5 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
 
 const Brevo = require('sib-api-v3-sdk');
 
@@ -23,6 +24,7 @@ export class BrevoWaitlistService {
   async sync(contact: WaitlistContact): Promise<void> {
     const listIds = this.getListIds(contact);
     const [firstName, ...lastNameParts] = contact.name.trim().split(/\s+/);
+    const brevoPhone = this.toBrevoPhone(contact.phone);
 
     try {
       await this.api.createContact({
@@ -30,7 +32,7 @@ export class BrevoWaitlistService {
         attributes: {
           FIRSTNAME: firstName,
           ...(lastNameParts.length ? { LASTNAME: lastNameParts.join(' ') } : {}),
-          SMS: contact.phone,
+          ...(brevoPhone ? { SMS: brevoPhone } : {}),
         },
         updateEnabled: true,
       });
@@ -62,5 +64,12 @@ export class BrevoWaitlistService {
     }
 
     return [...new Set(listIds)];
+  }
+
+  private toBrevoPhone(phone: string): string | undefined {
+    if (!phone?.trim().startsWith('+')) return undefined;
+
+    const parsedPhone = parsePhoneNumberFromString(phone);
+    return parsedPhone?.isValid() ? parsedPhone.number : undefined;
   }
 }

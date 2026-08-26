@@ -2,31 +2,29 @@ import {
   IsBoolean,
   IsEmail,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MinLength,
   registerDecorator,
   type ValidationArguments,
   type ValidationOptions,
 } from 'class-validator';
-import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
-
-function IsValidInternationalPhone(validationOptions?: ValidationOptions) {
+function IsValidPhone(validationOptions?: ValidationOptions) {
   return (object: object, propertyName: string) => {
     registerDecorator({
-      name: 'isValidInternationalPhone',
+      name: 'isValidPhone',
       target: object.constructor,
       propertyName,
       options: validationOptions,
       validator: {
         validate(value: unknown) {
-          return (
-            typeof value === 'string' &&
-            value.startsWith('+') &&
-            parsePhoneNumberFromString(value)?.isValid() === true
-          );
+          if (value === undefined || value === null || value === '') return true;
+          if (typeof value !== 'string') return false;
+          const digits = value.replace(/\D/g, '');
+          return digits.length >= 7 && digits.length <= 15;
         },
         defaultMessage(args: ValidationArguments) {
-          return `${args.property} must be a valid international phone number`;
+          return `${args.property} must contain between 7 and 15 digits`;
         },
       },
     });
@@ -43,11 +41,11 @@ export class CreateWaitlistEntryDto {
   email!: string;
 
   @IsString()
-  @IsNotEmpty()
-  @IsValidInternationalPhone({
-    message: 'phone must be a valid international phone number',
+  @IsOptional()
+  @IsValidPhone({
+    message: 'phone must contain between 7 and 15 digits',
   })
-  phone!: string;
+  phone?: string;
 
   @IsBoolean()
   emailConsent!: boolean;
