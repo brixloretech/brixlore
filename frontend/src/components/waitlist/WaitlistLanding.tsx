@@ -209,7 +209,7 @@ export default function WaitlistLanding() {
                         ? "Your name"
                         : step === "email"
                           ? "you@example.com"
-                          : "773 253 1216"
+                          : "777 222 1111"
                     }
                     autoComplete={step === "phone" ? "tel" : step}
                     className="h-14 w-full rounded-2xl border border-white/15 bg-white/[0.06] px-4 text-base text-white outline-none transition placeholder:text-neutral-500 focus:border-white/50 focus:bg-white/[0.1]"
