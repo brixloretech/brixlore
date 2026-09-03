@@ -6,6 +6,8 @@
 export const SITE_NAME = "Brixlore.TV";
 /** Full branding with .TV suffix (e.g. footer, hero). */
 export const SITE_BRAND = "Brixlore.TV";
+export const LOGO_HEIGHT = 80;
+export const LOGO_WIDTH = 140;
 export const SITE_TAGLINE =
   "Brixlore | Media On Our Terms";
 export const SITE_DESCRIPTION =

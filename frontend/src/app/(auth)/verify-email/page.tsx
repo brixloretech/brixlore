@@ -2,117 +2,136 @@
 
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
+import { Check, MailCheck, ShieldAlert } from "lucide-react";
 import {
-  Card,
-
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Button,
-} from "@/components/ui";
-import { authService } from "@/lib/services";
+  AuthButton,
+  AuthCard,
+  AuthContent,
+  AuthFooter,
+  AuthHeader,
+  AuthNotice,
+} from "@/components/auth";
+import { Loader } from "@/components/ui";
 import { getApiErrorMessage } from "@/lib/api-client";
+import { authService } from "@/lib/services";
 
 function VerifyEmailInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const returnUrlParam = searchParams.get("returnUrl");
-  const returnUrl =
-    returnUrlParam && returnUrlParam.startsWith("/")
-      ? returnUrlParam
-      : "/dashboard";
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const returnUrl = returnUrlParam?.startsWith("/")
+    ? returnUrlParam
+    : "/dashboard";
+  const [status, setStatus] = useState<"loading" | "success" | "error">(
+    "loading",
+  );
   const [message, setMessage] = useState("");
 
   useEffect(() => {
     if (!token) {
       setStatus("error");
-      setMessage("No verification token provided.");
+      setMessage("No verification token was provided.");
       return;
     }
 
+    let active = true;
+
     authService
       .verifyEmail({ token })
-      .then((res) => {
+      .then((response) => {
+        if (!active) return;
         setStatus("success");
-        setMessage(res.message);
+        setMessage(response.message);
       })
-      .catch((err) => {
+      .catch((error) => {
+        if (!active) return;
         setStatus("error");
-        setMessage(getApiErrorMessage(err));
+        setMessage(getApiErrorMessage(error));
       });
+
+    return () => {
+      active = false;
+    };
   }, [token]);
 
+  if (status === "loading") {
+    return (
+      <AuthCard>
+        <AuthHeader
+          eyebrow="Verification in progress"
+          title="Opening your account."
+          description="We’re confirming your private link. This should only take a moment."
+        />
+        <AuthContent className="pb-9">
+          <div className="flex min-h-32 items-center justify-center rounded-2xl border border-white/[0.08] bg-white/[0.025]">
+            <Loader
+              size="md"
+              label="Verifying email"
+              className="text-white/55"
+            />
+          </div>
+        </AuthContent>
+      </AuthCard>
+    );
+  }
+
+  if (status === "success") {
+    return (
+      <AuthCard>
+        <AuthHeader
+          eyebrow="Identity confirmed"
+          title="You’re ready to watch."
+          description={message || "Your email address has been verified."}
+        />
+        <AuthContent>
+          <div className="grid h-16 w-16 place-items-center rounded-full bg-white text-black">
+            <Check size={24} />
+          </div>
+        </AuthContent>
+        <AuthFooter>
+          <AuthButton
+            type="button"
+            onClick={() =>
+              router.push(
+                `/login?returnUrl=${encodeURIComponent(returnUrl)}`,
+              )
+            }
+          >
+            Continue to sign in
+          </AuthButton>
+        </AuthFooter>
+      </AuthCard>
+    );
+  }
+
   return (
-    <Card className="mx-auto max-w-md">
-      <CardHeader className="text-center">
-        {status === "loading" && (
-          <>
-            <CardTitle>Verifying your email...</CardTitle>
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-              Please wait while we process your request.
-            </p>
-          </>
-        )}
-        {status === "success" && (
-          <>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-              <svg
-                className="h-6 w-6 text-green-600 dark:text-green-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            </div>
-            <CardTitle>Email Verified!</CardTitle>
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-              {message}
-            </p>
-          </>
-        )}
-        {status === "error" && (
-          <>
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-              <svg
-                className="h-6 w-6 text-red-600 dark:text-red-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </div>
-            <CardTitle>Verification Failed</CardTitle>
-            <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-              {message}
-            </p>
-          </>
-        )}
-      </CardHeader>
-      <CardFooter>
-        <Button
-          fullWidth
-          onClick={() => router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)}
-          variant={status === "error" ? "outline" : "primary"}
+    <AuthCard>
+      <AuthHeader
+        eyebrow="Verification paused"
+        title="We couldn’t confirm it."
+        description="The link may be incomplete, expired, or already used. You can return to sign in and request another one."
+      />
+      <AuthContent className="space-y-5">
+        <div className="grid h-16 w-16 place-items-center rounded-full border border-white/15 bg-white/[0.06] text-white">
+          <ShieldAlert size={24} />
+        </div>
+        <AuthNotice>{message}</AuthNotice>
+      </AuthContent>
+      <AuthFooter className="space-y-4">
+        <AuthButton
+          type="button"
+          onClick={() =>
+            router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)
+          }
         >
-          Go to Login
-        </Button>
-      </CardFooter>
-    </Card>
+          Go to sign in
+        </AuthButton>
+        <p className="flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/25">
+          <MailCheck size={12} /> New links can be requested at sign in
+        </p>
+      </AuthFooter>
+    </AuthCard>
   );
 }
 
@@ -120,11 +139,15 @@ export default function VerifyEmailPage() {
   return (
     <Suspense
       fallback={
-        <Card className="mx-auto max-w-md">
-          <CardHeader className="text-center">
-            <CardTitle>Loading...</CardTitle>
-          </CardHeader>
-        </Card>
+        <AuthCard>
+          <div className="flex min-h-[360px] items-center justify-center">
+            <Loader
+              size="md"
+              label="Preparing verification"
+              className="text-white/55"
+            />
+          </div>
+        </AuthCard>
       }
     >
       <VerifyEmailInner />

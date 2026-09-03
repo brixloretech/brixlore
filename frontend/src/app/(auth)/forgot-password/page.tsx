@@ -2,17 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ArrowLeft, Check, Mail } from "lucide-react";
 import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Button,
-  Input,
-} from "@/components/ui";
-import { validateEmail } from "@/lib/validation";
+  AuthButton,
+  AuthCard,
+  AuthContent,
+  AuthFooter,
+  AuthHeader,
+  AuthNotice,
+  authInputClass,
+} from "@/components/auth";
+import { Input } from "@/components/ui";
 import { authService } from "@/lib/services";
+import { validateEmail } from "@/lib/validation";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -21,9 +23,10 @@ export default function ForgotPasswordPage() {
   const [success, setSuccess] = useState(false);
   const [message, setMessage] = useState("");
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
     setError(null);
+
     const emailError = validateEmail(email);
     if (emailError) {
       setError(emailError);
@@ -35,11 +38,11 @@ export default function ForgotPasswordPage() {
       const response = await authService.forgotPassword({ email });
       setMessage(response.message);
       setSuccess(true);
-    } catch (err) {
+    } catch (requestError) {
       setError(
-        err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again."
+        requestError instanceof Error
+          ? requestError.message
+          : "Something went wrong. Please try again.",
       );
     } finally {
       setIsLoading(false);
@@ -48,68 +51,72 @@ export default function ForgotPasswordPage() {
 
   if (success) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Check your email</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-neutral-600 dark:text-neutral-400">
-            {message}
+      <AuthCard>
+        <AuthHeader
+          eyebrow="Message sent"
+          title="Check your inbox."
+          description={
+            message ||
+            "We sent a private reset link to your email. Follow it to choose a new password."
+          }
+        />
+        <AuthContent>
+          <div className="grid h-16 w-16 place-items-center rounded-full bg-white text-black">
+            <Check size={24} />
+          </div>
+          <p className="mt-5 text-sm leading-6 text-white/40">
+            The link may take a minute to arrive. Check your spam folder if you
+            do not see it.
           </p>
-        </CardContent>
-        <CardFooter>
+        </AuthContent>
+        <AuthFooter>
           <Link
             href="/login"
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-neutral-900 px-4 text-sm font-medium text-white hover:bg-neutral-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200"
+            className="inline-flex h-14 w-full items-center justify-center gap-2 rounded-full bg-white text-sm font-semibold text-black transition-colors hover:bg-white/80"
           >
-            Back to sign in
+            Back to sign in <ArrowLeft size={15} />
           </Link>
-        </CardFooter>
-      </Card>
+        </AuthFooter>
+      </AuthCard>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Forgot password</CardTitle>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Enter your email and we&apos;ll send you a link to reset your
-          password.
-        </p>
-      </CardHeader>
+    <AuthCard>
+      <AuthHeader
+        eyebrow="Account recovery"
+        title="Find your way back."
+        description="Tell us where to reach you and we’ll send a secure link to reset your password."
+      />
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          {error && (
-            <p
-              className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400"
-              role="alert"
-            >
-              {error}
-            </p>
-          )}
+        <AuthContent className="space-y-5">
+          {error && <AuthNotice>{error}</AuthNotice>}
           <Input
             label="Email"
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(event) => setEmail(event.target.value)}
             disabled={isLoading}
             placeholder="you@example.com"
+            className={authInputClass}
           />
-        </CardContent>
-        <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" fullWidth disabled={isLoading}>
-            {isLoading ? "Sending…" : "Send reset link"}
-          </Button>
+          <AuthButton type="submit" disabled={isLoading}>
+            {isLoading ? "Sending secure link..." : "Send reset link"}
+          </AuthButton>
+          <p className="flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/25">
+            <Mail size={12} /> One secure email, no spam
+          </p>
+        </AuthContent>
+        <AuthFooter>
           <Link
             href="/login"
-            className="text-center text-sm text-neutral-600 underline hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white"
+            className="flex items-center justify-center gap-2 text-sm font-semibold text-white/45 transition hover:text-white"
           >
-            Back to sign in
+            <ArrowLeft size={14} /> Back to sign in
           </Link>
-        </CardFooter>
+        </AuthFooter>
       </form>
-    </Card>
+    </AuthCard>
   );
 }

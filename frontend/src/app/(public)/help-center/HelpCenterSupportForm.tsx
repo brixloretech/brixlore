@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { siteService } from "@/lib/services";
+import { ArrowRight, Check } from "lucide-react";
 import { getApiErrorMessage } from "@/lib/api-client";
+import { siteService } from "@/lib/services";
 import { validateEmail, validateRequired } from "@/lib/validation";
 
 type FormErrors = {
@@ -11,6 +12,9 @@ type FormErrors = {
   subject?: string;
   message?: string;
 };
+
+const fieldClass =
+  "h-14 w-full rounded-none border-0 border-b border-black/20 bg-transparent px-0 text-[15px] text-black outline-none transition-colors placeholder:text-black/32 hover:border-black/45 focus:border-black disabled:cursor-not-allowed disabled:opacity-50";
 
 export function HelpCenterSupportForm() {
   const [name, setName] = useState("");
@@ -30,16 +34,11 @@ export function HelpCenterSupportForm() {
       message: validateRequired(message, "Message") ?? undefined,
     };
     setErrors(nextErrors);
-    return (
-      !nextErrors.name &&
-      !nextErrors.email &&
-      !nextErrors.subject &&
-      !nextErrors.message
-    );
+    return Object.values(nextErrors).every((error) => !error);
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setNotice(null);
     setSubmitError(null);
     if (!runValidation()) return;
@@ -58,93 +57,141 @@ export function HelpCenterSupportForm() {
       setSubject("");
       setMessage("");
       setErrors({});
-    } catch (err) {
-      setSubmitError(getApiErrorMessage(err));
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <form className="mt-4 max-w-md space-y-4" onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} noValidate className="space-y-8">
       {notice ? (
-        <div className="rounded border border-emerald-900/40 bg-emerald-950/20 px-3 py-2 text-sm text-emerald-300">
+        <div
+          className="flex gap-3 border border-black/20 bg-black px-4 py-4 text-sm leading-6 text-white"
+          role="status"
+        >
+          <Check size={17} className="mt-0.5 shrink-0" />
           {notice}
         </div>
       ) : null}
       {submitError ? (
-        <div className="rounded border border-red-900/50 bg-red-950/20 px-3 py-2 text-sm text-red-300">
+        <div
+          className="border border-red-900/25 bg-red-900/[0.07] px-4 py-4 text-sm leading-6 text-red-900"
+          role="alert"
+        >
           {submitError}
         </div>
       ) : null}
 
-      <div>
-        <input
-          type="text"
-          placeholder="Your Name"
-          className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          disabled={submitting}
-          required
-        />
-        {errors.name ? (
-          <p className="mt-1 text-xs text-red-400">{errors.name}</p>
-        ) : null}
+      <div className="grid gap-8 sm:grid-cols-2">
+        <div>
+          <label htmlFor="support-name" className="mb-2 block text-sm font-medium text-black/75">
+            Your name
+          </label>
+          <input
+            id="support-name"
+            type="text"
+            autoComplete="name"
+            placeholder="Name"
+            className={fieldClass}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            disabled={submitting}
+            required
+            aria-invalid={Boolean(errors.name)}
+            aria-describedby={errors.name ? "support-name-error" : undefined}
+          />
+          {errors.name ? (
+            <p id="support-name-error" className="mt-2 text-xs text-red-800" role="alert">
+              {errors.name}
+            </p>
+          ) : null}
+        </div>
+
+        <div>
+          <label htmlFor="support-email" className="mb-2 block text-sm font-medium text-black/75">
+            Email address
+          </label>
+          <input
+            id="support-email"
+            type="email"
+            autoComplete="email"
+            placeholder="you@example.com"
+            className={fieldClass}
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            disabled={submitting}
+            required
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? "support-email-error" : undefined}
+          />
+          {errors.email ? (
+            <p id="support-email-error" className="mt-2 text-xs text-red-800" role="alert">
+              {errors.email}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <div>
+        <label htmlFor="support-subject" className="mb-2 block text-sm font-medium text-black/75">
+          Subject
+        </label>
         <input
-          type="email"
-          placeholder="Your Email"
-          className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          disabled={submitting}
-          required
-        />
-        {errors.email ? (
-          <p className="mt-1 text-xs text-red-400">{errors.email}</p>
-        ) : null}
-      </div>
-
-      <div>
-        <input
+          id="support-subject"
           type="text"
-          placeholder="Subject"
-          className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white"
+          placeholder="What should we know?"
+          className={fieldClass}
           value={subject}
-          onChange={(e) => setSubject(e.target.value)}
+          onChange={(event) => setSubject(event.target.value)}
           disabled={submitting}
           required
+          aria-invalid={Boolean(errors.subject)}
+          aria-describedby={errors.subject ? "support-subject-error" : undefined}
         />
         {errors.subject ? (
-          <p className="mt-1 text-xs text-red-400">{errors.subject}</p>
+          <p id="support-subject-error" className="mt-2 text-xs text-red-800" role="alert">
+            {errors.subject}
+          </p>
         ) : null}
       </div>
 
       <div>
+        <label htmlFor="support-message" className="mb-2 block text-sm font-medium text-black/75">
+          Message
+        </label>
         <textarea
-          placeholder="How can we help?"
-          className="w-full rounded border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white"
-          rows={4}
+          id="support-message"
+          placeholder="Tell us what happened, what you expected, and the device or browser you are using."
+          className="min-h-44 w-full resize-y rounded-none border-0 border-b border-black/20 bg-transparent px-0 py-3 text-[15px] leading-7 text-black outline-none transition-colors placeholder:text-black/32 hover:border-black/45 focus:border-black disabled:cursor-not-allowed disabled:opacity-50"
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(event) => setMessage(event.target.value)}
           disabled={submitting}
           required
+          aria-invalid={Boolean(errors.message)}
+          aria-describedby={errors.message ? "support-message-error" : undefined}
         />
         {errors.message ? (
-          <p className="mt-1 text-xs text-red-400">{errors.message}</p>
+          <p id="support-message-error" className="mt-2 text-xs text-red-800" role="alert">
+            {errors.message}
+          </p>
         ) : null}
       </div>
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="w-full rounded bg-accent px-4 py-2 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {submitting ? "Sending..." : "Send Message"}
-      </button>
+      <div className="flex flex-col gap-5 border-t border-black/20 pt-7 sm:flex-row sm:items-center sm:justify-between">
+        <p className="max-w-xs text-xs leading-5 text-black/45">
+          Your request is reviewed by the Brixlore support team.
+        </p>
+        <button
+          type="submit"
+          disabled={submitting}
+          className="inline-flex h-14 shrink-0 items-center justify-center gap-3 rounded-full bg-black px-7 text-sm font-semibold text-white transition-colors hover:bg-black/76 disabled:cursor-not-allowed disabled:opacity-45"
+        >
+          {submitting ? "Sending request..." : "Send support request"}
+          {!submitting && <ArrowRight size={16} />}
+        </button>
+      </div>
     </form>
   );
 }

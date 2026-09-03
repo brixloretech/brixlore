@@ -1,15 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ArrowRight,
+  Check,
+  ChevronRight,
+  CreditCard,
+  Crown,
+  Headphones,
+  ShieldCheck,
+} from "lucide-react";
 import {
   Button,
   Input,
+  Loader,
   Modal,
   ModalContent,
   ModalFooter,
-  Loader,
 } from "@/components/ui";
+import { PlanActionButtons } from "@/components/content/PlanActionButtons";
 import { useAuth } from "@/contexts";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { siteService, subscriptionService } from "@/lib/services";
@@ -18,12 +28,40 @@ import type {
   GetSubscriptionResponseDto,
   PublicPlanDto,
 } from "@/types/api";
+import { RainbowButton } from "@/components/ui/rainbow-button";
+
+function money(amount: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+function date(value?: string) {
+  if (!value) return "Not available";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime())
+    ? "Not available"
+    : parsed.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+}
 
 export default function SubscriptionPage() {
   const { user } = useAuth();
   const [plans, setPlans] = useState<PublicPlanDto[]>([]);
   const [subscription, setSubscription] =
     useState<GetSubscriptionResponseDto | null>(null);
+  const [billing, setBilling] = useState<BillingSummaryDto | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
+  const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportName, setSupportName] = useState(user?.name ?? "");
   const [supportEmail, setSupportEmail] = useState(user?.email ?? "");
@@ -32,461 +70,449 @@ export default function SubscriptionPage() {
   const [supportError, setSupportError] = useState<string | null>(null);
   const [supportSuccess, setSupportSuccess] = useState<string | null>(null);
   const [supportLoading, setSupportLoading] = useState(false);
-  const [billingLoading, setBillingLoading] = useState(false);
-  const [billingError, setBillingError] = useState<string | null>(null);
-  const [billingSummary, setBillingSummary] =
-    useState<BillingSummaryDto | null>(null);
-  const [billingSummaryLoading, setBillingSummaryLoading] = useState(true);
-  const [isLoading, setIsLoading] = useState(true);
 
-  const [cancelModalOpen, setCancelModalOpen] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
-  const [cancelError, setCancelError] = useState<string | null>(null);
-
+  const refreshSubscription = async () => {
+    const value = await subscriptionService.getSubscription(true);
+    setSubscription(value ?? null);
+  };
   useEffect(() => {
     let active = true;
-    Promise.all([
+    void Promise.all([
       subscriptionService.getPlans(),
       subscriptionService.getSubscription(true),
       subscriptionService.getBillingSummary(),
     ])
-      .then(([planList, sub, billing]) => {
-        if (!active) return;
-        setPlans(planList);
-        setSubscription(sub ?? null);
-        setBillingSummary(billing ?? { paymentMethod: null, invoices: [] });
+      .then(([planList, current, summary]) => {
+        if (active) {
+          setPlans(planList);
+          setSubscription(current ?? null);
+          setBilling(summary ?? { paymentMethod: null, invoices: [] });
+        }
       })
       .catch(() => {
-        if (!active) return;
-        setPlans([]);
-        setSubscription(null);
-        setBillingSummary({ paymentMethod: null, invoices: [] });
+        if (active) {
+          setPlans([]);
+          setSubscription(null);
+          setBilling({ paymentMethod: null, invoices: [] });
+        }
       })
       .finally(() => {
-        if (!active) return;
-        setBillingSummaryLoading(false);
-        setIsLoading(false);
+        if (active) setLoading(false);
       });
     return () => {
       active = false;
     };
   }, []);
-
   useEffect(() => {
     setSupportName(user?.name ?? "");
     setSupportEmail(user?.email ?? "");
   }, [user]);
+  const activePlan = useMemo(
+    () => plans.find((plan) => plan.id === subscription?.planId) ?? null,
+    [plans, subscription?.planId],
+  );
+  const isCancelled = subscription?.status === "CANCELLED";
+  const payment = billing?.paymentMethod;
 
-  async function handleOpenBillingPortal() {
+  async function openPortal() {
     setBillingError(null);
     setBillingLoading(true);
     try {
-      const res = await subscriptionService.createPortalSession(
+      const result = await subscriptionService.createPortalSession(
         window.location.href,
       );
-      if (res?.url) {
-        window.location.href = res.url;
-      } else {
-        setBillingError("Billing portal is unavailable right now.");
-      }
-    } catch (err) {
-      setBillingError(getApiErrorMessage(err));
+      if (result?.url) window.location.href = result.url;
+      else setBillingError("Billing portal is unavailable right now.");
+    } catch (error) {
+      setBillingError(getApiErrorMessage(error));
     } finally {
       setBillingLoading(false);
     }
   }
-
-  async function handleCancelSubscription() {
+  async function cancelSubscription() {
     setCancelError(null);
-    setIsCanceling(true);
+    setCanceling(true);
     try {
       await subscriptionService.cancelSubscription();
-      const updatedSub = await subscriptionService.getSubscription(true);
-      setSubscription(updatedSub ?? null);
-      setCancelModalOpen(false);
-    } catch (err) {
-      setCancelError(getApiErrorMessage(err));
+      await refreshSubscription();
+      setCancelOpen(false);
+    } catch (error) {
+      setCancelError(getApiErrorMessage(error));
     } finally {
-      setIsCanceling(false);
+      setCanceling(false);
     }
   }
-
-  async function handleSupportSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitSupport(event: React.FormEvent) {
+    event.preventDefault();
     setSupportError(null);
     setSupportSuccess(null);
-    const name = supportName.trim();
-    const email = supportEmail.trim();
-    const subject = supportSubject.trim();
-    const message = supportMessage.trim();
-    if (!name || !email || !subject || !message) {
+    if (
+      ![supportName, supportEmail, supportSubject, supportMessage].every(
+        (value) => value.trim(),
+      )
+    ) {
       setSupportError("Please fill out all fields.");
       return;
     }
     setSupportLoading(true);
     try {
-      const res = await siteService.submitContact({
-        name,
-        email,
-        subject,
-        message,
+      const result = await siteService.submitContact({
+        name: supportName.trim(),
+        email: supportEmail.trim(),
+        subject: supportSubject.trim(),
+        message: supportMessage.trim(),
       });
-      setSupportSuccess(res.message ?? "Your request was sent.");
+      setSupportSuccess(result.message ?? "Your request was sent.");
       setSupportSubject("");
       setSupportMessage("");
-    } catch (err) {
-      setSupportError(getApiErrorMessage(err));
+    } catch (error) {
+      setSupportError(getApiErrorMessage(error));
     } finally {
       setSupportLoading(false);
     }
   }
 
-  const activePlan = useMemo(() => {
-    if (!subscription?.planId) return null;
-    return plans.find((plan) => plan.id === subscription.planId) ?? null;
-  }, [plans, subscription]);
-
-  const formatNextChargeDate = (isoDate?: string): string => {
-    if (!isoDate) return "Not available";
-    const parsed = new Date(isoDate);
-    if (Number.isNaN(parsed.getTime())) return "Not available";
-    return new Intl.DateTimeFormat("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-      timeZone: "UTC",
-    }).format(parsed);
-  };
-
-  const inferredBillingCycle = useMemo<"monthly" | "yearly">(() => {
-    if (!activePlan) return "monthly";
-
-    const yearlyCents =
-      activePlan.yearlyPrice != null
-        ? Math.round(activePlan.yearlyPrice * 100)
-        : null;
-    const monthlyCents = Math.round(activePlan.price * 100);
-
-    const latestInvoice = billingSummary?.invoices?.[0] ?? null;
-    if (latestInvoice) {
-      const invoiceAmount =
-        latestInvoice.status === "paid"
-          ? latestInvoice.amountPaid
-          : latestInvoice.amountDue;
-      if (yearlyCents != null && Math.abs(invoiceAmount - yearlyCents) <= 1) {
-        return "yearly";
-      }
-      if (Math.abs(invoiceAmount - monthlyCents) <= 1) {
-        return "monthly";
-      }
-    }
-
-    if (subscription?.currentPeriodEnd && yearlyCents != null) {
-      const periodEnd = new Date(subscription.currentPeriodEnd);
-      if (!Number.isNaN(periodEnd.getTime())) {
-        const daysUntilEnd =
-          (periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24);
-        if (daysUntilEnd > 45) {
-          return "yearly";
-        }
-      }
-    }
-
-    return "monthly";
-  }, [activePlan, billingSummary?.invoices, subscription?.currentPeriodEnd]);
-
-  const isFreePlan = activePlan?.price === 0;
-  const nextCharge = isFreePlan ? "--" : formatNextChargeDate(subscription?.currentPeriodEnd);
-  const priceLabel = activePlan
-    ? isFreePlan
-      ? "$0.00 / free"
-      : inferredBillingCycle === "yearly" && activePlan.yearlyPrice != null
-        ? `$${activePlan.yearlyPrice.toFixed(2)} / year`
-        : `$${activePlan.price.toFixed(2)} / month`
-    : "--";
-  const paymentMethod = billingSummary?.paymentMethod ?? null;
-  const invoices = billingSummary?.invoices ?? [];
-
-  const formatCurrency = (amount: number, currency?: string) => {
-    const normalized = (currency ?? "usd").toUpperCase();
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: normalized,
-    }).format((amount ?? 0) / 100);
-  };
-
-  const formatBrand = (brand?: string) => {
-    if (!brand) return "Card";
-    return brand.charAt(0).toUpperCase() + brand.slice(1);
-  };
-
-  if (isLoading) {
+  if (loading)
     return (
-      <main className="flex min-h-[60vh] items-center justify-center px-4 py-12">
-        <Loader size="lg" label="Loading subscription…" />
+      <main className="flex min-h-[65vh] items-center justify-center">
+        <Loader size="lg" label="Preparing your membership…" />
       </main>
     );
-  }
 
   return (
-    <div className="font-sans">
-      <header className="mb-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-neutral-500">
-          Subscription
+    <div className="min-h-[calc(100vh-57px)] w-full max-w-full overflow-x-hidden bg-[#050505] text-white">
+      <section className="relative isolate overflow-hidden border-b border-white/15">
+        <div className="absolute inset-0 -z-20 bg-[radial-gradient(circle_at_78%_16%,rgba(255,255,255,.16),transparent_18%),linear-gradient(140deg,#151515_0%,#050505_62%)]" />
+        <p
+          aria-hidden="true"
+          className="pointer-events-none absolute right-[-0.07em] top-[7%] -z-10 select-none text-[21vw] font-semibold leading-none tracking-[-0.14em] text-white/[0.045]"
+        >
+          ACCESS
         </p>
-        <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-          Keep your plan in sync
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm text-neutral-400">
-          Review your plan, billing, and payment methods.
-        </p>
-      </header>
-
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="space-y-6">
-          <div className="rounded-2xl border border-neutral-700/60 bg-neutral-900/60 p-6">
-            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500">
-              Current plan
+        <div className="relative mx-auto grid min-h-[550px] max-w-[1550px] items-end gap-10 px-4 pb-14 pt-24 sm:px-6 sm:pb-16 lg:min-h-[620px] lg:grid-cols-[1.1fr_.9fr] lg:px-10 lg:pb-20">
+          <div>
+            <p className="flex items-center gap-3 text-[10px] font-bold uppercase tracking-[0.22em] text-white/60">
+              <Crown size={14} /> Brixlore membership
             </p>
-            <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <h1 className="mt-6 text-5xl font-semibold leading-[0.84] tracking-[-0.085em] sm:text-7xl lg:text-[88px]">
+              More than
+              <br />a <span className="text-white/40">subscription.</span>
+            </h1>
+            <p className="mt-7 max-w-md border-l border-white/45 pl-5 text-sm leading-7 text-white/65 sm:text-base">
+              A front-row pass to every story, every screen, and the worlds
+              still waiting to be discovered.
+            </p>
+            <Link href="#plans" className="mt-9 inline-flex ">
+              <RainbowButton>
+                Choose your access <ChevronRight size={16} />
+              </RainbowButton>
+            </Link>
+          </div>
+          <div className="relative overflow-hidden border border-white/20 bg-white p-6 text-black sm:p-8">
+            <div className="absolute -right-14 -top-14 h-40 w-40 rounded-full border-[25px] border-black/10" />
+            <p className="relative text-[10px] font-bold uppercase tracking-[0.18em] text-black/45">
+              Your membership
+            </p>
+            <h2 className="relative mt-4 text-4xl font-semibold leading-[0.88] tracking-[-0.065em]">
+              {activePlan?.name ??
+                (subscription?.isSubscribed
+                  ? "Brixlore member"
+                  : "Free access")}
+            </h2>
+            <p className="relative mt-5 text-sm leading-6 text-black/60">
+              {subscription?.isSubscribed
+                ? isCancelled
+                  ? `Access ends ${date(subscription.currentPeriodEnd)}.`
+                  : "Your membership is active and ready for every story."
+                : "Choose a membership to unlock the full Brixlore experience."}
+            </p>
+            <div className="relative mt-8 flex items-end justify-between border-t border-black/15 pt-5">
               <div>
-                <h2 className="text-2xl font-semibold text-white">
-                  {activePlan?.name ??
-                    (subscription?.isSubscribed ? "Active plan" : "Free")}
-                </h2>
-                <p className="mt-1 text-sm text-neutral-400">
-                  {activePlan?.perks?.[0] ??
-                    (subscription?.isSubscribed
-                      ? "Subscription benefits are active."
-                      : "Choose a plan to unlock premium access.")}
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-black/45">
+                  Next renewal
+                </p>
+                <p className="mt-1 text-sm font-semibold">
+                  {subscription?.isSubscribed
+                    ? date(subscription.currentPeriodEnd)
+                    : "—"}
                 </p>
               </div>
-              <div className="rounded-xl border border-neutral-700/70 bg-neutral-950/60 px-4 py-3 text-right">
-                <p className="text-xs text-neutral-500">Next charge</p>
-                <p className="text-sm font-semibold text-white">{nextCharge}</p>
-                <p className="text-xs text-neutral-500">{priceLabel}</p>
-              </div>
-            </div>
-            <div className="mt-6 flex flex-wrap gap-3 items-center">
-              <Link href="/subscription">
-                <Button type="button">Manage plan</Button>
-              </Link>
-              {subscription?.isSubscribed && subscription?.status !== "CANCELLED" && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                  onClick={() => setCancelModalOpen(true)}
-                >
-                  Cancel subscription
-                </Button>
-              )}
-              {subscription?.isSubscribed && subscription?.status === "CANCELLED" && (
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2.5 py-1.5 text-xs font-semibold text-amber-400 ring-1 ring-inset ring-amber-500/20">
-                  Scheduled to cancel on {formatNextChargeDate(subscription.currentPeriodEnd)}
-                </span>
-              )}
+              <ShieldCheck size={25} />
             </div>
           </div>
-
-          <div className="rounded-2xl border border-neutral-700/60 bg-neutral-900/60 p-6">
-            <h3 className="text-lg font-semibold text-white">Payment method</h3>
-            <p className="mt-1 text-sm text-neutral-400">
-              Manage your saved payment methods in the billing portal.
-            </p>
-            <div className="mt-5 rounded-xl border border-neutral-700/70 bg-neutral-950/60 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  {billingSummaryLoading ? (
-                    <>
-                      <p className="text-sm font-semibold text-white">
-                        Loading payment method
-                      </p>
-                      <p className="text-xs text-neutral-400">
-                        Fetching your default card details.
-                      </p>
-                    </>
-                  ) : paymentMethod ? (
-                    <>
-                      <p className="text-sm font-semibold text-white">
-                        {`${formatBrand(paymentMethod.brand)} ending in ${paymentMethod.last4}`}
-                      </p>
-                      <p className="text-xs text-neutral-400">
-                        {`Expires ${String(paymentMethod.expMonth).padStart(2, "0")}/${String(paymentMethod.expYear).slice(-2)}`}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-sm font-semibold text-white">
-                        No card on file
-                      </p>
-                      <p className="text-xs text-neutral-400">
-                        Add or update a card in the billing portal.
-                      </p>
-                    </>
-                  )}
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleOpenBillingPortal}
-                  disabled={billingLoading}
+        </div>
+      </section>
+      <div className="mx-auto max-w-[1550px] px-4 py-12 sm:px-6 sm:py-16 lg:px-10 lg:py-20">
+        <section id="plans" className="scroll-mt-20">
+          <div className="flex flex-wrap items-end justify-between gap-5 border-b border-white/15 pb-5">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
+                Choose your level
+              </p>
+              <h2 className="mt-3 text-4xl font-semibold leading-none tracking-[-0.065em] sm:text-5xl">
+                Make every screen yours.
+              </h2>
+            </div>
+            <div className="flex border border-white/20 p-1">
+              <button
+                type="button"
+                onClick={() => setCycle("monthly")}
+                className={`px-4 py-2 text-xs font-bold transition ${cycle === "monthly" ? "bg-white text-black" : "text-white/55"}`}
+              >
+                Monthly
+              </button>
+              <button
+                type="button"
+                onClick={() => setCycle("yearly")}
+                className={`px-4 py-2 text-xs font-bold transition ${cycle === "yearly" ? "bg-white text-black" : "text-white/55"}`}
+              >
+                Yearly
+              </button>
+            </div>
+          </div>
+          <div className="mt-8 grid gap-px border border-white/15 bg-white/15 lg:grid-cols-3">
+            {plans.map((plan, index) => {
+              const isFeatured = plan.isPopular || index === 1;
+              const price =
+                cycle === "yearly" && plan.yearlyPrice != null
+                  ? plan.yearlyPrice
+                  : plan.price;
+              const isCurrent =
+                subscription?.isSubscribed && subscription.planId === plan.id;
+              return (
+                <article
+                  key={plan.id}
+                  className={`relative flex min-h-[510px] flex-col p-6 sm:p-8 ${isFeatured ? "bg-white text-black" : "bg-[#090909] text-white"}`}
                 >
-                  {billingLoading ? "Opening..." : "Update card"}
-                </Button>
+                  <div className="flex items-start justify-between gap-4">
+                    <p
+                      className={`font-mono text-[10px] font-bold uppercase tracking-[0.18em] ${isFeatured ? "text-black/45" : "text-white/45"}`}
+                    >
+                      0{index + 1} /{" "}
+                      {plan.isPopular ? "Most chosen" : "Membership"}
+                    </p>
+                    {isCurrent && (
+                      <span
+                        className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${isFeatured ? "border-black/25" : "border-white/25"}`}
+                      >
+                        Current plan
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="mt-8 text-4xl font-semibold leading-none tracking-[-0.065em]">
+                    {plan.name}
+                  </h3>
+                  <div className="mt-5 flex items-end gap-2">
+                    <span className="text-5xl font-semibold tracking-[-0.08em]">
+                      {money(price)}
+                    </span>
+                    <span
+                      className={`mb-1 text-xs ${isFeatured ? "text-black/55" : "text-white/50"}`}
+                    >
+                      / {cycle === "yearly" ? "year" : "month"}
+                    </span>
+                  </div>
+                  {cycle === "yearly" && plan.yearlyPrice != null && (
+                    <p
+                      className={`mt-3 text-xs font-medium ${isFeatured ? "text-black/55" : "text-white/50"}`}
+                    >
+                      A year of unlimited stories, in one payment.
+                    </p>
+                  )}
+                  <ul
+                    className={`mt-8 space-y-4 border-t pt-6 text-sm ${isFeatured ? "border-black/15" : "border-white/15"}`}
+                  >
+                    {plan.perks.slice(0, 5).map((perk) => (
+                      <li key={perk} className="flex gap-3">
+                        <Check size={17} className="shrink-0" />
+                        {perk}
+                      </li>
+                    ))}
+                    <li className="flex gap-3">
+                      <Check size={17} className="shrink-0" />
+                      Up to {plan.deviceLimit} devices
+                    </li>
+                    {plan.offlineAllowed && (
+                      <li className="flex gap-3">
+                        <Check size={17} className="shrink-0" />
+                        Offline downloads included
+                      </li>
+                    )}
+                  </ul>
+                  <div className="mt-auto pt-8">
+                    <PlanActionButtons
+                      planId={plan.id}
+                      planName={plan.name}
+                      isFreeTier={plan.price === 0}
+                      featured={isFeatured}
+                      billingCycle={cycle}
+                      userSubscription={subscription}
+                      onRefreshSub={() => void refreshSubscription()}
+                    />
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+        <section className="mt-16 grid gap-px border border-white/15 bg-white/15 lg:grid-cols-[1.1fr_.9fr]">
+          <div className="bg-[#0b0b0b] p-6 sm:p-8">
+            <div className="flex items-start justify-between gap-5">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
+                  Billing control
+                </p>
+                <h2 className="mt-4 text-3xl font-semibold leading-none tracking-[-0.055em]">
+                  Your payment, your terms.
+                </h2>
               </div>
+              <CreditCard size={24} className="text-white/50" />
+            </div>
+            <div className="mt-8 border-y border-white/15 py-5">
+              {payment ? (
+                <>
+                  <p className="text-sm font-semibold">
+                    {payment.brand
+                      ? `${payment.brand.charAt(0).toUpperCase() + payment.brand.slice(1)} ending in ${payment.last4}`
+                      : `Card ending in ${payment.last4}`}
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Expires {String(payment.expMonth).padStart(2, "0")}/
+                    {String(payment.expYear).slice(-2)}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-semibold">
+                    No payment method on file
+                  </p>
+                  <p className="mt-1 text-xs text-white/45">
+                    Add or update your card securely through the billing portal.
+                  </p>
+                </>
+              )}
+            </div>
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={openPortal}
+                disabled={billingLoading}
+              >
+                <RainbowButton>
+                  {billingLoading ? "Opening..." : "Open billing portal"}
+                </RainbowButton>
+              </button>
+              {subscription?.isSubscribed && !isCancelled && (
+                <button
+                  type="button"
+                  onClick={() => setCancelOpen(true)}
+                  className="px-3 "
+                >
+                  <RainbowButton>Cancel membership</RainbowButton>
+                </button>
+              )}
             </div>
             {billingError && (
-              <p className="mt-3 text-sm text-red-400" role="alert">
+              <p className="mt-4 text-sm text-red-300" role="alert">
                 {billingError}
               </p>
             )}
           </div>
-        </div>
-
-        <aside className="space-y-6">
-          <div className="rounded-2xl border border-neutral-700/60 bg-neutral-900/60 p-6">
-            <h3 className="text-lg font-semibold text-white">
-              Billing history
-            </h3>
-            <p className="mt-1 text-sm text-neutral-400">
-              Recent invoices for your records.
+          <div className="bg-white p-6 text-black sm:p-8">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-black/45">
+              Need a human?
             </p>
-            <div className="mt-5 space-y-3">
-              {invoices.length > 0 ? (
-                <div className="space-y-3">
-                  {invoices.map((invoice) => {
-                    const amount =
-                      invoice.status === "paid"
-                        ? invoice.amountPaid
-                        : invoice.amountDue;
-                    const label = invoice.status === "paid" ? "Paid" : "Due";
-                    const dateLabel = new Date(
-                      invoice.createdAt,
-                    ).toLocaleDateString();
-                    const linkUrl =
-                      invoice.hostedInvoiceUrl ?? invoice.invoicePdf ?? "";
-                    return (
-                      <div
-                        key={invoice.id}
-                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-neutral-700/70 bg-neutral-950/60 px-4 py-3"
-                      >
-                        <div>
-                          <p className="text-sm font-semibold text-white">
-                            {`${label} ${formatCurrency(amount, invoice.currency)}`}
-                          </p>
-                          <p className="text-xs text-neutral-400">
-                            {`${dateLabel} • ${invoice.status}`}
-                          </p>
-                        </div>
-                        {linkUrl ? (
-                          <a
-                            href={linkUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs font-semibold text-accent hover:text-accent/80"
-                          >
-                            View invoice
-                          </a>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+            <h2 className="mt-4 text-3xl font-semibold leading-none tracking-[-0.055em]">
+              We’re here for every question.
+            </h2>
+            <p className="mt-5 max-w-sm text-sm leading-7 text-black/60">
+              Billing questions, plan changes, and account help—our team can
+              take care of it.
+            </p>
+            <button
+              type="button"
+              onClick={() => setSupportOpen(true)}
+              className="mt-8 inline-flex items-center gap-2 border-b border-black pb-2 text-sm font-bold"
+            >
+              Contact support <Headphones size={16} />
+            </button>
+            <div className="mt-9 border-t border-black/15 pt-5">
+              <p className="text-xs text-black/55">Recent invoices</p>
+              {billing?.invoices?.length ? (
+                billing.invoices.slice(0, 2).map((invoice) => (
+                  <a
+                    key={invoice.id}
+                    href={
+                      invoice.hostedInvoiceUrl ||
+                      invoice.invoicePdf ||
+                      undefined
+                    }
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 flex items-center justify-between text-sm font-semibold hover:text-black/60"
+                  >
+                    <span>
+                      {invoice.status === "paid" ? "Paid" : "Due"}{" "}
+                      {new Intl.NumberFormat("en-US", {
+                        style: "currency",
+                        currency: (invoice.currency || "usd").toUpperCase(),
+                      }).format(
+                        (invoice.status === "paid"
+                          ? invoice.amountPaid
+                          : invoice.amountDue) / 100,
+                      )}
+                    </span>
+                    <ArrowRight size={15} />
+                  </a>
+                ))
               ) : (
-                <div className="rounded-xl border border-dashed border-neutral-700/70 bg-neutral-950/40 px-4 py-3 text-sm text-neutral-400">
-                  View invoices and billing history in the billing portal.
-                </div>
+                <p className="mt-2 text-sm text-black/55">
+                  Invoices appear here after your first payment.
+                </p>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleOpenBillingPortal}
-                disabled={billingLoading}
-              >
-                {billingLoading ? "Opening..." : "Open billing portal"}
-              </Button>
             </div>
           </div>
-
-          <div className="rounded-2xl border border-neutral-700/60 bg-neutral-900/60 p-6">
-            <h3 className="text-lg font-semibold text-white">Need help?</h3>
-            <p className="mt-1 text-sm text-neutral-400">
-              Billing questions or plan changes can be handled anytime.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setSupportOpen(true)}
-              >
-                Contact support
-              </Button>
-            </div>
-          </div>
-        </aside>
-      </section>
-
+        </section>
+      </div>
       <Modal
         isOpen={supportOpen}
         onClose={() => setSupportOpen(false)}
         title="Contact support"
       >
-        <form onSubmit={handleSupportSubmit}>
+        <form onSubmit={submitSupport}>
           <ModalContent className="space-y-4">
             {supportError && (
-              <p
-                className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400"
-                role="alert"
-              >
-                {supportError}
-              </p>
+              <p className="text-sm text-red-400">{supportError}</p>
             )}
             {supportSuccess && (
-              <p
-                className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                role="status"
-              >
-                {supportSuccess}
-              </p>
+              <p className="text-sm text-emerald-300">{supportSuccess}</p>
             )}
             <Input
               label="Name"
               value={supportName}
-              onChange={(e) => setSupportName(e.target.value)}
+              onChange={(event) => setSupportName(event.target.value)}
               disabled={supportLoading}
-              placeholder="Your name"
             />
             <Input
               label="Email"
               type="email"
               value={supportEmail}
-              onChange={(e) => setSupportEmail(e.target.value)}
+              onChange={(event) => setSupportEmail(event.target.value)}
               disabled={supportLoading}
-              placeholder="you@example.com"
             />
             <Input
               label="Subject"
               value={supportSubject}
-              onChange={(e) => setSupportSubject(e.target.value)}
+              onChange={(event) => setSupportSubject(event.target.value)}
+              disabled={supportLoading}
+            />
+            <textarea
+              value={supportMessage}
+              onChange={(event) => setSupportMessage(event.target.value)}
               disabled={supportLoading}
               placeholder="How can we help?"
+              className="min-h-[120px] w-full rounded-lg border border-white/15 bg-black px-3 py-2 text-sm text-white outline-none focus:border-white/50"
             />
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                Message
-              </label>
-              <textarea
-                className="min-h-[120px] w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-500 transition-colors focus:border-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-400/20 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100 dark:placeholder:text-neutral-400 dark:focus:border-neutral-500 dark:focus:ring-neutral-500/20"
-                value={supportMessage}
-                onChange={(e) => setSupportMessage(e.target.value)}
-                disabled={supportLoading}
-                placeholder="Share the details so we can help faster."
-              />
-            </div>
           </ModalContent>
           <ModalFooter>
             <Button
@@ -498,52 +524,44 @@ export default function SubscriptionPage() {
               Cancel
             </Button>
             <Button type="submit" disabled={supportLoading}>
-              {supportLoading ? "Sending..." : "Send"}
+              {supportLoading ? "Sending..." : "Send request"}
             </Button>
           </ModalFooter>
         </form>
       </Modal>
-
       <Modal
-        isOpen={cancelModalOpen}
+        isOpen={cancelOpen}
         onClose={() => {
-          if (!isCanceling) setCancelModalOpen(false);
+          if (!canceling) setCancelOpen(false);
         }}
-        title="Cancel Subscription"
+        title="Cancel membership"
       >
         <ModalContent>
-          <div className="text-neutral-300">
-            <p>
-              Are you sure you want to cancel your subscription?
-            </p>
-            <p className="mt-2 text-sm text-neutral-400">
-              You will continue to have access to your subscription benefits until{" "}
-              <span className="font-semibold text-white">
-                {formatNextChargeDate(subscription?.currentPeriodEnd)}
-              </span>
-              , at which point your plan will end and offline downloads will be revoked.
-            </p>
-            {cancelError && (
-              <p className="mt-4 text-sm font-medium text-red-500" role="alert">
-                {cancelError}
-              </p>
-            )}
-          </div>
+          <p className="text-neutral-300">
+            You’ll keep your membership benefits until{" "}
+            <strong className="text-white">
+              {date(subscription?.currentPeriodEnd)}
+            </strong>
+            .
+          </p>
+          {cancelError && (
+            <p className="mt-4 text-sm text-red-400">{cancelError}</p>
+          )}
         </ModalContent>
         <ModalFooter>
           <Button
             variant="outline"
-            disabled={isCanceling}
-            onClick={() => setCancelModalOpen(false)}
+            disabled={canceling}
+            onClick={() => setCancelOpen(false)}
           >
-            Keep Subscription
+            Keep membership
           </Button>
           <Button
-            disabled={isCanceling}
-            className="bg-red-600 hover:bg-red-700 text-white"
-            onClick={handleCancelSubscription}
+            disabled={canceling}
+            className="bg-red-600 text-white hover:bg-red-700"
+            onClick={cancelSubscription}
           >
-            {isCanceling ? "Canceling..." : "Cancel Subscription"}
+            {canceling ? "Canceling..." : "Cancel membership"}
           </Button>
         </ModalFooter>
       </Modal>

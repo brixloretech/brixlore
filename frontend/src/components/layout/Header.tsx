@@ -6,10 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/contexts";
 import { fetchBranding } from "@/lib/branding";
+import { LOGO_HEIGHT, LOGO_WIDTH } from "@/lib/seo";
 import { Button } from "@/components/ui";
-
-const LOGO_HEIGHT = 80;
-const LOGO_WIDTH = 140;
 
 function NavContent({
   isAuthenticated,

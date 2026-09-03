@@ -1,240 +1,109 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useEffect, useState, type ReactNode } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import {
+  Crown,
+  History,
+  House,
+  ListVideo,
+  LogOut,
+  Menu,
+  PlayCircle,
+  Search,
+  Settings,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { ProtectedRoute } from "@/components/auth";
 import { useAuth } from "@/contexts";
 import { SITE_BRAND } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 import { fetchBranding } from "@/lib/branding";
 
-function MenuIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M4 6h16M4 12h16M4 18h16"
-      />
-    </svg>
-  );
+type NavItem = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+};
+
+const PRIMARY_NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard", label: "Home", icon: House },
+  { href: "/dashboard/explore", label: "Search / Explore", icon: Search },
+  { href: "/dashboard/my-list", label: "My List", icon: ListVideo },
+  { href: "/dashboard/continue-watching", label: "Continue Watching", icon: PlayCircle },
+  { href: "/dashboard/watch-history", label: "Watch History", icon: History },
+];
+
+const SECONDARY_NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard/subscription", label: "Subscription", icon: Crown },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+];
+
+function isCurrentPath(pathname: string, href: string) {
+  return href === "/dashboard" ? pathname === href : pathname.startsWith(href);
 }
-function CloseIcon({ className }: { className?: string }) {
+
+function RailLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const Icon = item.icon;
+  const active = isCurrentPath(pathname, item.href);
+
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
+    <Link
+      href={item.href}
+      aria-label={item.label}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group relative flex h-12 w-12 items-center justify-center rounded-full transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+        active
+          ? "bg-white text-black shadow-[0_0_28px_rgba(255,255,255,0.22)]"
+          : "text-white/45 hover:bg-white/10 hover:text-white",
+      )}
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6 18L18 6M6 6l12 12"
-      />
-    </svg>
+      <Icon size={21} strokeWidth={active ? 2.4 : 1.9} aria-hidden="true" />
+      <span className="pointer-events-none absolute left-[calc(100%+14px)] top-1/2 hidden -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-2xl transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100 lg:block">
+        {item.label}
+      </span>
+    </Link>
   );
 }
 
-function IconHome({ className }: { className?: string }) {
+function DrawerLink({ item, pathname, onNavigate }: { item: NavItem; pathname: string; onNavigate: () => void }) {
+  const Icon = item.icon;
+  const active = isCurrentPath(pathname, item.href);
+
   return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex items-center gap-4 rounded-full px-4 py-3.5 text-sm font-medium transition-colors",
+        active ? "bg-white text-black" : "text-white/60 hover:bg-white/10 hover:text-white",
+      )}
     >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3 11l9-7 9 7v9a2 2 0 01-2 2h-4a2 2 0 01-2-2v-4H11v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-9z"
-      />
-    </svg>
-  );
-}
-function IconSearch({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"
-      />
-    </svg>
-  );
-}
-function IconList({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
-      />
-    </svg>
-  );
-}
-function IconPlay({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6 5l12 7-12 7V5z"
-      />
-    </svg>
-  );
-}
-function IconCard({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3 7h18M5 11h4m-4 6h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
-      />
-    </svg>
-  );
-}
-function IconSettings({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-      />
-    </svg>
-  );
-}
-function IconLogout({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M16 17l5-5-5-5M21 12H9"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M13 7V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h6a2 2 0 002-2v-2"
-      />
-    </svg>
-  );
-}
-function IconHistory({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-      aria-hidden
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-      />
-    </svg>
+      <Icon size={20} strokeWidth={active ? 2.35 : 1.9} aria-hidden="true" />
+      <span>{item.label}</span>
+    </Link>
   );
 }
 
-const PRIMARY_NAV_ITEMS = [
-  { href: "/dashboard", label: "Home", icon: IconHome },
-  { href: "/dashboard/explore", label: "Search / Explore", icon: IconSearch },
-  { href: "/dashboard/my-list", label: "My List", icon: IconList },
-  {
-    href: "/dashboard/continue-watching",
-    label: "Continue Watching",
-    icon: IconPlay,
-  },
-  {
-    href: "/dashboard/watch-history",
-    label: "Watch History",
-    icon: IconHistory,
-  },
-] as const;
-
-const SECONDARY_NAV_ITEMS = [
-  { href: "/dashboard/subscription", label: "Subscription", icon: IconCard },
-  { href: "/dashboard/settings", label: "Settings", icon: IconSettings },
-] as const;
-
-export default function DashboardLayoutClient({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function DashboardLayoutClient({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
-  const visiblePrimaryNavItems = PRIMARY_NAV_ITEMS;
+  const activeItem = [...PRIMARY_NAV_ITEMS, ...SECONDARY_NAV_ITEMS].find((item) => isCurrentPath(pathname, item.href));
+
+  useEffect(() => {
+    fetchBranding()
+      .then((branding) => setLogoUrl(branding.logoUrl ?? null))
+      .catch(() => setLogoUrl(null));
+  }, []);
 
   useEffect(() => {
     setDrawerOpen(false);
@@ -242,200 +111,90 @@ export default function DashboardLayoutClient({
 
   useEffect(() => {
     if (!drawerOpen) return;
-    const prev = document.body.style.overflow;
+    const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = prev;
+      document.body.style.overflow = originalOverflow;
     };
   }, [drawerOpen]);
 
   useEffect(() => {
-    let active = true;
-    fetchBranding()
-      .then((branding) => {
-        if (!active) return;
-        setLogoUrl(branding.logoUrl ?? null);
-      })
-      .catch(() => {
-        if (!active) return;
-        setLogoUrl(null);
-      });
-    return () => {
-      active = false;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDrawerOpen(false);
     };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
   }, []);
 
-  const sidebarContent = (
-    <>
-      <div className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-neutral-700/50 px-5 lg:justify-start">
-        <Link
-          href="/"
-          className="flex items-center gap-3 rounded focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-off-black"
-        >
-          {logoUrl ? (
-            <Image
-              src={logoUrl}
-              alt=""
-              width={32}
-              height={32}
-              className="h-8 w-8 rounded object-contain"
-              unoptimized
-            />
-          ) : (
-            <Image
-              src="/logo.png"
-              alt=""
-              width={32}
-              height={32}
-              className="h-8 w-8 rounded object-contain"
-            />
-          )}
-          <span className="text-sm font-semibold tracking-tight text-white">
-            {SITE_BRAND}
-          </span>
-        </Link>
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(false)}
-          className="rounded p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white lg:hidden"
-          aria-label="Close menu"
-        >
-          <CloseIcon className="h-6 w-6" />
-        </button>
-      </div>
-      <nav className="flex-1 space-y-6 overflow-y-auto p-3">
-        <div className="space-y-0.5">
-          {visiblePrimaryNavItems.map(({ href, label, icon: Icon }) => {
-            const isActive =
-              href === "/dashboard"
-                ? pathname === "/dashboard"
-                : pathname.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  "border-l-2",
-                  isActive
-                    ? "border-accent bg-accent/10 text-white"
-                    : "border-transparent text-neutral-300 hover:bg-neutral-800/50 hover:text-accent",
-                )}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0 opacity-80" />
-                {label}
-              </Link>
-            );
-          })}
-        </div>
-        <div className="space-y-0.5">
-          <p className="px-3 text-[0.65rem] font-semibold uppercase tracking-[0.3em] text-neutral-600">
-            Account
-          </p>
-          {SECONDARY_NAV_ITEMS.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname.startsWith(href);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                  "border-l-2",
-                  isActive
-                    ? "border-accent bg-accent/10 text-white"
-                    : "border-transparent text-neutral-300 hover:bg-neutral-800/50 hover:text-accent",
-                )}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <Icon className="h-5 w-5 flex-shrink-0 opacity-80" />
-                {label}
-              </Link>
-            );
-          })}
-          <button
-            type="button"
-            onClick={async () => {
-              await logout();
-              router.replace("/login");
-            }}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800/50 hover:text-accent"
-          >
-            <IconLogout className="h-5 w-5 flex-shrink-0 opacity-80" />
-            Logout
-          </button>
-        </div>
-      </nav>
-      <div className="border-t border-neutral-700/50 p-3">
-        <Link
-          href="/"
-          className="flex items-center rounded-lg px-3 py-2 text-xs font-medium text-neutral-400 transition-colors hover:bg-neutral-800/50 hover:text-accent"
-        >
-          ← Back to site
-        </Link>
-      </div>
-    </>
-  );
+  const handleLogout = async () => {
+    setDrawerOpen(false);
+    await logout();
+    router.replace("/login");
+  };
 
   return (
     <ProtectedRoute>
-      <div className="flex min-h-screen bg-off-black">
-        {/* Desktop sidebar */}
-        <aside
-          className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-neutral-700/50 bg-off-black/95 lg:flex"
-          aria-label="Dashboard navigation"
-        >
-          {sidebarContent}
+      <div className="min-h-screen bg-black text-white">
+        <aside className="fixed inset-y-0 left-0 z-40 hidden w-[92px] flex-col items-center border-r border-white/10 bg-black/95 py-7 backdrop-blur-xl lg:flex">
+          <Link href="/" aria-label={`${SITE_BRAND} home`} className="group mb-10 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] transition-colors hover:border-white/35">
+            {logoUrl ? (
+              <Image src={logoUrl} alt={SITE_BRAND} width={38} height={38} className="max-h-8 w-auto object-contain" />
+            ) : (
+              <Image src="/logo.png" alt={SITE_BRAND} width={38} height={38} className="max-h-8 w-auto object-contain" priority />
+            )}
+          </Link>
+
+          <nav aria-label="Dashboard navigation" className="flex flex-1 flex-col items-center gap-3">
+            {PRIMARY_NAV_ITEMS.map((item) => <RailLink key={item.href} item={item} pathname={pathname} />)}
+          </nav>
+
+          <div className="flex flex-col items-center gap-3">
+            <span className="h-px w-7 bg-white/15" />
+            {SECONDARY_NAV_ITEMS.map((item) => <RailLink key={item.href} item={item} pathname={pathname} />)}
+            <button type="button" onClick={handleLogout} aria-label="Sign out" className="group relative flex h-12 w-12 items-center justify-center rounded-full text-white/40 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80">
+              <LogOut size={20} strokeWidth={1.9} aria-hidden="true" />
+              <span className="pointer-events-none absolute left-[calc(100%+14px)] top-1/2 hidden -translate-y-1/2 whitespace-nowrap rounded-full border border-white/10 bg-zinc-950 px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-2xl transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100 lg:block">Sign out</span>
+            </button>
+          </div>
         </aside>
 
-        {/* Mobile drawer */}
-        <div
-          className={cn(
-            "fixed inset-0 z-50 lg:hidden",
-            drawerOpen ? "pointer-events-auto" : "pointer-events-none",
-          )}
-          aria-hidden={!drawerOpen}
-        >
-          <div
-            className={cn(
-              "absolute inset-0 bg-black/60 transition-opacity duration-200",
-              drawerOpen ? "opacity-100" : "opacity-0",
-            )}
-            onClick={() => setDrawerOpen(false)}
-            aria-hidden
-          />
-          <aside
-            className={cn(
-              "absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-neutral-700/50 bg-off-black shadow-xl transition-transform duration-200 ease-out",
-              drawerOpen ? "translate-x-0" : "-translate-x-full",
-            )}
-            aria-label="Dashboard navigation"
-          >
-            {sidebarContent}
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/10 bg-black/80 px-4 py-3 backdrop-blur-xl lg:hidden">
+          <Link href="/" className="flex items-center gap-2" aria-label={`${SITE_BRAND} home`}>
+            {logoUrl ? <Image src={logoUrl} alt="" width={30} height={30} className="h-7 w-7 object-contain" /> : <Image src="/logo.png" alt="" width={30} height={30} className="h-7 w-7 object-contain" />}
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-white/70">{activeItem?.label ?? "Your space"}</span>
+          </Link>
+          <button type="button" onClick={() => setDrawerOpen(true)} aria-label="Open dashboard menu" aria-expanded={drawerOpen} className="flex h-11 w-11 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-white transition-colors hover:bg-white hover:text-black">
+            <Menu size={21} aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className={cn("fixed inset-0 z-50 lg:hidden", drawerOpen ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!drawerOpen}>
+          <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Close menu overlay" className={cn("absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity duration-300", drawerOpen ? "opacity-100" : "opacity-0")} />
+          <aside aria-label="Dashboard menu" className={cn("absolute inset-y-2 left-2 flex w-[min(360px,calc(100vw-28px))] flex-col rounded-[28px] border border-white/15 bg-[#101010] p-5 shadow-2xl transition-transform duration-300 ease-out", drawerOpen ? "translate-x-0" : "-translate-x-[calc(100%+24px)]")}>
+            <div className="mb-8 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-white/40">Your space</p>
+                <p className="mt-1 text-lg font-semibold text-white">{user?.name || "Member"}</p>
+              </div>
+              <button type="button" onClick={() => setDrawerOpen(false)} aria-label="Close dashboard menu" className="flex h-10 w-10 items-center justify-center rounded-full border border-white/15 text-white/70 transition-colors hover:bg-white hover:text-black"><X size={20} /></button>
+            </div>
+
+            <nav className="space-y-1" aria-label="Dashboard navigation">
+              {PRIMARY_NAV_ITEMS.map((item) => <DrawerLink key={item.href} item={item} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />)}
+            </nav>
+            <div className="my-6 h-px bg-white/10" />
+            <nav className="space-y-1 mb-6" aria-label="Account navigation">
+              {SECONDARY_NAV_ITEMS.map((item) => <DrawerLink key={item.href} item={item} pathname={pathname} onNavigate={() => setDrawerOpen(false)} />)}
+            </nav>
+            <div className=" border-t border-white/10 pt-5">
+              <button type="button" onClick={handleLogout} className="flex w-full items-center gap-4 rounded-full px-4 py-3.5 text-sm font-medium text-white/55 transition-colors hover:bg-white/10 hover:text-white"><LogOut size={20} strokeWidth={1.9} />Sign out</button>
+            </div>
           </aside>
         </div>
 
-        {/* Top bar + main content */}
-        <div className="flex min-h-screen min-w-0 flex-1 flex-col pl-0 lg:pl-64">
-          <header className="sticky top-0 z-30 flex shrink-0 items-center gap-3 border-b border-neutral-700/50 bg-off-black/95 px-4 py-4 backdrop-blur-sm sm:px-6 lg:px-8">
-            <button
-              type="button"
-              onClick={() => setDrawerOpen(true)}
-              className="rounded p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white lg:hidden"
-              aria-label="Open menu"
-            >
-              <MenuIcon className="h-6 w-6" />
-            </button>
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
-              My account
-            </p>
-          </header>
-          <main className="flex-1">
-            <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-              {children}
-            </div>
-          </main>
-        </div>
+        <main className="min-h-screen lg:pl-[92px]">
+          <div className="mx-auto mb-16">{children}</div>
+        </main>
       </div>
     </ProtectedRoute>
   );

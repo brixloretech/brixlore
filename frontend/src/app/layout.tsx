@@ -7,6 +7,7 @@ import { SITE_NAME, SITE_DESCRIPTION, SITE_TAGLINE } from "@/lib/seo";
 import { getAppUrl, getMatomoUrl, getMatomoSiteId } from "@/lib/env";
 import { Noto_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
+import MobileNav from "@/components/layout/Mobile-nav";
 
 const notoSans = Noto_Sans({
   subsets: ["latin"],
@@ -73,7 +74,9 @@ export default function RootLayout({
             strategy="afterInteractive"
           >{`var _paq=window._paq=window._paq||[];_paq.push(['trackPageView']);_paq.push(['enableLinkTracking']);(function(){var u="${matomoUrl}/";_paq.push(['setTrackerUrl',u+'matomo.php']);_paq.push(['setSiteId','${matomoSiteId}']);var d=document,g=d.createElement('script'),s=d.getElementsByTagName('script')[0];g.async=true;g.src=u+'matomo.js';s.parentNode.insertBefore(g,s);})();`}</Script>
         )}
-        <Providers>{children}</Providers>
+        <Providers>
+          {children} <MobileNav />
+        </Providers>
       </body>
     </html>
   );

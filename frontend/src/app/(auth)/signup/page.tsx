@@ -10,15 +10,17 @@ import {
   useStripe,
 } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
+import { Check, CreditCard, ShieldCheck } from "lucide-react";
 import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  Button,
-  Input,
-} from "@/components/ui";
+  AuthButton,
+  AuthCard,
+  AuthContent,
+  AuthFooter,
+  AuthHeader,
+  AuthNotice,
+  authInputClass,
+} from "@/components/auth";
+import { Input, Loader } from "@/components/ui";
 import {
   validateEmail,
   validatePassword,
@@ -27,7 +29,6 @@ import {
 } from "@/lib/validation";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { authService, subscriptionService } from "@/lib/services";
-import { useAuth } from "@/contexts";
 import { useMatomo } from "@/hooks/useMatomo";
 import type { PublicPlanDto } from "@/types/api";
 
@@ -41,7 +42,6 @@ function SignupFormInner() {
   const stripe = useStripe();
   const elements = useElements();
 
-  const {} = useAuth();
   const { trackEvent } = useMatomo();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -259,78 +259,35 @@ function SignupFormInner() {
 
   if (isSuccess) {
     return (
-      <Card>
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-            <svg
-              className="h-6 w-6 text-green-600 dark:text-green-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M5 13l4 4L19 7"
-              />
-            </svg>
-          </div>
-          <CardTitle>Check your email</CardTitle>
-          <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-            {successMessage || "Registration successful. Please check your email to verify your account."}
-          </p>
-        </CardHeader>
-        <CardFooter className="flex flex-col gap-3">
-          <Button fullWidth onClick={() => router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)}>
-            Go to Login
-          </Button>
-          <p className="text-center text-xs text-neutral-500">
-            Didn&apos;t receive an email? Check your spam folder.
-          </p>
-        </CardFooter>
-      </Card>
+      <AuthCard>
+        <AuthHeader eyebrow="One last step" title="Check your email." description={successMessage || "Registration successful. Please verify your email to open your Brixlore account."} />
+        <AuthContent><div className="grid h-16 w-16 place-items-center rounded-full bg-white text-black"><Check size={24} /></div></AuthContent>
+        <AuthFooter className="space-y-3">
+          <AuthButton type="button" onClick={() => router.push(`/login?returnUrl=${encodeURIComponent(returnUrl)}`)}>Go to sign in</AuthButton>
+          <p className="text-center text-xs text-white/32">Didn&apos;t receive it? Check your spam folder.</p>
+        </AuthFooter>
+      </AuthCard>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Create account</CardTitle>
-        <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-          Enter your details to create a new account.
-        </p>
+    <AuthCard>
+      <AuthHeader eyebrow="Join Brixlore" title="Create your space." description="One account for independent films, original series, your list, and every story still to come.">
         {plansError ? (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-800/60 dark:bg-red-950/30 dark:text-red-300">
-            {plansError}
-          </div>
+          <AuthNotice className="mt-5">{plansError}</AuthNotice>
         ) : hasPlan || displayPlanName ? (
-          <div className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600 dark:border-neutral-700 dark:bg-neutral-900/60 dark:text-neutral-300">
-            <span>
-              Selected plan:{" "}
-              <strong>{selectedPlan?.name || displayPlanName}</strong>
-              {billingCycle === "yearly" ? " (annual)" : ""}
-              {trialSelected ? " (trial)" : ""}
-            </span>
-          </div>
+          <AuthNotice tone="neutral" className="mt-5 flex items-center justify-between gap-4">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Selected access</span>
+            <strong className="text-xs text-white/80">{selectedPlan?.name || displayPlanName}{billingCycle === "yearly" ? " · Annual" : ""}{trialSelected ? " · Trial" : ""}</strong>
+          </AuthNotice>
         ) : null}
         {requiresPayment && !hasStripeKey ? (
-          <p className="mt-3 text-xs text-red-600 dark:text-red-400">
-            Stripe publishable key is missing. Add
-            NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY to your env.
-          </p>
+          <AuthNotice className="mt-3">Payment configuration is unavailable right now.</AuthNotice>
         ) : null}
-      </CardHeader>
+      </AuthHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
-          {submitError && (
-            <p
-              className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/50 dark:text-red-400"
-              role="alert"
-            >
-              {submitError}
-            </p>
-          )}
+        <AuthContent className="space-y-5">
+          {submitError && <AuthNotice>{submitError}</AuthNotice>}
           <Input
             label="Name"
             type="text"
@@ -340,6 +297,7 @@ function SignupFormInner() {
             error={errors.name}
             disabled={isLoading}
             placeholder="Your name"
+            className={authInputClass}
           />
           <Input
             label="Email"
@@ -350,6 +308,7 @@ function SignupFormInner() {
             error={errors.email}
             disabled={isLoading}
             placeholder="you@example.com"
+            className={authInputClass}
           />
           <Input
             label="Password"
@@ -361,6 +320,7 @@ function SignupFormInner() {
             disabled={isLoading}
             placeholder="At least 8 characters"
             hint="Must be at least 8 characters."
+            className={authInputClass}
           />
           <Input
             label="Confirm password"
@@ -371,13 +331,14 @@ function SignupFormInner() {
             error={errors.confirmPassword}
             disabled={isLoading}
             placeholder="Repeat password"
+            className={authInputClass}
           />
           {requiresPayment && (
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                Card details
+              <label className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-300">
+                <CreditCard size={15} /> Card details
               </label>
-              <div className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 shadow-sm dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-100">
+              <div className="flex h-14 items-center rounded-xl border border-white/12 bg-white/[0.045] px-4 text-sm text-white shadow-inner shadow-black/20 transition-colors hover:border-white/22 focus-within:border-white/55 focus-within:ring-4 focus-within:ring-white/[0.07]">
                 <CardElement
                   options={{
                     style: {
@@ -391,17 +352,14 @@ function SignupFormInner() {
                 />
               </div>
               {cardError ? (
-                <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">
+                <p className="mt-2 text-sm text-red-200">
                   {cardError}
                 </p>
               ) : null}
             </div>
           )}
-        </CardContent>
-        <CardFooter className="flex flex-col gap-3">
-          <Button
+          <AuthButton
             type="submit"
-            fullWidth
             disabled={
               isLoading || (requiresPayment && (!stripeReady || !hasStripeKey))
             }
@@ -411,19 +369,14 @@ function SignupFormInner() {
               : requiresPayment
                 ? "Create account & subscribe"
                 : "Create free account"}
-          </Button>
-          <p className="text-center text-sm text-neutral-600 dark:text-neutral-400">
-            Already have an account?{" "}
-             <Link
-               href={`/login?returnUrl=${encodeURIComponent(returnUrl)}`}
-              className="underline hover:text-neutral-900 dark:hover:text-white"
-            >
-              Sign in
-            </Link>
-          </p>
-        </CardFooter>
+          </AuthButton>
+          {requiresPayment && <p className="flex items-center justify-center gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/25"><ShieldCheck size={12} /> Payment details are encrypted</p>}
+        </AuthContent>
+        <AuthFooter>
+          <p className="text-center text-sm text-white/42">Already have an account? <Link href={`/login?returnUrl=${encodeURIComponent(returnUrl)}`} className="font-semibold text-white transition hover:text-white/70">Sign in</Link></p>
+        </AuthFooter>
       </form>
-    </Card>
+    </AuthCard>
   );
 }
 
@@ -431,19 +384,7 @@ export default function SignupPage() {
   return (
     <Suspense
       fallback={
-        <Card>
-          <CardHeader>
-            <CardTitle>Create account</CardTitle>
-            <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-400">
-              Loading signup details...
-            </p>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              Preparing the payment form.
-            </p>
-          </CardContent>
-        </Card>
+        <AuthCard><div className="flex min-h-[440px] items-center justify-center"><Loader size="md" label="Preparing signup" className="text-white/55" /></div></AuthCard>
       }
     >
       <Elements stripe={stripePromise}>

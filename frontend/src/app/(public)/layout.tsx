@@ -7,8 +7,9 @@
  */
 
 import type { Metadata } from "next";
-import { Header, Footer } from "@/components/layout";
 import { SITE_BRAND, SITE_DESCRIPTION } from "@/lib/seo";
+import Header2 from "@/components/layout/Header-2";
+import Footer2 from "@/components/layout/Footer-2";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -27,9 +28,15 @@ export default function PublicLayout({
 }) {
   return (
     <div className="flex min-h-screen min-w-0 flex-col overflow-x-hidden bg-background dark:bg-off-black">
-      <Header />
-      {children}
-      <Footer />
+      <link rel="stylesheet" href="/assets/css/swiper-bundle.min.css" />
+      <link rel="stylesheet" href="/assets/css/flaticon_misao.css" />
+      <link rel="stylesheet" href="/assets/css/scrollCue.css" />
+      <link rel="stylesheet" href="/assets/css/remixicon.css" />
+      <link rel="stylesheet" href="/assets/css/style.css" />
+      <Header2 />
+      <div className="lg:pb-0">{children}</div>
+      <Footer2 />
+   
     </div>
   );
 }

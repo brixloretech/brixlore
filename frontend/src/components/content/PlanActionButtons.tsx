@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { subscriptionService } from "@/lib/services";
 import { Modal, ModalContent, ModalFooter, Button } from "@/components/ui";
 import type { SubscriptionStatusDto } from "@/types/api";
+import { ShinyButton } from "../ui/shiny-button";
 
 type PlanActionButtonsProps = {
   planId: string;
@@ -16,6 +17,7 @@ type PlanActionButtonsProps = {
   billingCycle?: "monthly" | "yearly";
   userSubscription?: SubscriptionStatusDto | null;
   onRefreshSub?: () => void;
+  appearance?: "default" | "cinematic";
 };
 
 export function PlanActionButtons({
@@ -26,6 +28,7 @@ export function PlanActionButtons({
   billingCycle = "monthly",
   userSubscription,
   onRefreshSub,
+  appearance = "default",
 }: PlanActionButtonsProps) {
   const { isAuthenticated, isSubscribed, isAdmin } = useAuth();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -39,9 +42,7 @@ export function PlanActionButtons({
     userSubscription.billingCycle?.toLowerCase() === billingCycle.toLowerCase();
 
   const isSubscribedToOther =
-    userSubscription &&
-    userSubscription.isSubscribed &&
-    !isCurrentPlan;
+    userSubscription && userSubscription.isSubscribed && !isCurrentPlan;
 
   const isFreeUser = isAuthenticated && !isSubscribed && !isAdmin;
 
@@ -58,7 +59,11 @@ export function PlanActionButtons({
         onRefreshSub();
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to change subscription plan.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to change subscription plan.",
+      );
     } finally {
       setIsUpdating(false);
     }
@@ -96,7 +101,9 @@ export function PlanActionButtons({
           onClick={() => setIsModalOpen(true)}
           className={cn(
             "inline-flex h-10 w-full items-center justify-center rounded-full border px-5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent",
-            featured
+            appearance === "cinematic"
+              ? "h-12 border-white/15 bg-white text-black transition-colors hover:bg-white/82"
+              : featured
               ? "border-accent bg-accent text-accent-foreground shadow-accent-glow hover:bg-accent/90"
               : "border-accent/45 bg-accent/5 text-white hover:bg-accent/10",
           )}
@@ -119,10 +126,14 @@ export function PlanActionButtons({
                 {billingCycle}) plan?
               </p>
               <p className="mt-2 text-xs text-neutral-400">
-                Your Stripe account will be updated immediately. Prorated charges or credits will be automatically calculated and applied.
+                Your Stripe account will be updated immediately. Prorated
+                charges or credits will be automatically calculated and applied.
               </p>
               {error && (
-                <p className="mt-4 text-sm font-medium text-red-500" role="alert">
+                <p
+                  className="mt-4 text-sm font-medium text-red-500"
+                  role="alert"
+                >
                   {error}
                 </p>
               )}
@@ -136,10 +147,7 @@ export function PlanActionButtons({
             >
               Cancel
             </Button>
-            <Button
-              disabled={isUpdating}
-              onClick={handlePlanChange}
-            >
+            <Button disabled={isUpdating} onClick={handlePlanChange}>
               {isUpdating ? "Updating..." : "Confirm Change"}
             </Button>
           </ModalFooter>
@@ -150,18 +158,30 @@ export function PlanActionButtons({
 
   return (
     <div className="mt-5">
-      <Link
-        href={actionHref}
-        className={cn(
-          "inline-flex h-10 items-center justify-center rounded-full border px-5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-accent dark:focus-visible:ring-offset-off-black",
-          featured
-            ? "border-accent bg-accent text-accent-foreground shadow-accent-glow hover:bg-accent/90"
-            : "border-accent/45 bg-accent/5 text-white hover:bg-accent/10",
-        )}
-        aria-label={`Subscribe to ${planName}`}
-      >
-        Subscribe Now
-      </Link>
+      {appearance === "cinematic" ? (
+        <Link
+          href={actionHref}
+          className={cn(
+            "inline-flex h-12 w-full items-center justify-center rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70",
+            featured
+              ? "border-white bg-white text-black hover:bg-white/82"
+              : "border-white/18 bg-white/[0.06] text-white hover:bg-white hover:text-black",
+          )}
+          aria-label={`Choose ${planName}`}
+        >
+          Choose plan
+        </Link>
+      ) : (
+        <Link
+          href={actionHref}
+          className={cn("inline-flex")}
+          aria-label={`Subscribe to ${planName}`}
+        >
+          <ShinyButton className={cn("rounded-full" ,  featured
+              ? "border-accent bg-black text-accent-foreground shadow-accent-glow hover:bg-accent/90"
+              : "border-accent/45 bg-accent/55 text-white hover:bg-accent/10")}>Subscribe Now</ShinyButton>
+        </Link>
+      )}
     </div>
   );
 }
