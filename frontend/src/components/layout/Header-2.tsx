@@ -14,20 +14,20 @@ function Header2() {
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isSticky, setIsSticky] = useState(false);
+  // const [isSticky, setIsSticky] = useState(false);
 
-  useEffect(() => {
-    const updateStickyState = () => {
-      setIsSticky(window.scrollY >= 120);
-    };
+  // useEffect(() => {
+  //   const updateStickyState = () => {
+  //     setIsSticky(window.scrollY >= 120);
+  //   };
 
-    updateStickyState();
-    window.addEventListener("scroll", updateStickyState, { passive: true });
+  //   updateStickyState();
+  //   window.addEventListener("scroll", updateStickyState, { passive: true });
 
-    return () => {
-      window.removeEventListener("scroll", updateStickyState);
-    };
-  }, []);
+  //   return () => {
+  //     window.removeEventListener("scroll", updateStickyState);
+  //   };
+  // }, []);
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -161,7 +161,7 @@ function Header2() {
                   </ShimmerButton>
                 </Link>
               )}
-              
+
             </div>
           </div> */}
         </div>
