@@ -1410,47 +1410,76 @@ export default function Home() {
           </TextAnimate>
 
           <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-neutral-400 sm:text-base">
-            Everything you need to know about Brixlore, memberships, and
-            watching your favorite stories.
+            Everything you need to know about Brixlore, the waitlist, and what comes next.
           </p>
 
-          <div className="mt-10 space-y-3">
+          <div className="mt-10 space-y-10">
             {[
-              [
-                "What is Brixlore?",
-                "Brixlore is a home for bold, independent stories, original series, and documentaries.",
-              ],
-              [
-                "Do I need an account to watch?",
-                "Some content may be available to browse publicly, while an account gives you access to personalized features and membership options.",
-              ],
-              [
-                "What does a membership include?",
-                "Membership benefits depend on the plan you choose and may include access to premium content and additional viewing features.",
-              ],
-              [
-                "Can I watch on multiple devices?",
-                "Yes. You can access Brixlore from supported phones, tablets, desktop browsers, and TV devices. Device limits depend on your plan.",
-              ],
-              [
-                "How do I get help with my account or billing?",
-                "Visit the contact page and our support team will help with account access, billing, and other questions.",
-              ],
-            ].map(([question, answer]) => (
-              <details
-                key={question}
-                className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors open:border-white/20 open:bg-white/[0.06]"
-              >
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-white marker:content-none sm:px-6 sm:py-5 sm:text-base">
-                  {question}
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-normal text-neutral-300 transition-transform group-open:rotate-45">
-                    +
-                  </span>
-                </summary>
-                <p className="border-t border-white/10 px-5 pb-5 pt-4 text-sm leading-6 text-neutral-400 sm:px-6">
-                  {answer}
-                </p>
-              </details>
+              {
+                title: "About Brixlore",
+                items: [
+                  ["What is Brixlore?", "Brixlore is a streaming platform for urban culture, featuring documentaries, independent film, original series, and editorial stories in arts, sports, and entertainment. We focus on culture, not algorithms, because urban stories deserve visibility, not footnotes."],
+                  ["How is Brixlore different from Netflix, Tubi, or other streaming platforms?", "Most platforms treat urban content as a category, but we built a platform dedicated to urban storytelling. Brixlore features content from independent creators, filmmakers, and cultural voices outside mainstream streaming, making it their home."],
+                  ["What kind of content will be on Brixlore?", "Brixlore features documentaries, indie films, original series, cultural editorial, and live sessions. Content focuses on urban culture—covering contemporary, historical, and future stories in arts, sports, entertainment, and community. More details to come as launch approaches."],
+                ],
+              },
+              {
+                title: "The waitlist",
+                items: [
+                  ["Why is Brixlore in waitlist mode right now?", "We're finalizing the platform to ensure your initial experience with Brixlore is perfect. We're also actively engaging with content partners and aim to ensure the library aligns with the platform's identity before opening."],
+                  ["What do I get by joining the waitlist?", "Waitlist members get early access before the public. As a member, you'll be first in when we launch and the first to know about exclusive perks. We won't be spamming your inbox. When we reach out, it means something is actually happening."],
+                  ["How do I join the waitlist?", "Hit \"Get Early Access.\" Enter your name and email in the field on this page. That's it. No app to download, no account required yet."],
+                  ["When will Brixlore launch?", "We're not announcing a date yet—we'd rather get it right than rush it. The waitlist-to-launch window is short, and you'll get an email before we go live. Keep an eye on your inbox and follow our social channels for updates."],
+                  ["Can I refer friends to the waitlist?", "Yes—and we'd love that. Sharing Brixlore with your circle helps the platform. Our community is as important as the content. Referral features are part of the waitlist."],
+                ],
+              },
+              {
+                title: "Membership and pricing",
+                items: [
+                  ["Will Brixlore be free or subscription-based?", "We'll share more on pricing as we get closer to launch. What we're building is a premium experience, and we want the pricing to reflect that without being a barrier. Waitlist members will be the first to hear about any founding-member rates or early-access offers."],
+                  ["What will a Brixlore membership include?", "Membership will include access to the full content library—original series, documentaries, indie films, and curated programming. Depending on the plan, members can also expect: ad-free or reduced-ad viewing, access to exclusive drops and premieres, bonus content such as commentary and behind-the-scenes, and multi-device support. Full plan details will be released closer to launch."],
+                  ["Will there be a free tier or ad-supported option?", "We're exploring the right model for our audience. We'll share the full breakdown before launch. If you're on the waitlist, you'll be the first to know."],
+                ],
+              },
+              {
+                title: "Watching and devices",
+                items: [
+                  ["What devices will Brixlore work on?", "Brixlore is built to go where you go. At launch, you'll be able to watch on iPhone, iPad, Android phones and tablets, desktop browsers (Chrome, Safari, Firefox, Edge), and smart TVs and OTT devices (Roku, Fire TV, Apple TV, and more). Full device compatibility details will be confirmed at launch."],
+                  ["Will I be able to watch offline?", "Offline viewing is on our roadmap. We'll confirm which plans include this feature as we approach launch."],
+                  ["How many screens can I watch on at the same time?", "Simultaneous streaming limits will depend on the membership plan you choose. Details will be available at launch. We're designing the plans to be fair to both individual viewers and households."],
+                ],
+              },
+              {
+                title: "Content and creators",
+                items: [
+                  ["Will Brixlore feature content from independent creators?", "Yes—this is core to who we are. Brixlore exists to give independent filmmakers, documentary creators, and cultural storytellers a platform with the reach and presentation quality they deserve. If you're a creator interested in having your work featured on Brixlore, we'd love to hear from you."],
+                  ["I’m a content creator or filmmaker. Can I submit my work?", "We're actively in discussions with content partners. Reach out through our contact page to tell us about your work. We'll follow up as our acquisition process opens formally."],
+                  ["Will there be live content or events on the platform?", "Live sessions are part of the Brixlore vision. More details about live programming will be announced as we build out the content slate."],
+                ],
+              },
+              {
+                title: "Support and contact",
+                items: [
+                  ["I signed up for the waitlist but didn’t get a confirmation email/message. What should I do?", "Check your spam or promotions folder first—confirmation emails sometimes end up there. If it's not there, make sure you entered the correct email address/phone number and try signing up again. Still nothing? Reach out via our contact page, and we'll sort it out."],
+                  ["How do I stay updated on Brixlore’s progress?", "The best ways to stay in the loop: stay on the waitlist—we'll email you directly before launch; and follow us on TikTok, X, Facebook, and YouTube. We communicate only when we have substantive information to convey, rather than merely to occupy your feed."],
+                  ["How do I contact the Brixlore team?", "Visit our help center or reach out via the site's contact page. We're a small team building something we care about—your messages do get read."],
+                ],
+              },
+            ].map((section) => (
+              <div key={section.title}>
+                <h5 className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-neutral-500">{section.title}</h5>
+                <div className="space-y-3">
+                  {section.items.map(([question, answer]) => (
+                    <details key={question} className="group rounded-2xl border border-white/10 bg-white/[0.03] transition-colors open:border-white/20 open:bg-white/[0.06]">
+                      <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-sm font-semibold text-white marker:content-none sm:px-6 sm:py-5 sm:text-base">
+                        {question}
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/15 text-lg font-normal text-neutral-300 transition-transform group-open:rotate-45">+</span>
+                      </summary>
+                      <p className="border-t border-white/10 px-5 pb-5 pt-4 text-sm leading-6 text-neutral-400 sm:px-6">{answer}</p>
+                    </details>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>

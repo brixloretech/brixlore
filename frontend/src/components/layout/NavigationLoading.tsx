@@ -85,7 +85,7 @@ export default function NavigationLoading() {
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black" role="status" aria-label="Loading page">
-      <Image src="/loading.gif" alt="Loading" width={320} height={180} priority />
+      <Image src="/favicon.png" alt="Loading" width={180} height={120} priority />
     </div>
   );
 }
