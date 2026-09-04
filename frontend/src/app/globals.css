@@ -146,6 +146,27 @@
   }
 }
 
+@keyframes navigationImageFade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.navigation-loading-image {
+  animation: navigationImageFade 1s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .navigation-loading-image {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 @keyframes browseHeroProgress {
   from {
     transform: scaleX(0);
