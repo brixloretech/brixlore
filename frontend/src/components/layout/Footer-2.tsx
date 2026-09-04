@@ -8,8 +8,11 @@ import React from "react";
 function Footer2() {
   const logoUrl = useBrandLogo();
   return (
-    <footer className="pt-[60px] md:pt-[80px] lg:pt-[100px] xl:pt-[120px] 2xl:pt-[140px]">
-      <div className="container">
+    <footer 
+    // className="pt-[60px] md:pt-[80px] lg:pt-[100px] xl:pt-[120px] 2xl:pt-[140px]"
+    >
+           {/* Tepm0roy */}
+      {/* <div className="container">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-[25px]">
           <div className="col-span-2">
             <Link
@@ -60,7 +63,7 @@ function Footer2() {
                   <i className="ri-android-fill" />
                 </Link>
               </li>
-             
+
             </ul>
           </div>
           <div className="hidden md:block">
@@ -229,9 +232,10 @@ function Footer2() {
             </ul>
           </div>
         </div>
-      </div>
-      <div className="pt-[60px] md:pt-[80px] lg:pt-[100px] xl:pt-[120px] 2xl:pt-[140px]" />
-      <div className="py-[20px] md:py-[30px] lg:py-[40px] border-t border-white/10 mb-[85px] md:mb-0">
+      </div> */}
+      {/* <div className="pt-[60px] md:pt-[80px] lg:pt-[100px] xl:pt-[120px] 2xl:pt-[140px]" /> */}
+      {/* add to class mb-[85px] */}
+      <div className="py-[20px] md:py-[30px] lg:py-[40px] border-t border-white/10  md:mb-0">
         <div className="container">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-[15px] md:gap-[25px] items-center text-center ltr:md:text-left rtl:md:text-right">
             <p className="flex-none !mb-0 md:text-start text-center">
@@ -274,7 +278,7 @@ function Footer2() {
                   <i className="ri-facebook-fill" />
                 </Link>
               </li>
-              
+
               <li>
                 <Link
                   href="https://youtube.com/@brixlore?si=0SyB5xL99PWqSCnW"
@@ -288,7 +292,7 @@ function Footer2() {
           </div>
         </div>
       </div>
-      
+
     </footer>
   );
 }

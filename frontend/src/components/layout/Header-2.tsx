@@ -46,9 +46,13 @@ function Header2() {
     <header
       className={`py-[15px] lg:py-0 xl:py-[10px] fixed top-0 left-0 right-0 z-[4] !rounded-none transition-all duration-300 ease-in-out ${isSticky ? "navbar-sticky" : ""}`}
       id="navbar"
+      //  {/* Tepm0roy */}
+        style={{ paddingTop: "15px", paddingBottom: "15px"  }}
     >
       <div className="container 2xl:!px-[100px] xl:!max-w-[1920px]">
-        <div className="relative flex items-center flex-wrap lg:flex-nowrap justify-between lg:justify-start gap-[25px] xl:gap-[35px]">
+        <div className="relative flex items-center flex-wrap lg:flex-nowrap justify-between lg:justify-start gap-[25px] xl:gap-[35px]"
+        //  {/* Tepm0roy */}
+                style={{ justifyContent: "center" }}>
           <Link
             href="/"
             className="-ml-1 flex shrink-0 items-center gap-2 text-white sm:-ml-2"
@@ -75,7 +79,7 @@ function Header2() {
             )}
           </Link>
 
-          <div className="flex-none lg:hidden">
+          {/* <div className="flex-none lg:hidden">
             <button
               type="button"
               id="navbarBurgerToggle"
@@ -88,8 +92,9 @@ function Header2() {
               <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
               <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
             </button>
-          </div>
-          <div className="hidden lg:flex items-center grow basis-full basis-auto gap-[25px] xl:gap-[35px]">
+          </div> */}
+          {/* Temp0rary */}
+          {/* <div className="hidden lg:flex items-center grow basis-full basis-auto gap-[25px] xl:gap-[35px]">
             <ul className="navbar-nav flex items-center flex-row gap-[25px] xl:gap-[35px] flex-none">
               <li className="nav-item relative">
                 <Link
@@ -167,7 +172,7 @@ function Header2() {
                 <i className="ri-menu-line" />
               </button>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
     </header>
