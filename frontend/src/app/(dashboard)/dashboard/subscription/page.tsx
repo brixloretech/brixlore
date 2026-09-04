@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
-  Check,
   ChevronRight,
   CreditCard,
   Crown,
@@ -20,6 +19,7 @@ import {
   ModalFooter,
 } from "@/components/ui";
 import { PlanActionButtons } from "@/components/content/PlanActionButtons";
+import { SubscriptionCards } from "@/components/content/SubscriptionCards";
 import { useAuth } from "@/contexts";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { siteService, subscriptionService } from "@/lib/services";
@@ -30,13 +30,6 @@ import type {
 } from "@/types/api";
 import { RainbowButton } from "@/components/ui/rainbow-button";
 
-function money(amount: number) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(amount);
-}
 function date(value?: string) {
   if (!value) return "Not available";
   const parsed = new Date(value);
@@ -270,89 +263,36 @@ export default function SubscriptionPage() {
               </button>
             </div>
           </div>
-          <div className="mt-8 grid gap-px border border-white/15 bg-white/15 lg:grid-cols-3">
-            {plans.map((plan, index) => {
-              const isFeatured = plan.isPopular || index === 1;
-              const price =
-                cycle === "yearly" && plan.yearlyPrice != null
-                  ? plan.yearlyPrice
-                  : plan.price;
-              const isCurrent =
-                subscription?.isSubscribed && subscription.planId === plan.id;
-              return (
-                <article
-                  key={plan.id}
-                  className={`relative flex min-h-[510px] flex-col p-6 sm:p-8 ${isFeatured ? "bg-white text-black" : "bg-[#090909] text-white"}`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <p
-                      className={`font-mono text-[10px] font-bold uppercase tracking-[0.18em] ${isFeatured ? "text-black/45" : "text-white/45"}`}
-                    >
-                      0{index + 1} /{" "}
-                      {plan.isPopular ? "Most chosen" : "Membership"}
-                    </p>
-                    {isCurrent && (
-                      <span
-                        className={`border px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] ${isFeatured ? "border-black/25" : "border-white/25"}`}
-                      >
-                        Current plan
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="mt-8 text-4xl font-semibold leading-none tracking-[-0.065em]">
-                    {plan.name}
-                  </h3>
-                  <div className="mt-5 flex items-end gap-2">
-                    <span className="text-5xl font-semibold tracking-[-0.08em]">
-                      {money(price)}
-                    </span>
-                    <span
-                      className={`mb-1 text-xs ${isFeatured ? "text-black/55" : "text-white/50"}`}
-                    >
-                      / {cycle === "yearly" ? "year" : "month"}
-                    </span>
-                  </div>
-                  {cycle === "yearly" && plan.yearlyPrice != null && (
-                    <p
-                      className={`mt-3 text-xs font-medium ${isFeatured ? "text-black/55" : "text-white/50"}`}
-                    >
-                      A year of unlimited stories, in one payment.
-                    </p>
-                  )}
-                  <ul
-                    className={`mt-8 space-y-4 border-t pt-6 text-sm ${isFeatured ? "border-black/15" : "border-white/15"}`}
-                  >
-                    {plan.perks.slice(0, 5).map((perk) => (
-                      <li key={perk} className="flex gap-3">
-                        <Check size={17} className="shrink-0" />
-                        {perk}
-                      </li>
-                    ))}
-                    <li className="flex gap-3">
-                      <Check size={17} className="shrink-0" />
-                      Up to {plan.deviceLimit} devices
-                    </li>
-                    {plan.offlineAllowed && (
-                      <li className="flex gap-3">
-                        <Check size={17} className="shrink-0" />
-                        Offline downloads included
-                      </li>
-                    )}
-                  </ul>
-                  <div className="mt-auto pt-8">
-                    <PlanActionButtons
-                      planId={plan.id}
-                      planName={plan.name}
-                      isFreeTier={plan.price === 0}
-                      featured={isFeatured}
-                      billingCycle={cycle}
-                      userSubscription={subscription}
-                      onRefreshSub={() => void refreshSubscription()}
-                    />
-                  </div>
-                </article>
-              );
-            })}
+          <div className="mt-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+            <SubscriptionCards
+              plans={plans.map((plan) => ({
+                id: plan.id,
+                name: plan.name,
+                description: "A front-row pass to every Brixlore story.",
+                price: (cycle === "yearly" && plan.yearlyPrice != null ? plan.yearlyPrice : plan.price).toFixed(2),
+                period: cycle === "yearly" ? "year" : "month",
+                isFreeTier: plan.price <= 0,
+                features: [
+                  ...(plan.perks ?? []).slice(0, 5),
+                  `Up to ${plan.deviceLimit} devices`,
+                  ...(plan.offlineAllowed ? ["Offline downloads included"] : []),
+                ],
+                featured: plan.isPopular,
+                billingNote: cycle === "yearly" ? "Billed annually" : "Billed monthly · cancel anytime",
+              }))}
+              billingCycle={cycle}
+              renderFooter={(plan) => (
+                <PlanActionButtons
+                  planId={plan.id}
+                  planName={plan.name}
+                  isFreeTier={plan.isFreeTier}
+                  featured={plan.featured}
+                  billingCycle={cycle}
+                  userSubscription={subscription}
+                  onRefreshSub={() => void refreshSubscription()}
+                />
+              )}
+            />
           </div>
         </section>
         <section className="mt-16 grid gap-px border border-white/15 bg-white/15 lg:grid-cols-[1.1fr_.9fr]">

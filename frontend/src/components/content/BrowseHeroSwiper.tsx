@@ -223,7 +223,7 @@ export function BrowseHeroSwiper() {
           </div>
 
           <div className="mt-10 flex items-end justify-between gap-6 sm:mt-12">
-            <a href="#new-on-brixlore" className="hidden items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45 transition hover:text-white sm:inline-flex">
+            <a href="/search" className="hidden items-center gap-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/45 transition hover:text-white sm:inline-flex">
               Explore the collection <ArrowDown size={14} />
             </a>
             <div className="ml-auto flex items-center gap-3">
@@ -232,7 +232,7 @@ export function BrowseHeroSwiper() {
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {/* <div className="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-6">
             {items.map((featured, index) => (
               <button key={featured.id} type="button" onClick={() => swiperRef.current?.slideToLoop(index)} aria-label={`Show ${featured.title}`} aria-current={index === activeIndex ? "true" : undefined} className="group min-w-0 text-left">
                 <span className="block h-px overflow-hidden bg-white/20">
@@ -243,7 +243,7 @@ export function BrowseHeroSwiper() {
                 <span className={`mt-2 hidden truncate text-[10px] font-medium uppercase tracking-[0.08em] transition sm:block ${index === activeIndex ? "text-white" : "text-white/30 group-hover:text-white/65"}`}>{featured.title}</span>
               </button>
             ))}
-          </div>
+          </div> */}
         </div>
       </div>
     </section>

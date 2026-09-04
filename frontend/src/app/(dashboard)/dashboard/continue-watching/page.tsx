@@ -180,8 +180,8 @@ export default function ContinueWatchingPage() {
         </header>
 
         {selected ? (
-          <section className="mt-8 grid border border-white/15 lg:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
-            <div className="relative min-h-[390px] overflow-hidden bg-white/10 sm:min-h-[480px]">
+          <section className="mt-8 grid border border-white/15 lg:grid-cols-[minmax(0,1.18fr)_minmax(280px,0.62fr)]">
+            <div className="relative min-h-[300px] overflow-hidden bg-white/10 sm:min-h-[380px]">
               {selected.thumbnailUrl ? (
                 <img
                   src={selected.thumbnailUrl}
@@ -198,11 +198,11 @@ export default function ContinueWatchingPage() {
                 </span>{" "}
                 Selected session
               </div>
-              <div className="absolute inset-x-5 bottom-5 sm:inset-x-8 sm:bottom-8">
+              <div className="absolute inset-x-5 bottom-5 sm:inset-x-7 sm:bottom-7">
                 <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/55">
                   Resume from {selectedProgress}%
                 </p>
-                <h2 className="mt-3 max-w-xl text-3xl font-semibold leading-[0.9] tracking-[-0.065em] sm:text-5xl">
+                <h2 className="mt-3 max-w-xl text-3xl font-semibold leading-[0.9] tracking-[-0.065em] sm:text-4xl lg:text-5xl">
                   {selected.contentTitle}
                 </h2>
                 <p className="mt-3 text-sm text-white/65">
@@ -229,21 +229,21 @@ export default function ContinueWatchingPage() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col bg-white p-6 text-black sm:p-8">
+            <div className="flex flex-col bg-white p-5 text-black sm:p-6">
               <div className="flex items-center justify-between">
                 <p className="font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-black/45">
                   Your place
                 </p>
                 <Pause size={17} />
               </div>
-              <p className="mt-7 text-[clamp(72px,12vw,150px)] font-semibold leading-[0.72] tracking-[-0.1em]">
+              <p className="mt-6 text-[clamp(56px,8vw,100px)] font-semibold leading-[0.72] tracking-[-0.1em]">
                 {selectedProgress}
-                <span className="text-[0.36em]">%</span>
+                <span className="ml-4 text-[0.36em]">%</span>
               </p>
               <p className="mt-5 text-sm font-medium text-black/60">
                 {remaining(selected.progress, selected.duration)}
               </p>
-              <div className="mt-8 h-2 overflow-hidden bg-black/10">
+              <div className="mt-7 h-2 overflow-hidden bg-black/10">
                 <div
                   className="h-full bg-black"
                   style={{ width: `${selectedProgress}%` }}

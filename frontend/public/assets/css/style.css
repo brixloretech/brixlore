@@ -5016,7 +5016,7 @@
 
 body {
   background-color: var(--color-black);
-  font-family: var(--font-body);
+  font-family: var(--font-sans, sans-serif);
   font-size: var(--text-sm);
   line-height: var(--tw-leading, var(--text-sm--line-height));
   color: var(--color-body)

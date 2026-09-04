@@ -44,7 +44,7 @@ function Header2() {
   return (
     <>
     <header
-      className={`py-[15px] lg:py-0 xl:py-[10px] fixed top-0 left-0 right-0 z-[4] !rounded-none transition-all duration-300 ease-in-out ${isSticky ? "navbar-sticky" : ""}`}
+      className="py-[15px] px-[15px] lg:py-0 xl:py-[10px] fixed top-0 left-0 right-0 z-[4] !rounded-none transition-all duration-300 ease-in-out navbar-sticky"
       id="navbar"
       //  {/* Tepm0roy */}
         style={{ paddingTop: "15px", paddingBottom: "15px"  }}
@@ -161,16 +161,7 @@ function Header2() {
                   </ShimmerButton>
                 </Link>
               )}
-              <button
-                type="button"
-                id="navbarBurgerToggle"
-                aria-label="Open navigation menu"
-                aria-expanded={isSidebarOpen}
-                onClick={() => setIsSidebarOpen(true)}
-                className="navbar-burger-toggle text-xl inline-block text-white transition-all duration-300 ease-in-out hover:text-secondary ltr:-ml-[8px] rtl:-mr-[8px]"
-              >
-                <i className="ri-menu-line" />
-              </button>
+              
             </div>
           </div> */}
         </div>

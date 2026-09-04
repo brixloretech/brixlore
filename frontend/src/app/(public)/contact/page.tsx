@@ -17,6 +17,7 @@ import { Input } from "@/components/ui";
 import { getApiErrorMessage } from "@/lib/api-client";
 import { siteService } from "@/lib/services";
 import { validateEmail, validateRequired } from "@/lib/validation";
+import { authInputClass } from "@/components/auth";
 
 const fieldClass =
   "h-14 rounded-none border-0 border-b border-white/18 bg-transparent px-0 text-[15px] text-white shadow-none placeholder:text-white/25 hover:border-white/35 focus:border-white focus:bg-transparent focus:ring-0 disabled:bg-transparent";
@@ -276,7 +277,7 @@ export default function ContactPage() {
                       error={errors.name}
                       disabled={submitting}
                       required
-                      className={fieldClass}
+                      className={authInputClass}
                     />
                     <Input
                       label="Email address"
@@ -288,7 +289,7 @@ export default function ContactPage() {
                       error={errors.email}
                       disabled={submitting}
                       required
-                      className={fieldClass}
+                      className={authInputClass}
                     />
                   </div>
 
@@ -300,7 +301,7 @@ export default function ContactPage() {
                     error={errors.subject}
                     disabled={submitting}
                     required
-                    className={fieldClass}
+                    className={authInputClass}
                   />
 
                   <div>
