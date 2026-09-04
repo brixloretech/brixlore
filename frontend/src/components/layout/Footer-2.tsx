@@ -1,12 +1,12 @@
 "use client"
-import { useBrandLogo } from "@/hooks";
-import { LOGO_HEIGHT, LOGO_WIDTH } from "@/lib/seo";
-import Image from "next/image";
+// import { useBrandLogo } from "@/hooks";
+// import { LOGO_HEIGHT, LOGO_WIDTH } from "@/lib/seo";
+// import Image from "next/image";
 import Link from "next/link";
 import React from "react";
 
 function Footer2() {
-  const logoUrl = useBrandLogo();
+  // const logoUrl = useBrandLogo();
   return (
     <footer 
     // className="pt-[60px] md:pt-[80px] lg:pt-[100px] xl:pt-[120px] 2xl:pt-[140px]"

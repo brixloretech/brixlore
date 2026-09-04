@@ -1391,7 +1391,7 @@ export default function Home() {
       {/* </div> */}
       {/* FAQ */}
       <section
-        className="relative bg-[#000000] px-4 py-20 !pt-44 sm:px-8 sm:py-8"
+        className="relative bg-[#000000] px-4 py-20 sm:px-8 sm:py-8"
         aria-labelledby="waitlist-faq-heading"
       >
         <div className="mx-auto max-w-3xl">
@@ -1455,7 +1455,8 @@ export default function Home() {
           </div>
         </div>
         {/* support */}
-        <div className="mx-auto mt-10 max-w-3xl   px-5 py-8 pb-12 text-center sm:px-8">
+        {/* Tepm0roy */}
+        {/* <div className="mx-auto mt-10 max-w-3xl   px-5 py-8 pb-12 text-center sm:px-8">
           <TextAnimate
             animation="blurInUp"
             by="character"
@@ -1476,7 +1477,7 @@ export default function Home() {
             </Link>{" "}
             to learn more.
           </p>
-        </div>
+        </div> */}
       </section>
     </>
   );

@@ -7,7 +7,7 @@ import { SITE_NAME, SITE_DESCRIPTION, SITE_TAGLINE } from "@/lib/seo";
 import { getAppUrl, getMatomoUrl, getMatomoSiteId } from "@/lib/env";
 import { Noto_Sans } from "next/font/google";
 import { cn } from "@/lib/utils";
-import MobileNav from "@/components/layout/Mobile-nav";
+// import MobileNav from "@/components/layout/Mobile-nav";
 
 const notoSans = Noto_Sans({
   subsets: ["latin"],
