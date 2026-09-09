@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Compass, House, User, type LucideIcon } from "lucide-react";
+import { Compass, House, Smartphone, User, type LucideIcon } from "lucide-react";
 import { useAuth } from "@/contexts";
 
 type NavItem = {
@@ -25,7 +25,7 @@ function MobileNav() {
       icon: Compass,
       active: pathname.startsWith("/browse-2"),
     },
-    // { label: "App", href: "/get-the-app", icon: Smartphone, active: pathname.startsWith("/get-the-app") },
+    { label: "App", href: "/get-the-app", icon: Smartphone, active: pathname.startsWith("/get-the-app") },
     {
       label: "Account",
       href: accountHref,
