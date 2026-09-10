@@ -17,6 +17,8 @@ function MobileNav() {
   const { isAuthenticated, isLoading } = useAuth();
   const accountHref = isAuthenticated ? "/dashboard" : "/login";
 
+  if (pathname === "/") return null;
+
   const items: NavItem[] = [
     { label: "Home", href: "/", icon: House, active: pathname === "/" },
     {

@@ -43,131 +43,126 @@ function Header2() {
 
   return (
     <>
-    <header
-      className="py-[15px] px-[15px] lg:py-0 xl:py-[10px] fixed top-0 left-0 right-0 z-[4] !rounded-none transition-all duration-300 ease-in-out navbar-sticky"
-      id="navbar"
-      //  {/* Tepm0roy */}
-        style={{ paddingTop: "15px", paddingBottom: "15px"  }}
-    >
-      <div className="container 2xl:!px-[100px] xl:!max-w-[1920px]">
-        <div className="relative flex items-center flex-wrap lg:flex-nowrap justify-between lg:justify-start gap-[25px] xl:gap-[35px]"
-        //  {/* Tepm0roy */}
-                style={{ justifyContent: "center" }}>
-          <Link
-            href="/"
-            className="-ml-1 flex shrink-0 items-center gap-2 text-white sm:-ml-2"
-            aria-label="BRIXLORE.TV home"
-          >
-            {logoUrl ? (
-              <Image
-                src={logoUrl}
-                alt="BRIXLORE.TV"
-                width={LOGO_WIDTH}
-                height={LOGO_HEIGHT}
-                className="h-12 w-auto object-contain"
-                unoptimized
-              />
-            ) : (
-              <Image
-                src="/logo-2.png"
-                alt="BRIXLORE.TV"
-                width={LOGO_WIDTH}
-                height={LOGO_HEIGHT}
-                className="h-9 w-auto object-contain"
-                priority
-              />
-            )}
-          </Link>
-
-          {/* <div className="flex-none lg:hidden">
-            <button
-              type="button"
-              id="navbarBurgerToggle"
-              aria-label="Open navigation menu"
-              aria-expanded={isSidebarOpen}
-              onClick={() => setIsSidebarOpen(true)}
-              className="navbar-burger-toggle inline-block leading-none"
+      <header
+        className="py-[15px] px-[15px] lg:py-0 xl:py-[10px] fixed top-0 left-0 right-0 z-[4] !rounded-none transition-all duration-300 ease-in-out navbar-sticky"
+        id="navbar"
+      >
+        <div className="container 2xl:!px-[100px] xl:!max-w-[1920px]">
+          <div className="relative flex items-center flex-wrap lg:flex-nowrap justify-between lg:justify-start gap-[25px] xl:gap-[35px]">
+            <Link
+              href="/"
+              className="-ml-1 flex shrink-0 items-center gap-2 text-white sm:-ml-2"
+              aria-label="BRIXLORE.TV home"
             >
-              <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
-              <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
-              <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
-            </button>
-          </div> */}
-          {/* Temp0rary */}
-          {/* <div className="hidden lg:flex items-center grow basis-full basis-auto gap-[25px] xl:gap-[35px]">
-            <ul className="navbar-nav flex items-center flex-row gap-[25px] xl:gap-[35px] flex-none">
-              <li className="nav-item relative">
-                <Link
-                  href="/"
-                  className="nav-link active font-bold text-15 relative py-[30px] block text-white transition-all duration-300 ease-in-out hover:text-secondary"
-                >
-                  Home
-                </Link>
-              </li>
-              <li className="nav-item relative">
-                <Link
-                  href="/browse-2"
-                  className="nav-link font-bold text-15 relative py-[30px] block text-white transition-all duration-300 ease-in-out hover:text-secondary"
-                >
-                  Movies &amp; TV Shows
-                </Link>
-              </li>
-              <li className="nav-item relative">
-                <Link
-                  href="/get-the-app"
-                  className="nav-link font-bold text-15 relative py-[30px] block text-white transition-all duration-300 ease-in-out hover:text-secondary"
-                >
-                  Get the App
-                </Link>
-              </li>
-            </ul>
-            <form onSubmit={handleSearch} className="relative w-full">
-              <input
-                type="text"
-                name="query"
-                className="form-input !h-[50px] rounded-full "
-                placeholder="Search for movies or TV shows"
-              />
-              <button
-                className="absolute  top-1/2 ltr:right-[20px] rtl:left-[20px] text-xl leading-none transition-all duration-300 ease-in-out hover:text-primary "
-                type="submit"
-                style={{ transform: "translateY(-50%)" }}
-              >
-                <i className="ri-search-line" />
-              </button>
-            </form>
-            <div className="flex items-center gap-[25px] xl:gap-[35px] flex-none">
-              {!isLoading && (
-                <Link
-                  href={isAuthenticated ? "/dashboard" : "/login"}
-                  className="text-xl relative inline-block xl:hidden text-white transition-all duration-300 ease-in-out hover:text-secondary"
-                >
-                  <i className="ri-user-3-line" />
-                </Link>
-              )}
-
-              {isLoading ? (
-                <div className="h-10 w-24 animate-pulse rounded-full bg-white/10" />
-              ) : isAuthenticated ? (
-                <Link href="/dashboard">
-                  <ShimmerButton className="inline-flex items-center justify-center">
-                    Dashboard
-                  </ShimmerButton>
-                </Link>
+              {logoUrl ? (
+                <Image
+                  src={logoUrl}
+                  alt="BRIXLORE.TV"
+                  width={LOGO_WIDTH}
+                  height={LOGO_HEIGHT}
+                  className="h-12 w-auto object-contain"
+                  unoptimized
+                />
               ) : (
-                <Link href="/login">
-                  <ShimmerButton className="inline-flex items-center justify-center">
-                    Sign In
-                  </ShimmerButton>
-                </Link>
+                <Image
+                  src="/logo-2.png"
+                  alt="BRIXLORE.TV"
+                  width={LOGO_WIDTH}
+                  height={LOGO_HEIGHT}
+                  className="h-9 w-auto object-contain"
+                  priority
+                />
               )}
+            </Link>
 
+            <div className="flex-none lg:hidden">
+              <button
+                type="button"
+                id="navbarBurgerToggle"
+                aria-label="Open navigation menu"
+                aria-expanded={isSidebarOpen}
+                onClick={() => setIsSidebarOpen(true)}
+                className="navbar-burger-toggle inline-block leading-none"
+              >
+                <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
+                <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
+                <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
+              </button>
             </div>
-          </div> */}
+            {/* Temp0rary */}
+            <div className="hidden lg:flex items-center grow basis-full basis-auto gap-[25px] xl:gap-[35px]">
+              <ul className="navbar-nav flex items-center flex-row gap-[25px] xl:gap-[35px] flex-none">
+                <li className="nav-item relative">
+                  <Link
+                    href="/"
+                    className="nav-link active font-bold text-15 relative py-[30px] block text-white transition-all duration-300 ease-in-out hover:text-secondary"
+                  >
+                    Home
+                  </Link>
+                </li>
+                <li className="nav-item relative">
+                  <Link
+                    href="/browse-2"
+                    className="nav-link font-bold text-15 relative py-[30px] block text-white transition-all duration-300 ease-in-out hover:text-secondary"
+                  >
+                    Movies &amp; TV Shows
+                  </Link>
+                </li>
+                <li className="nav-item relative">
+                  <Link
+                    href="/get-the-app"
+                    className="nav-link font-bold text-15 relative py-[30px] block text-white transition-all duration-300 ease-in-out hover:text-secondary"
+                  >
+                    Get the App
+                  </Link>
+                </li>
+              </ul>
+              <form onSubmit={handleSearch} className="relative w-full">
+                <input
+                  type="text"
+                  name="query"
+                  className="form-input !h-[50px] rounded-full "
+                  placeholder="Search for movies or TV shows"
+                />
+                <button
+                  className="absolute  top-1/2 ltr:right-[20px] rtl:left-[20px] text-xl leading-none transition-all duration-300 ease-in-out hover:text-primary "
+                  type="submit"
+                  style={{ transform: "translateY(-50%)" }}
+                >
+                  <i className="ri-search-line" />
+                </button>
+              </form>
+              <div className="flex items-center gap-[25px] xl:gap-[35px] flex-none">
+                {!isLoading && (
+                  <Link
+                    href={isAuthenticated ? "/dashboard" : "/login"}
+                    className="text-xl relative inline-block xl:hidden text-white transition-all duration-300 ease-in-out hover:text-secondary"
+                  >
+                    <i className="ri-user-3-line" />
+                  </Link>
+                )}
+
+                {isLoading ? (
+                  <div className="h-10 w-24 animate-pulse rounded-full bg-white/10" />
+                ) : isAuthenticated ? (
+                  <Link href="/dashboard">
+                    <ShimmerButton className="inline-flex items-center justify-center">
+                      Dashboard
+                    </ShimmerButton>
+                  </Link>
+                ) : (
+                  <Link href="/login">
+                    <ShimmerButton className="inline-flex items-center justify-center">
+                      Sign In
+                    </ShimmerButton>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </header>
-     {/* Sidebar Modal */}
+      </header>
+      {/* Sidebar Modal */}
       <div
         className="sidebar-modal"
         style={{
@@ -285,20 +280,20 @@ function Header2() {
         <div className="p-[20px] md:p-[30px] lg:px-[40px] bg-black border-t border-white/8 lg:hidden">
           <div className="flex items-center gap-[25px] md:gap-[30px] mb-[20px] md:mb-[25px]">
             {isLoading ? (
-                <div className="h-10 w-24 animate-pulse rounded-full bg-white/10" />
-              ) : isAuthenticated ? (
-                <Link href="/dashboard">
-                  <ShimmerButton className="inline-flex items-center justify-center">
-                    Dashboard
-                  </ShimmerButton>
-                </Link>
-              ) : (
-                <Link href="/login">
-                  <ShimmerButton className="inline-flex items-center justify-center">
-                    Sign In
-                  </ShimmerButton>
-                </Link>
-              )}
+              <div className="h-10 w-24 animate-pulse rounded-full bg-white/10" />
+            ) : isAuthenticated ? (
+              <Link href="/dashboard">
+                <ShimmerButton className="inline-flex items-center justify-center">
+                  Dashboard
+                </ShimmerButton>
+              </Link>
+            ) : (
+              <Link href="/login">
+                <ShimmerButton className="inline-flex items-center justify-center">
+                  Sign In
+                </ShimmerButton>
+              </Link>
+            )}
           </div>
           <form onSubmit={handleSearch} className="relative">
             <input
@@ -326,7 +321,8 @@ function Header2() {
         onClick={() => setIsSidebarOpen(false)}
         aria-hidden="true"
       />
-      {/* End Sidebar Modal */}</>
+      {/* End Sidebar Modal */}
+    </>
   );
 }
 

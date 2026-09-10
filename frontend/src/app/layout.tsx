@@ -76,7 +76,7 @@ export default function RootLayout({
         )}
         <Providers>
           {children}
-            {/* Tepm0roy */}
+          {/* Tepm0roy */}
           <MobileNav />
         </Providers>
       </body>

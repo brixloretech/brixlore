@@ -66,13 +66,11 @@ function WatchPageSkeleton() {
 function EpisodeCard({
   contentId,
   episode,
-  seasonNumber,
   active,
   fallbackImage,
 }: {
   contentId: string;
   episode: EpisodeResponseDto;
-  seasonNumber?: number;
   active: boolean;
   fallbackImage?: string | null;
 }) {
@@ -82,13 +80,13 @@ function EpisodeCard({
     <Link
       href={`/watch-2/${contentId}?episodeId=${encodeURIComponent(episode.id)}`}
       aria-current={active ? "page" : undefined}
-      className={`group block min-w-0 overflow-hidden rounded-[22px] border transition duration-300 ${
-        active
-          ? "border-white/45 bg-white/[0.11] shadow-[0_18px_60px_rgba(0,0,0,.4)]"
-          : "border-white/10 bg-white/[0.035] hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.065]"
+    className={`group flex min-w-0 items-center gap-4 border-t  px-4 sm:px-6 border-white/10 py-4 transition ${
+      active
+          ? "bg-white/[0.07]"
+          : "hover:bg-white/[0.045]"
       }`}
-    >
-      <div className="relative aspect-video overflow-hidden bg-white/[0.06]">
+  >
+      <div className="relative h-[76px] w-[128px] shrink-0 overflow-hidden rounded-xl bg-white/[0.06] sm:h-[86px] sm:w-[152px]">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -99,34 +97,25 @@ function EpisodeCard({
         ) : (
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,255,255,.16),transparent_38%),#111]" />
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/5 to-transparent" />
-        <span className={`absolute left-4 top-4 grid h-10 w-10 place-items-center rounded-full backdrop-blur-md transition ${active ? "bg-white text-black" : "bg-black/45 text-white group-hover:bg-white group-hover:text-black"}`}>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
+        <span className={`absolute inset-0 m-auto grid h-9 w-9 place-items-center rounded-full backdrop-blur-md transition ${active ? "bg-white text-black" : "bg-black/55 text-white group-hover:bg-white group-hover:text-black"}`}>
           <Play size={15} fill="currentColor" />
         </span>
-        {active && (
-          <span className="absolute bottom-3 left-4 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-white" /> Playing now
-          </span>
-        )}
-        {episode.duration && (
-          <span className="absolute bottom-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-[10px] font-semibold text-white/75 backdrop-blur-md">
-            {formatDuration(episode.duration)}
-          </span>
-        )}
       </div>
-      <div className="p-4 sm:p-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.17em] text-white/35">
-          {seasonNumber ? `S${String(seasonNumber).padStart(2, "0")} · ` : ""}E{String(episode.episodeNumber).padStart(2, "0")}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2">
+          <p className="shrink-0 text-xs font-semibold text-white/45">{episode.episodeNumber}.</p>
+          <h3 className="line-clamp-1 text-sm font-semibold tracking-[-0.02em] text-white sm:text-base">{episode.title}</h3>
+        </div>
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-white/48">
+          {episode.duration && <span>{formatDuration(episode.duration)}</span>}
+          <span className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-semibold text-white/60">TV-{active ? "MA" : "14"}</span>
+        </div>
+        <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-white/45">
+          {episode.description || "Episode details are not available yet."}
         </p>
-        <h3 className="mt-2 line-clamp-1 text-base font-semibold tracking-[-0.025em] text-white">
-          {episode.title}
-        </h3>
-        {episode.description && (
-          <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/42">
-            {episode.description}
-          </p>
-        )}
       </div>
+      {active && <span className="shrink-0 text-white" aria-label="Playing now"><Play size={18} fill="currentColor" /></span>}
     </Link>
   );
 }
@@ -140,6 +129,7 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<"episodes" | "related" | "details">("episodes");
 
   useEffect(() => {
     let active = true;
@@ -297,7 +287,7 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
               <span className="max-w-[220px] truncate text-white/70">{content.title}</span>
             )}
           </nav>
-         
+
         </div>
 
         <section aria-label="Video player" className="relative overflow-hidden rounded-[22px] border border-white/15 bg-black shadow-[0_35px_120px_rgba(0,0,0,.65)] sm:rounded-[28px]">
@@ -339,8 +329,18 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
           </aside>
         </section>
 
-        {isEpisodic && (content.episodes?.length ?? 0) > 0 && (
-          <section className="border-b border-white/10 py-14 sm:py-16 lg:py-20" aria-labelledby="episodes-heading">
+        <div className="border-b border-white/10 pt-10 sm:pt-14">
+          <div className="flex items-center gap-8 border-b border-white/10" role="tablist" aria-label="Watch information">
+            {(["episodes", "related", "details"] as const).map((tab) => (
+              <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`border-b-2 px-1 pb-4 text-sm font-semibold transition sm:text-base ${activeTab === tab ? "border-white text-white" : "border-transparent text-white/42 hover:text-white"}`}>
+                {tab[0].toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {activeTab === "episodes" && isEpisodic && (content.episodes?.length ?? 0) > 0 && (
+          <section className="border-b border-white/10 py-10 sm:py-14" aria-labelledby="episodes-heading">
             <div className="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-end">
               <div>
                 <p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38"><Sparkles size={13} /> Continue the story</p>
@@ -362,9 +362,9 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
 
             {selectedSeason?.description && <p className="mb-8 max-w-2xl text-sm leading-6 text-white/45">{selectedSeason.description}</p>}
             {visibleEpisodes.length ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]">
                 {visibleEpisodes.map((episode) => (
-                  <EpisodeCard key={episode.id} contentId={content.id} episode={episode} seasonNumber={selectedSeason?.seasonNumber} active={currentEpisode?.id === episode.id} fallbackImage={content.thumbnailUrl || content.bannerUrl} />
+                  <EpisodeCard key={episode.id} contentId={content.id} episode={episode} active={currentEpisode?.id === episode.id} fallbackImage={content.thumbnailUrl || content.bannerUrl} />
                 ))}
               </div>
             ) : (
@@ -373,7 +373,7 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
           </section>
         )}
 
-        <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="related-heading">
+        {activeTab === "related" && <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="related-heading">
           <div className="mb-8 grid gap-4 sm:mb-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
             <div>
               <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38">Stay on this frequency</p>
@@ -385,7 +385,21 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
             </div>
           </div>
           <MoviesSwiper contentId={content.id} slidesPerView={4} />
-        </section>
+        </section>}
+
+        {activeTab === "details" && <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="details-heading">
+          <div className="max-w-3xl rounded-2xl border border-white/10 bg-white/[0.035] p-6 sm:p-8">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38">About this story</p>
+            <h2 id="details-heading" className="mt-3 text-3xl font-semibold tracking-[-0.05em]">Details</h2>
+            <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-white/55">{content.description || "No description available yet."}</p>
+            <dl className="mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 sm:grid-cols-4">
+              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Type</dt><dd className="mt-2 text-sm text-white/75">{content.type}</dd></div>
+              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Year</dt><dd className="mt-2 text-sm text-white/75">{content.releaseYear}</dd></div>
+              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Rating</dt><dd className="mt-2 text-sm text-white/75">{content.ageRating || "NR"}</dd></div>
+              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Category</dt><dd className="mt-2 text-sm text-white/75">{content.category || "—"}</dd></div>
+            </dl>
+          </div>
+        </section>}
 
         {categories.length > 0 && (
           <section className="flex flex-col gap-5 border-t border-white/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
