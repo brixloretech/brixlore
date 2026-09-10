@@ -1,4 +1,10 @@
 {
   "java.configuration.updateBuildConfiguration": "interactive",
-  "java.compile.nullAnalysis.mode": "automatic"
+  "java.compile.nullAnalysis.mode": "automatic",
+  "chat.tools.terminal.autoApprove": {
+    "/^node -e \"const tslib=require\\('tslib'\\); console\\.log\\(\\{version:require\\('tslib/package\\.json'\\)\\.version, hasExtends:typeof tslib\\.__extends, keys:Object\\.keys\\(tslib\\)\\.length\\}\\)\"$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
 }

@@ -1,587 +1,126 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  StatusBar,
-} from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { Pressable, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../../src/theme/colors";
-import { spacing, typography, borderRadius } from "../../constants/theme";
+import { spacing, typography } from "../../constants/theme";
 import { useAuthStore } from "../../store/useAuthStore";
 import { subscriptionService } from "../../services/subscriptionService";
 import { contentService } from "../../services/contentService";
 import { useSubscriptionStore } from "../../store/useSubscriptionStore";
 
-// ─────────────────────────────────────────────
-// Guest Screen (not logged in)
-// ─────────────────────────────────────────────
-function GuestProfileScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-  const features = [
-    { icon: "play-circle-outline" as const, label: "Stream unlimited content" },
-    { icon: "download-outline" as const, label: "Download for offline viewing" },
-    { icon: "bookmark-outline" as const, label: "Build your personal watchlist" },
-    { icon: "tv-outline" as const, label: "Watch on multiple devices" },
-  ];
-
-  return (
-    <View style={[guestStyles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" backgroundColor={themeColors.background} />
-      <ScrollView
-        contentContainerStyle={guestStyles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Hero Section */}
-        <View style={guestStyles.hero}>
-          {/* Icon Ring */}
-          <View style={guestStyles.iconRing}>
-            <Ionicons name="person-outline" size={52} color={themeColors.error} />
-          </View>
-
-          <Text style={guestStyles.heroTitle}>Welcome to Brixlore</Text>
-          <Text style={guestStyles.heroSubtitle}>
-            Sign in to unlock your full entertainment experience.
-          </Text>
-        </View>
-
-        {/* Feature List */}
-        <View style={guestStyles.featuresContainer}>
-          {features.map((f) => (
-            <View key={f.label} style={guestStyles.featureRow}>
-              <View style={guestStyles.featureIconWrap}>
-                <Ionicons name={f.icon} size={20} color={themeColors.error} />
-              </View>
-              <Text style={guestStyles.featureLabel}>{f.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* CTA Buttons */}
-        <View style={guestStyles.ctaSection}>
-          <Pressable
-            style={({ pressed }) => [
-              guestStyles.signInBtn,
-              pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
-            ]}
-            onPress={() => router.push("/login")}
-          >
-            <Text style={guestStyles.signInText}>Sign In</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              guestStyles.signUpBtn,
-              pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
-            ]}
-            onPress={() => router.push("/signup")}
-          >
-            <Text style={guestStyles.signUpText}>Create Account</Text>
-          </Pressable>
-
-          <Text style={guestStyles.termsNote}>
-            By continuing, you agree to our{" "}
-            <Text style={guestStyles.termsLink}>Terms of Service</Text> and{" "}
-            <Text style={guestStyles.termsLink}>Privacy Policy</Text>.
-          </Text>
-        </View>
-
-        {/* Divider */}
-        <View style={guestStyles.dividerRow}>
-          <View style={guestStyles.dividerLine} />
-          <Text style={guestStyles.dividerText}>or continue as guest</Text>
-          <View style={guestStyles.dividerLine} />
-        </View>
-
-        {/* Guest Quick Links */}
-        <View style={guestStyles.guestLinks}>
-          <Pressable
-            style={guestStyles.guestLinkItem}
-            onPress={() => router.push("/help-support")}
-          >
-            <Ionicons name="help-circle-outline" size={22} color={themeColors.textSecondary} />
-            <Text style={guestStyles.guestLinkText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
-          </Pressable>
-          <Pressable
-            style={guestStyles.guestLinkItem}
-            onPress={() => router.push("/about")}
-          >
-            <Ionicons name="information-circle-outline" size={22} color={themeColors.textSecondary} />
-            <Text style={guestStyles.guestLinkText}>About</Text>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
-          </Pressable>
-        </View>
-      </ScrollView>
-    </View>
-  );
+function Row({ icon, title, detail, onPress }: { icon: IconName; title: string; detail?: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}>
+    <View style={styles.rowIcon}><Ionicons name={icon} size={18} color="rgba(255,255,255,0.82)" /></View>
+    <View style={styles.rowCopy}><Text style={styles.rowTitle}>{title}</Text>{detail ? <Text style={styles.rowDetail} numberOfLines={1}>{detail}</Text> : null}</View>
+    <Ionicons name="arrow-forward" size={17} color="rgba(255,255,255,0.38)" />
+  </Pressable>;
 }
 
-// ─────────────────────────────────────────────
-// Authenticated Profile Screen
-// ─────────────────────────────────────────────
-function AuthenticatedProfileScreen() {
+function GuestProfile() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const benefits: Array<{ icon: IconName; text: string }> = [
+    { icon: "play-outline", text: "Pick up any story, on any screen." },
+    { icon: "bookmark-outline", text: "Keep a personal list of titles." },
+    { icon: "download-outline", text: "Take your favourites offline." },
+  ];
+  return <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <StatusBar barStyle="light-content" />
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <View style={styles.guestHero}>
+        <Text style={styles.eyebrow}>BRIXLORE / ACCOUNT</Text>
+        <Text style={styles.guestTitle}>Make it{"\n"}yours.</Text>
+        <View style={styles.copyRule}><Text style={styles.guestCopy}>Sign in to build your collection and make every return feel familiar.</Text></View>
+        <Pressable onPress={() => router.push("/login")} style={styles.primaryButton}><Text style={styles.primaryButtonText}>Sign in</Text><Ionicons name="arrow-up" size={16} color="#050505" /></Pressable>
+        <Pressable onPress={() => router.push("/signup")} style={styles.secondaryButton}><Text style={styles.secondaryButtonText}>Create an account</Text></Pressable>
+      </View>
+      <View style={styles.guestPanel}>
+        <Text style={styles.panelLabel}>WHAT YOU UNLOCK</Text>
+        {benefits.map((benefit, index) => <View key={benefit.text} style={[styles.benefit, index > 0 && styles.benefitBorder]}><Ionicons name={benefit.icon} size={19} color="rgba(255,255,255,0.78)" /><Text style={styles.benefitText}>{benefit.text}</Text></View>)}
+      </View>
+      <View style={styles.footerLinks}><Pressable onPress={() => router.push("/help-support")}><Text style={styles.footerLink}>Help & support</Text></Pressable><View style={styles.footerDot} /><Pressable onPress={() => router.push("/about")}><Text style={styles.footerLink}>About Brixlore</Text></Pressable></View>
+    </ScrollView>
+  </View>;
+}
+
+function AuthenticatedProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuthStore();
   const { subscription, fetchSubscription } = useSubscriptionStore();
-  const isFreeTier = !subscription?.isSubscribed;
-  const [planName, setPlanName] = useState<string | null>(null);
-  const [contentCount, setContentCount] = useState<number>(0);
-  const [categoriesCount, setCategoriesCount] = useState<number>(0);
-  const memberSince = user?.createdAt
-    ? new Date(user.createdAt).getFullYear()
-    : null;
+  const [planName, setPlanName] = useState("Free");
+  const [contentCount, setContentCount] = useState(0);
+  const [categoriesCount, setCategoriesCount] = useState(0);
+  const isSubscribed = Boolean(subscription?.isSubscribed);
+  const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "Member";
+  const initials = useMemo(() => displayName.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase(), [displayName]);
+  const memberSince = user?.createdAt ? new Date(user.createdAt).getFullYear() : null;
 
   useEffect(() => {
     let active = true;
-    const loadPlanAndCounts = async () => {
+    void (async () => {
       try {
         await fetchSubscription();
-        const sub = useSubscriptionStore.getState().subscription;
-
-        const [plans, allContent, cats] = await Promise.all([
-          subscriptionService.getPlans(),
-          contentService.getContentForBrowse(),
-          contentService.getCategories(),
-        ]);
+        const current = useSubscriptionStore.getState().subscription;
+        const [plans, content, categories] = await Promise.all([subscriptionService.getPlans(), contentService.getContentForBrowse(), contentService.getCategories()]);
         if (!active) return;
-        const match = sub ? plans.find((plan) => plan.id === sub.planId) : null;
-        setPlanName(match?.name ?? (sub?.isSubscribed ? "Active" : "Free"));
-        setContentCount(allContent.length);
-        const filteredCats = cats.filter((c) => c.toLowerCase() !== "all");
-        setCategoriesCount(filteredCats.length);
-      } catch {
-        if (!active) return;
-        setPlanName(null);
-      }
-    };
-    loadPlanAndCounts();
+        setPlanName(plans.find((plan) => plan.id === current?.planId)?.name ?? (current?.isSubscribed ? "Active membership" : "Free"));
+        setContentCount(content.length);
+        setCategoriesCount(categories.filter((category) => category.toLowerCase() !== "all").length);
+      } catch { if (active) setPlanName("Free"); }
+    })();
     return () => { active = false; };
   }, [fetchSubscription]);
 
-  const handleLogout = async () => {
-    await logout();
-    router.replace("/login");
-  };
-
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
-
-        {/* User Info */}
-        <View style={styles.userCard}>
-          <View style={styles.avatarContainer}>
-            <Ionicons name="person" size={40} color={themeColors.error} />
-          </View>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user?.name || user?.email || "User"}</Text>
-            <Text style={styles.userEmail}>{user?.email}</Text>
-            <View style={styles.metaRow}>
-              <Text style={styles.metaPill}>Plan: {planName ?? "Free"}</Text>
-              <Text style={styles.metaPill}>
-                {memberSince ? `Member since ${memberSince}` : "Member profile"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Account Snapshot Cards */}
-        <View style={styles.snapshotRow}>
-          <View style={styles.snapshotCard}>
-            <Text style={styles.snapshotLabel}>Library</Text>
-            <Text style={styles.snapshotValue}>{contentCount}</Text>
-            <Text style={styles.snapshotSubtext}>Titles available</Text>
-          </View>
-          <View style={styles.snapshotCard}>
-            <Text style={styles.snapshotLabel}>Categories</Text>
-            <Text style={styles.snapshotValue}>{categoriesCount}</Text>
-            <Text style={styles.snapshotSubtext}>Collections</Text>
-          </View>
-          <Pressable
-            style={styles.snapshotCard}
-            onPress={() => router.push("/subscription")}
-          >
-            <Text style={styles.snapshotLabel}>Subscription</Text>
-            <Text style={styles.snapshotValue} numberOfLines={1}>
-              {planName ?? "Free"}
-            </Text>
-            <Text style={styles.snapshotSubtext} numberOfLines={2}>
-              {!isFreeTier ? "Full access" : "Upgrade plan"}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Menu Items */}
-        <View style={styles.menuSection}>
-          <Pressable style={styles.menuItem} onPress={() => router.push("/continue-watching")}>
-            <Ionicons name="play-circle-outline" size={24} color={themeColors.textPrimary} />
-            <Text style={styles.menuText}>Continue Watching</Text>
-            <Ionicons name="chevron-forward" size={20} color={themeColors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.menuItem} onPress={() => router.push("/watch-history")}>
-            <Ionicons name="time-outline" size={24} color={themeColors.textPrimary} />
-            <Text style={styles.menuText}>Watch History</Text>
-            <Ionicons name="chevron-forward" size={20} color={themeColors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.menuItem} onPress={() => router.push("/subscription")}>
-            <Ionicons name="card-outline" size={24} color={themeColors.textPrimary} />
-            <Text style={styles.menuText}>Subscription</Text>
-            <Ionicons name="chevron-forward" size={20} color={themeColors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.menuItem} onPress={() => router.push("/settings")}>
-            <Ionicons name="settings-outline" size={24} color={themeColors.textPrimary} />
-            <Text style={styles.menuText}>Settings</Text>
-            <Ionicons name="chevron-forward" size={20} color={themeColors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.menuItem} onPress={() => router.push("/help-support")}>
-            <Ionicons name="help-circle-outline" size={24} color={themeColors.textPrimary} />
-            <Text style={styles.menuText}>Help & Support</Text>
-            <Ionicons name="chevron-forward" size={20} color={themeColors.textSecondary} />
-          </Pressable>
-
-          <Pressable style={styles.menuItem} onPress={() => router.push("/about")}>
-            <Ionicons name="information-circle-outline" size={24} color={themeColors.textPrimary} />
-            <Text style={styles.menuText}>About</Text>
-            <Ionicons name="chevron-forward" size={20} color={themeColors.textSecondary} />
-          </Pressable>
-        </View>
-
-        {/* Logout Button */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.logoutButton,
-            pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] },
-          ]}
-          onPress={handleLogout}
-        >
-          <Ionicons name="log-out-outline" size={20} color={themeColors.textPrimary} style={{ marginRight: 8 }} />
-          <Text style={styles.logoutText}>Sign Out</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
-  );
+  const signOut = async () => { await logout(); router.replace("/login"); };
+  return <View style={[styles.screen, { paddingTop: insets.top }]}>
+    <StatusBar barStyle="light-content" />
+    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <View style={styles.accountHero}>
+        <Text style={styles.eyebrow}>MEMBER SPACE / 01</Text>
+        <View style={styles.accountTopline}><View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View><View style={styles.online}><View style={styles.onlineDot} /><Text style={styles.onlineText}>ACTIVE</Text></View></View>
+        <Text style={styles.name}>{displayName}<Text style={styles.namePeriod}>.</Text></Text>
+        <Text style={styles.email}>{user?.email}</Text>
+        <View style={styles.copyRule}><Text style={styles.welcomeCopy}>Your personal front row is ready whenever you are.</Text></View>
+      </View>
+      <View style={styles.statGrid}>
+        <View style={[styles.stat, styles.statBorderRight]}><Text style={styles.statValue}>{contentCount || "—"}</Text><Text style={styles.statLabel}>TITLES IN CATALOG</Text></View>
+        <View style={styles.stat}><Text style={styles.statValue}>{categoriesCount || "—"}</Text><Text style={styles.statLabel}>COLLECTIONS</Text></View>
+      </View>
+      <Pressable onPress={() => router.push("/subscription")} style={({ pressed }) => [styles.membership, pressed && styles.rowPressed]}>
+        <View style={styles.membershipHeader}><Text style={styles.membershipLabel}>YOUR ACCESS</Text><Ionicons name={isSubscribed ? "checkmark-circle" : "add-circle-outline"} size={18} color="#050505" /></View>
+        <Text style={styles.membershipTitle}>{planName}</Text>
+        <Text style={styles.membershipCopy}>{isSubscribed ? "Your membership is active. Everything is ready to explore." : "Upgrade for uninterrupted stories and full access."}</Text>
+        <View style={styles.membershipAction}><Text style={styles.membershipActionText}>{isSubscribed ? "Manage membership" : "See membership"}</Text><Ionicons name="arrow-up" size={15} color="#050505" /></View>
+      </Pressable>
+      <View style={styles.sectionHeader}><Text style={styles.sectionIndex}>02 / 03</Text><Text style={styles.sectionTitle}>Your activity</Text></View>
+      <View style={styles.listPanel}>
+        <Row icon="play-circle-outline" title="Continue watching" detail="Return to what you started" onPress={() => router.push("/continue-watching")} />
+        <Row icon="time-outline" title="Watch history" detail="Every story you have played" onPress={() => router.push("/watch-history")} />
+      </View>
+      <View style={styles.sectionHeader}><Text style={styles.sectionIndex}>03 / 03</Text><Text style={styles.sectionTitle}>Account</Text></View>
+      <View style={styles.listPanel}>
+        <Row icon="settings-outline" title="Settings" detail={memberSince ? `Member since ${memberSince}` : "Preferences and account details"} onPress={() => router.push("/settings")} />
+        <Row icon="help-circle-outline" title="Help & support" detail="We are here if you need us" onPress={() => router.push("/help-support")} />
+        <Row icon="information-circle-outline" title="About Brixlore" onPress={() => router.push("/about")} />
+      </View>
+      <Pressable onPress={signOut} style={({ pressed }) => [styles.signOut, pressed && styles.rowPressed]}><Ionicons name="log-out-outline" size={18} color="rgba(255,255,255,0.7)" /><Text style={styles.signOutText}>Sign out</Text></Pressable>
+    </ScrollView>
+  </View>;
 }
 
-// ─────────────────────────────────────────────
-// Root export: gate on authentication
-// ─────────────────────────────────────────────
-export default function ProfileScreen() {
-  const { isAuthenticated } = useAuthStore();
+export default function ProfileScreen() { return useAuthStore((state) => state.isAuthenticated) ? <AuthenticatedProfile /> : <GuestProfile />; }
 
-  if (!isAuthenticated) {
-    return <GuestProfileScreen />;
-  }
-
-  return <AuthenticatedProfileScreen />;
-}
-
-// ─────────────────────────────────────────────
-// Guest Styles
-// ─────────────────────────────────────────────
-const guestStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xxxl,
-  },
-  hero: {
-    alignItems: "center",
-    paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xl,
-  },
-  iconRing: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 1.5,
-    borderColor: "rgba(248, 113, 113, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: spacing.xl,
-    backgroundColor: "#141418",
-  },
-  heroTitle: {
-    ...typography.h1,
-    color: themeColors.textPrimary,
-    textAlign: "center",
-    marginBottom: spacing.sm,
-  },
-  heroSubtitle: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-    textAlign: "center",
-    lineHeight: 24,
-    paddingHorizontal: spacing.md,
-  },
-  featuresContainer: {
-    backgroundColor: themeColors.surface,
-    borderRadius: borderRadius.lg,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.sm + 2,
-  },
-  featureIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: borderRadius.sm,
-    backgroundColor: "rgba(248, 113, 113, 0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: spacing.md,
-  },
-  featureLabel: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    flex: 1,
-  },
-  ctaSection: {
-    marginBottom: spacing.xl,
-    gap: spacing.sm,
-  },
-  signInBtn: {
-    backgroundColor: themeColors.error,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  signInText: {
-    ...typography.bodyBold,
-    color: "#fff",
-    fontSize: 16,
-    letterSpacing: 0.3,
-  },
-  signUpBtn: {
-    backgroundColor: "transparent",
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md + 2,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1.5,
-    borderColor: "rgba(248, 113, 113, 0.5)",
-  },
-  signUpText: {
-    ...typography.bodyBold,
-    color: themeColors.error,
-    fontSize: 16,
-    letterSpacing: 0.3,
-  },
-  termsNote: {
-    ...typography.small,
-    color: "#6b7280",
-    textAlign: "center",
-    lineHeight: 18,
-    marginTop: spacing.xs,
-  },
-  termsLink: {
-    color: themeColors.textSecondary,
-    textDecorationLine: "underline",
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.lg,
-    gap: spacing.sm,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: themeColors.border,
-  },
-  dividerText: {
-    ...typography.small,
-    color: "#6b7280",
-    whiteSpace: "nowrap",
-  } as any,
-  guestLinks: {
-    gap: spacing.xs,
-  },
-  guestLinkItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: themeColors.surface,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    gap: spacing.md,
-  },
-  guestLinkText: {
-    ...typography.body,
-    flex: 1,
-    color: themeColors.textSecondary,
-    fontSize: 15,
-  },
-});
-
-// ─────────────────────────────────────────────
-// Authenticated Styles
-// ─────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background,
-  },
-  content: {
-    flexGrow: 1,
-    padding: spacing.lg,
-  },
-  header: {
-    marginBottom: spacing.xl,
-  },
-  title: {
-    ...typography.title,
-    fontSize: 32,
-    fontWeight: "700",
-    color: themeColors.textPrimary,
-  },
-  userCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: themeColors.surface,
-    borderRadius: borderRadius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.xl,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-  },
-  avatarContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: themeColors.card,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: spacing.md,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    ...typography.title,
-    fontSize: 18,
-    fontWeight: "600",
-    color: themeColors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  userEmail: {
-    ...typography.body,
-    fontSize: 14,
-    color: themeColors.textSecondary,
-  },
-  metaRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  metaPill: {
-    ...typography.caption,
-    fontSize: 11,
-    color: themeColors.textSecondary,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: themeColors.card,
-  },
-  snapshotRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
-  },
-  snapshotCard: {
-    flex: 1,
-    backgroundColor: themeColors.surface,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    padding: spacing.sm,
-    minHeight: 90,
-    justifyContent: "space-between",
-  },
-  snapshotLabel: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-    fontSize: 9,
-    textTransform: "uppercase",
-    letterSpacing: 1.2,
-  },
-  snapshotValue: {
-    ...typography.title,
-    color: themeColors.textPrimary,
-    fontSize: 18,
-    fontWeight: "700",
-    marginVertical: 2,
-  },
-  snapshotSubtext: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-    fontSize: 9,
-  },
-  menuSection: {
-    marginBottom: spacing.xl,
-    gap: spacing.sm,
-  },
-  menuItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: themeColors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-  },
-  menuText: {
-    ...typography.body,
-    flex: 1,
-    fontSize: 16,
-    color: themeColors.textPrimary,
-    marginLeft: spacing.md,
-  },
-  logoutButton: {
-    flexDirection: "row",
-    backgroundColor: "rgba(248, 113, 113, 0.12)",
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "rgba(248, 113, 113, 0.3)",
-    marginTop: spacing.md,
-  },
-  logoutText: {
-    ...typography.bodyBold,
-    fontSize: 16,
-    color: themeColors.error,
-  },
+  screen: { flex: 1, backgroundColor: "#050505" }, scroll: { paddingBottom: 118 },
+  eyebrow: { ...typography.smallBold, color: "rgba(255,255,255,0.45)", fontSize: 10, letterSpacing: 1.8 },
+  accountHero: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 28, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.13)" }, accountTopline: { marginTop: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, avatar: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f4f5" }, avatarText: { ...typography.title, color: "#050505", fontSize: 18, fontWeight: "800", letterSpacing: -0.5 }, online: { flexDirection: "row", gap: 6, alignItems: "center" }, onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#a3e635" }, onlineText: { ...typography.smallBold, color: "rgba(255,255,255,0.55)", fontSize: 9, letterSpacing: 1.2 }, name: { ...typography.h1, color: themeColors.textPrimary, fontSize: 40, lineHeight: 42, letterSpacing: -1.8, marginTop: 20 }, namePeriod: { color: "rgba(255,255,255,0.35)" }, email: { ...typography.small, color: "rgba(255,255,255,0.52)", marginTop: 6 }, copyRule: { borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.5)", marginTop: 22, paddingLeft: 14, maxWidth: 290 }, welcomeCopy: { ...typography.small, color: "rgba(255,255,255,0.66)", lineHeight: 20 },
+  statGrid: { flexDirection: "row", marginHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.13)" }, stat: { flex: 1, paddingVertical: 20 }, statBorderRight: { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.13)", paddingRight: spacing.md, marginRight: spacing.md }, statValue: { ...typography.title, color: themeColors.textPrimary, fontSize: 27, lineHeight: 30, letterSpacing: -1 }, statLabel: { ...typography.smallBold, marginTop: 7, color: "rgba(255,255,255,0.43)", fontSize: 8, letterSpacing: 1.15 },
+  membership: { marginHorizontal: spacing.lg, marginTop: 22, padding: 20, backgroundColor: "#f4f4f5" }, membershipHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }, membershipLabel: { ...typography.smallBold, color: "rgba(0,0,0,0.52)", fontSize: 9, letterSpacing: 1.5 }, membershipTitle: { ...typography.h2, color: "#050505", fontSize: 27, lineHeight: 30, letterSpacing: -1.2, marginTop: 20 }, membershipCopy: { ...typography.small, color: "rgba(0,0,0,0.6)", lineHeight: 19, marginTop: 8, maxWidth: 290 }, membershipAction: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 20 }, membershipActionText: { ...typography.smallBold, color: "#050505", fontSize: 11 },
+  sectionHeader: { flexDirection: "row", gap: 13, alignItems: "baseline", marginTop: 32, paddingHorizontal: spacing.lg, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.15)" }, sectionIndex: { ...typography.smallBold, color: "rgba(255,255,255,0.38)", fontSize: 9, letterSpacing: 1.2 }, sectionTitle: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 16, letterSpacing: -0.2 }, listPanel: { marginHorizontal: spacing.lg }, row: { minHeight: 70, flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.10)", paddingVertical: 12 }, rowPressed: { opacity: 0.68 }, rowIcon: { width: 35, height: 35, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)" }, rowCopy: { flex: 1, marginLeft: 12, marginRight: spacing.sm }, rowTitle: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 14 }, rowDetail: { ...typography.small, color: "rgba(255,255,255,0.46)", fontSize: 11, marginTop: 3 }, signOut: { flexDirection: "row", justifyContent: "center", gap: 8, alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", marginHorizontal: spacing.lg, marginTop: 30, paddingVertical: 14 }, signOutText: { ...typography.smallBold, color: "rgba(255,255,255,0.75)", fontSize: 12 },
+  guestHero: { paddingHorizontal: spacing.lg, paddingTop: 26, paddingBottom: 32, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.14)" }, guestTitle: { ...typography.h1, color: themeColors.textPrimary, fontSize: 47, lineHeight: 43, letterSpacing: -2.3, marginTop: 25 }, guestCopy: { ...typography.small, color: "rgba(255,255,255,0.65)", lineHeight: 20 }, primaryButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#f4f4f5", paddingVertical: 15, marginTop: 28 }, primaryButtonText: { ...typography.smallBold, color: "#050505", fontSize: 13 }, secondaryButton: { alignItems: "center", paddingVertical: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", marginTop: 9 }, secondaryButtonText: { ...typography.smallBold, color: "rgba(255,255,255,0.78)", fontSize: 13 }, guestPanel: { marginHorizontal: spacing.lg, marginTop: 25, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.14)", paddingVertical: 8 }, panelLabel: { ...typography.smallBold, color: "rgba(255,255,255,0.45)", fontSize: 9, letterSpacing: 1.5, paddingTop: 10 }, benefit: { flexDirection: "row", alignItems: "center", gap: 13, paddingVertical: 17 }, benefitBorder: { borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.1)" }, benefitText: { ...typography.small, flex: 1, color: "rgba(255,255,255,0.73)", fontSize: 13 }, footerLinks: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 28 }, footerLink: { ...typography.small, color: "rgba(255,255,255,0.42)", fontSize: 11 }, footerDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.35)" },
 });

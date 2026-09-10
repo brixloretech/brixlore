@@ -40,7 +40,12 @@ export default function ContinueWatchingScreen() {
 
     try {
       setIsLoading(true);
-      const list = await streamingService.getContinueWatching();
+      const list = await Promise.race([
+        streamingService.getContinueWatching(),
+        new Promise<ContinueWatchingItemDto[]>((resolve) =>
+          setTimeout(() => resolve([]), 10_000),
+        ),
+      ]);
       setItems(list);
     } catch (error) {
       console.error("Failed to load continue watching:", error);

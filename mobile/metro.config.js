@@ -22,6 +22,18 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     return context.resolveRequest(context, moduleName, platform);
   }
 
+  if (
+    moduleName === "../tslib.js" &&
+    context.originModulePath.includes(`${path.sep}tslib${path.sep}modules${path.sep}index.js`)
+  ) {
+    return {
+      type: "sourceFile",
+      // pdf-lib's tslib modules entry imports the CommonJS build as a default.
+      // The ES module build only has named exports, so it leaves tslib.default undefined in Metro.
+      filePath: path.resolve(path.dirname(context.originModulePath), "..", "tslib.js"),
+    };
+  }
+
   // ONLY handle relative imports from specific known problematic packages
   const isRelative = moduleName.startsWith(".");
   if (isRelative && context.originModulePath) {

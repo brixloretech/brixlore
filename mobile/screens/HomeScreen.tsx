@@ -1,7 +1,6 @@
 import React, {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -22,25 +21,17 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { colors as themeColors } from "../src/theme/colors";
-import { borderRadius, shadows, spacing, typography } from "../constants/theme";
-import {
-  LargeVideoCard,
-  type VideoCardItem,
-} from "../components/LargeVideoCard";
+import { borderRadius, spacing, typography } from "../constants/theme";
+import { type VideoCardItem } from "../components/LargeVideoCard";
 import { SmallVideoCard } from "../components/SmallVideoCard";
 import { useMatomo } from "../hooks/useMatomo";
 import {
   contentService,
   type ContentSummaryDto,
 } from "../services/contentService";
-import { subscriptionService } from "../services/subscriptionService";
-import { useAuthStore } from "../store/useAuthStore";
-import { useSubscriptionStore } from "../store/useSubscriptionStore";
-import { useMyList } from "../contexts/MyListContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const HERO_HEIGHT = Math.min(290, SCREEN_WIDTH * 0.58);
-const HERO_CARD_WIDTH = SCREEN_WIDTH - spacing.md * 2;
+const HERO_HEIGHT = Math.min(560, Math.max(480, SCREEN_WIDTH * 1.18));
 const HERO_ITEM_WIDTH = SCREEN_WIDTH;
 
 type HomeSection = {
@@ -70,74 +61,31 @@ function toVideoCardItem(item: ContentSummaryDto): VideoCardItem {
 export default function HomeScreen() {
   const router = useRouter();
   const { trackEvent } = useMatomo();
-  const { user, isAuthenticated } = useAuthStore();
-  const { subscription, fetchSubscription } = useSubscriptionStore();
-  const { listIds, refresh: refreshList } = useMyList();
-  const isFreeTier = !subscription?.isSubscribed;
 
-  const [heroItems, setHeroItems] = useState<VideoCardItem[]>([]);
+  const [heroItems, setHeroItems] = useState<ContentSummaryDto[]>([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Snapshot and categories states
-  const [contentCount, setContentCount] = useState<number>(0);
-  const [categoriesCount, setCategoriesCount] = useState<number>(0);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [planName, setPlanName] = useState<string | null>(null);
-  const [allContentItems, setAllContentItems] = useState<ContentSummaryDto[]>([]);
-
-  const heroListRef = useRef<FlatList<VideoCardItem>>(null);
+  const heroListRef = useRef<FlatList<ContentSummaryDto>>(null);
   const autoScrollRef = useRef<NodeJS.Timeout | null>(null);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchSubscription();
-    }
-  }, [fetchSubscription, isAuthenticated]);
-
-  const savedItems = useMemo(() => {
-    const byId = new Map(allContentItems.map((c) => [c.id, c]));
-    return listIds
-      .map((id) => byId.get(id))
-      .filter((c): c is ContentSummaryDto => c != null)
-      .map(toVideoCardItem);
-  }, [allContentItems, listIds]);
 
   const loadContent = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [allContent, cats] = await Promise.all([
+      // Content should render independently of optional account/subscription
+      // requests. Keep the first screen responsive on slow mobile networks.
+      const allContent = await Promise.race([
         contentService.getContentForBrowse(),
-        contentService.getCategories(),
+        new Promise<ContentSummaryDto[]>((resolve) =>
+          setTimeout(() => resolve([]), 8000),
+        ),
       ]);
 
-      setAllContentItems(allContent);
-      setHeroItems(allContent.slice(0, 3).map(toVideoCardItem));
-      setContentCount(allContent.length);
+      setHeroItems(allContent.slice(0, 3));
 
-      const filteredCats = cats.filter((c) => c.toLowerCase() !== "all");
-      setCategoriesCount(filteredCats.length);
-      setCategories(filteredCats);
-
-      if (isAuthenticated) {
-        try {
-          const plans = await subscriptionService.getPlans();
-          await fetchSubscription();
-          const sub = useSubscriptionStore.getState().subscription;
-          if (sub) {
-            const match = plans.find((p) => p.id === sub.planId);
-            setPlanName(match?.name ?? (sub.isSubscribed ? "Active" : "Free"));
-          } else {
-            setPlanName("Free");
-          }
-        } catch {
-          setPlanName("Free");
-        }
-      } else {
-        setPlanName(null);
-      }
+      // Subscription state is loaded separately and must not block the home UI.
 
       const nextSections: HomeSection[] = [];
       const trendingNow = allContent.slice(0, 10).map(toVideoCardItem);
@@ -148,7 +96,7 @@ export default function HomeScreen() {
         nextSections.push({
           id: "trending-now",
           title: "Trending Now",
-          subtitle: "Most watched this week",
+
           items: trendingNow,
         });
       }
@@ -156,7 +104,7 @@ export default function HomeScreen() {
         nextSections.push({
           id: "editors-picks",
           title: "Editor's Picks",
-          subtitle: "Curated for quality",
+
           items: editorPicks,
         });
       }
@@ -164,7 +112,7 @@ export default function HomeScreen() {
         nextSections.push({
           id: "new-releases",
           title: "New Releases",
-          subtitle: "Freshly added titles",
+
           items: newReleases,
         });
       }
@@ -176,7 +124,7 @@ export default function HomeScreen() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [isAuthenticated]);
+  }, []);
 
   useEffect(() => {
     loadContent();
@@ -203,13 +151,10 @@ export default function HomeScreen() {
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    Promise.all([
-      loadContent(),
-      refreshList(),
-    ]).finally(() => {
+    loadContent().finally(() => {
       setIsRefreshing(false);
     });
-  }, [loadContent, refreshList]);
+  }, [loadContent]);
 
   const handleItemPress = useCallback(
     (id: string, episodeId?: string, title?: string) => {
@@ -220,32 +165,23 @@ export default function HomeScreen() {
     [router, trackEvent],
   );
 
-  const userName = useMemo(() => {
-    return user?.name || user?.email?.split("@")[0] || "Viewer";
-  }, [user]);
-
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  }, []);
-
   const renderSection = (section: HomeSection) => {
     if (section.items.length === 0) return null;
 
     return (
-      <View style={styles.section} key={section.id}>
+      <View style={styles.editorialRail} key={section.id}>
         <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            {section.subtitle ? (
-              <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
-            ) : null}
+          <View style={styles.editorialHeading}>
+            <Text style={styles.editorialNumber}>{section.id === "trending-now" ? "01 / 03" : section.id === "editors-picks" ? "02 / 03" : "03 / 03"}</Text>
+            <View>
+              <Text style={styles.eyebrow}>{section.id === "trending-now" ? "New on Brixlore" : section.id === "editors-picks" ? "The culture edit" : "Late-night signal"}</Text>
+              <Text style={styles.sectionTitle}>{section.id === "trending-now" ? "Fresh stories, still warm." : section.id === "editors-picks" ? "Work that stays with you." : "Press play after dark."}</Text>
+            </View>
           </View>
-          <Pressable onPress={() => router.push("/(tabs)/explore")}>
-            <Text style={styles.sectionLink}>See all</Text>
-          </Pressable>
+          <View style={styles.sectionHeaderAside}>
+            <Text style={styles.sectionSubtitle}>{section.subtitle}</Text>
+
+          </View>
         </View>
         <FlatList
           data={section.items}
@@ -288,48 +224,6 @@ export default function HomeScreen() {
           />
         }
       >
-        <View style={styles.header}>
-          <View style={styles.headerTextWrap}>
-            <Text style={styles.greeting}>{greeting}</Text>
-            <Text
-              style={styles.userName}
-              numberOfLines={1}
-              ellipsizeMode="tail"
-            >
-              {userName}
-            </Text>
-          </View>
-          <View style={styles.headerActions}>
-            {isAuthenticated && isFreeTier ? (
-              <Pressable
-                style={styles.headerUpgradeButton}
-                onPress={() => router.push("/plans")}
-              >
-                <Text style={styles.headerUpgradeButtonText}>Upgrade</Text>
-              </Pressable>
-            ) : null}
-            <Pressable
-              style={styles.headerActionButton}
-              onPress={() => router.push("/(tabs)/explore")}
-            >
-              <Ionicons
-                name="search"
-                size={20}
-                color={themeColors.textPrimary}
-              />
-            </Pressable>
-            <Pressable
-              style={styles.headerActionButton}
-              onPress={() => router.push("/notifications")}
-            >
-              <Ionicons
-                name="notifications-outline"
-                size={20}
-                color={themeColors.textPrimary}
-              />
-            </Pressable>
-          </View>
-        </View>
         {heroItems.length > 0 ? (
           <View style={styles.heroWrap}>
             <FlatList
@@ -352,41 +246,59 @@ export default function HomeScreen() {
                 );
                 setActiveHeroIndex(index);
               }}
-              renderItem={({ item }) => (
-                <View style={styles.heroItemContainer}>
-                  <Pressable
-                    style={styles.heroCard}
-                    onPress={() => handleItemPress(item.id, undefined, item.title)}
-                  >
-                    {item.thumbnailUri ? (
+              renderItem={({ item }) => {
+                const imageUrl = item.bannerUrl ?? item.posterUrl ?? item.thumbnailUrl;
+                const metadata = formatSubtitle(item);
+
+                return (
+                  <View style={styles.heroItemContainer}>
+                    <Pressable
+                      style={styles.heroCard}
+                      onPress={() => handleItemPress(item.id, undefined, item.title)}
+                    >
+                    {imageUrl ? (
                       <Image
-                        source={{ uri: item.thumbnailUri }}
+                        source={{ uri: imageUrl }}
                         style={styles.heroImage}
                         resizeMode="cover"
                       />
                     ) : (
                       <LinearGradient
-                        colors={["#111827", "#1f2937", "#374151"]}
+                        colors={["#090909", "#151515", "#030303"]}
                         style={styles.heroImage}
                       />
                     )}
                     <LinearGradient
-                      colors={["transparent", "rgba(0,0,0,0.85)"]}
+                      colors={["rgba(3,3,3,0.04)", "rgba(3,3,3,0.20)", "rgba(3,3,3,0.72)", "#030303"]}
+                      locations={[0, 0.35, 0.70, 1]}
                       style={styles.heroGradient}
                     />
                     <View style={styles.heroContent}>
+                      <View style={styles.heroMetaRow}>
+                        <Text style={styles.heroBadge}>Featured {item.type === "SERIES" ? "series" : "film"}</Text>
+                        {metadata ? <Text style={styles.heroMeta}>{metadata}</Text> : null}
+                      </View>
                       <Text style={styles.heroTitle} numberOfLines={2}>
                         {item.title}
                       </Text>
-                      {item.subtitle ? (
-                        <Text style={styles.heroSubtitle} numberOfLines={1}>
-                          {item.subtitle}
-                        </Text>
-                      ) : null}
+                      <Text style={styles.heroDescription} numberOfLines={2}>
+                        Discover {item.title}, now streaming as part of the Brixlore collection.
+                      </Text>
+                      <View style={styles.heroButtonRow}>
+                        <View style={styles.heroPlayButton}>
+                          <Ionicons name="play" size={15} color="#030303" />
+                          <Text style={styles.heroPlayText}>Play now</Text>
+                        </View>
+                        <View style={styles.heroInfoButton}>
+                          <Ionicons name="information-outline" size={16} color={themeColors.textPrimary} />
+                          <Text style={styles.heroInfoText}>Details</Text>
+                        </View>
+                      </View>
                     </View>
-                  </Pressable>
-                </View>
-              )}
+                    </Pressable>
+                  </View>
+                );
+              }}
             />
 
             {heroItems.length > 1 ? (
@@ -405,66 +317,28 @@ export default function HomeScreen() {
           </View>
         ) : null}
 
+        <View style={styles.signalBand}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.signalContent}>
+            <Text style={styles.signalText}>STORIES WITHOUT LIMITS</Text>
+            <Text style={styles.signalMark}>✦</Text>
+            <Text style={styles.signalText}>BUILT FROM CULTURE</Text>
+            <Text style={styles.signalMark}>✦</Text>
+            <Text style={styles.signalText}>STORIES WITHOUT LIMITS</Text>
+          </ScrollView>
+        </View>
 
-        {isAuthenticated && savedItems.length > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <View>
-                <Text style={styles.sectionTitle}>My List</Text>
-                <Text style={styles.sectionSubtitle}>Saved for later</Text>
-              </View>
-              <Pressable onPress={() => router.push("/(tabs)/my-list")}>
-                <Text style={styles.sectionLink}>See all</Text>
-              </Pressable>
-            </View>
-            <FlatList
-              data={savedItems}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <SmallVideoCard
-                  item={item}
-                  onPress={() => handleItemPress(item.id, undefined, item.title)}
-                />
-              )}
-              contentContainerStyle={styles.horizontalList}
-            />
-          </View>
-        ) : null}
-
-        {categories.length > 0 ? (
-          <View style={styles.section}>
-            <View style={styles.sectionHeaderRow}>
-              <View>
-                <Text style={styles.sectionTitle}>Explore Categories</Text>
-                <Text style={styles.sectionSubtitle}>Browse curated tags</Text>
-              </View>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.tagsScroll}
-            >
-              {categories.map((category) => (
-                <Pressable
-                  key={category}
-                  style={styles.tagPill}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/(tabs)/explore",
-                      params: { category },
-                    })
-                  }
-                >
-                  <Text style={styles.tagText}>{category}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        ) : null}
 
         {sections.map((section) => renderSection(section))}
+
+        <View style={styles.closingCta}>
+          <Text style={styles.eyebrow}>Take the signal with you</Text>
+          <Text style={styles.ctaTitle}>Your screen. Your pace. Your stories.</Text>
+          <Text style={styles.ctaDescription}>Keep watching wherever the day takes you. Download once, watch offline, and move between devices without losing your place.</Text>
+          <Pressable style={styles.ctaButton} onPress={() => router.push("/downloads")}>
+            <Text style={styles.ctaButtonText}>Watch your way</Text>
+            <Ionicons name="arrow-forward" size={16} color="#030303" />
+          </Pressable>
+        </View>
 
         <View style={{ height: spacing.xxl }} />
       </ScrollView>
@@ -547,19 +421,18 @@ const styles = StyleSheet.create({
     backgroundColor: themeColors.surface,
   },
   heroWrap: {
-    marginTop: spacing.sm,
+    marginTop: 0,
     marginBottom: spacing.lg,
   },
   heroItemContainer: {
     width: HERO_ITEM_WIDTH,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: 0,
   },
   heroCard: {
-    width: HERO_CARD_WIDTH,
+    width: SCREEN_WIDTH,
     height: HERO_HEIGHT,
-    borderRadius: borderRadius.lg,
+    borderRadius: 0,
     overflow: "hidden",
-    ...shadows.card,
   },
   heroImage: {
     width: "100%",
@@ -572,15 +445,30 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: spacing.lg,
     right: spacing.lg,
-    bottom: spacing.lg,
+    bottom: spacing.xl,
+  },
+  heroMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   heroBadge: {
-    ...typography.caption,
-    color: "#fcd34d",
+    ...typography.smallBold,
+    color: themeColors.primary,
+    // backgroundColor: themeColors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    borderRadius: borderRadius.full,
     fontWeight: "700",
-    marginBottom: spacing.xs,
-    letterSpacing: 0.8,
     textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  heroMeta: {
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.65)",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   heroTitle: {
     ...typography.title,
@@ -588,28 +476,45 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "800",
   },
-  heroSubtitle: {
-    ...typography.body,
+  heroDescription: {
+    ...typography.caption,
     color: "rgba(255,255,255,0.85)",
     marginTop: spacing.xs,
     marginBottom: spacing.md,
+    lineHeight: 21,
   },
-  heroButtonsRow: {
+  heroButtonRow: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
   },
-  heroPrimaryButton: {
+  heroPlayButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
     backgroundColor: themeColors.textPrimary,
-    borderRadius: borderRadius.md,
+    borderRadius: borderRadius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  heroPrimaryButtonText: {
-    ...typography.body,
+  heroPlayText: {
+    ...typography.smallBold,
     color: themeColors.background,
-    fontWeight: "700",
+  },
+  heroInfoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    backgroundColor: "rgba(0,0,0,0.24)",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  heroInfoText: {
+    ...typography.smallBold,
+    color: themeColors.textPrimary,
   },
   heroDotsRow: {
     flexDirection: "row",
@@ -628,36 +533,133 @@ const styles = StyleSheet.create({
     width: 24,
     backgroundColor: themeColors.accent,
   },
-  section: {
+  signalBand: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    // borderColor: "rgba(255,255,255,0.10)",
+    marginBottom: spacing.lg,
+    // paddingVertical: spacing.lg,
+    overflow: "hidden",
+    opacity: 0.42,
+  },
+  signalContent: {
+    alignItems: "center",
+    gap: spacing.lg,
+    paddingHorizontal: spacing.lg,
+  },
+  signalText: {
+    ...typography.h3,
+    color: themeColors.textPrimary,
+    fontSize: 22,
+    letterSpacing: -0.5,
+    textTransform: "uppercase",
+  },
+  signalMark: {
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 20,
+  },
+  editorialRail: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.10)",
+    paddingTop: spacing.xl,
     marginBottom: spacing.xl,
   },
   sectionHeaderRow: {
     paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-end",
     justifyContent: "space-between",
+    gap: spacing.md,
+  },
+  editorialHeading: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.md,
+  },
+  editorialNumber: {
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.30)",
+    fontSize: 9,
+    letterSpacing: 0.7,
+    paddingTop: 3,
+  },
+  eyebrow: {
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 9,
+    letterSpacing: 1.3,
+    textTransform: "uppercase",
+    marginBottom: 5,
   },
   sectionTitle: {
-    ...typography.title,
+    ...typography.h2,
     color: themeColors.textPrimary,
-    fontWeight: "700",
-    fontSize: 20,
-    marginBottom: spacing.xs,
+    fontWeight: "600",
+    fontSize: 18,
+    lineHeight: 20,
+    letterSpacing: -0.3,
+  },
+  sectionHeaderAside: {
+    width: 78,
+    gap: 5,
   },
   sectionSubtitle: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-    fontSize: 13,
+    ...typography.small,
+    color: "rgba(255,255,255,0.48)",
+    fontSize: 10,
+    lineHeight: 13,
   },
   sectionLink: {
-    ...typography.caption,
-    color: themeColors.accent,
-    fontWeight: "700",
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.70)",
+    textTransform: "uppercase",
+    fontSize: 9,
+    letterSpacing: 0.7,
   },
   horizontalList: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
+  },
+  closingCta: {
+    marginHorizontal: spacing.md,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+    padding: spacing.lg,
+    borderRadius: 28,
+    overflow: "hidden",
+    backgroundColor: "#0d0d0d",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+  },
+  ctaTitle: {
+    ...typography.h1,
+    color: themeColors.textPrimary,
+    fontSize: 32,
+    lineHeight: 32,
+    letterSpacing: -1,
+    marginBottom: spacing.md,
+  },
+  ctaDescription: {
+    ...typography.caption,
+    color: "rgba(255,255,255,0.52)",
+    lineHeight: 21,
+    marginBottom: spacing.lg,
+  },
+  ctaButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: themeColors.foreground,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  ctaButtonText: {
+    ...typography.smallBold,
+    color: themeColors.background,
   },
   snapshotRow: {
     flexDirection: "row",

@@ -40,7 +40,12 @@ export default function WatchHistoryScreen() {
 
     try {
       setIsLoading(true);
-      const list = await streamingService.getWatchHistory();
+      const list = await Promise.race([
+        streamingService.getWatchHistory(),
+        new Promise<ContinueWatchingItemDto[]>((resolve) =>
+          setTimeout(() => resolve([]), 10_000),
+        ),
+      ]);
       setHistoryItems(list);
     } catch (error) {
       console.error("Failed to load watch history:", error);

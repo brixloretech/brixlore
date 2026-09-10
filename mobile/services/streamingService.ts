@@ -20,6 +20,52 @@ type GetPlaybackInfoOptions = {
   asGuest?: boolean;
 };
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs),
+    ),
+  ]);
+}
+
+/**
+ * Guest playback must not pass through the authenticated Axios client. An
+ * expired stored session can make its interceptors retry/short-circuit an
+ * otherwise-public request on device. This small direct request keeps the
+ * preview route independent from authentication state.
+ */
+async function getGuestPlaybackDirect(
+  episodeId: string,
+): Promise<PlaybackMetadataResponse | null> {
+  const apiBaseUrl =
+    api.defaults.baseURL ||
+    Constants.expoConfig?.extra?.apiUrl ||
+    process.env.EXPO_PUBLIC_API_URL ||
+    "https://brick-tales-web-production-653a.up.railway.app";
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 7_000);
+  const requestUrl = `${String(apiBaseUrl).replace(/\/$/, "")}/episodes/${encodeURIComponent(episodeId)}/guest-play`;
+  try {
+    const response = await fetch(
+      requestUrl,
+      { headers: { Accept: "application/json" }, signal: controller.signal },
+    );
+    if (!response.ok) {
+      return null;
+    }
+    const payload = (await response.json()) as PlaybackMetadataResponse & {
+      data?: PlaybackMetadataResponse;
+    };
+    const data = payload?.streamKey ? payload : payload?.data;
+    return data?.streamKey ? data : null;
+  } catch (error) {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function buildStreamUrl(streamKey: string): string {
   const trimmed = streamKey.trim();
   if (!trimmed) return trimmed;
@@ -92,37 +138,59 @@ class StreamingService {
     options?: GetPlaybackInfoOptions,
   ): Promise<PlaybackInfoResponseDto | null> {
     try {
-      console.log(
-        `[Streaming] Getting playback info for episode: ${episodeId}`,
-      );
       let response;
 
       if (options?.asGuest) {
-        try {
+        // Use the public endpoint directly first. The Axios auth interceptor
+        // can retry an expired token and hide a valid guest stream in Expo Go.
+        const guestData = await getGuestPlaybackDirect(episodeId);
+        if (guestData?.streamKey) {
+          response = { data: guestData };
+        } else {
           response = await api.get<PlaybackMetadataResponse>(
-            `/episodes/${episodeId}/guest-play`,
+            `/episodes/${encodeURIComponent(episodeId)}/guest-play`,
           );
-        } catch (guestError: any) {
-          // Backend may not have guest-play route deployed yet (404).
-          // For guests, we cannot fall back to the auth-protected endpoint.
-          if (guestError?.response?.status === 404) {
-            console.warn(
-              "[Streaming] Guest playback endpoint not available. Backend needs to be restarted/redeployed.",
-            );
-            throw new Error("unavailable");
-          } else {
-            throw guestError;
-          }
         }
       } else {
-        response = await api.get<PlaybackMetadataResponse>(
-          `/episodes/${episodeId}/play`,
-        );
+        try {
+          // An expired or stalled authenticated endpoint must not block an
+          // otherwise-valid public preview stream indefinitely.
+          response = await withTimeout(
+            api.get<PlaybackMetadataResponse>(
+              `/episodes/${encodeURIComponent(episodeId)}/play`,
+            ),
+            5_000,
+            "Authenticated playback request",
+          );
+        } catch (authenticatedError: any) {
+          // Preserve an explicit access denial, but allow an expired/missing
+          // session to use the public preview route instead of leaving the
+          // native player with no source.
+          if (authenticatedError?.response?.status === 403) {
+            throw authenticatedError;
+          }
+          console.warn(
+            "[Streaming] Auth playback unavailable; trying guest playback.",
+          );
+          response = { data: await getGuestPlaybackDirect(episodeId) };
+        }
       }
 
       if (!response.data?.streamKey) {
-        console.error("[Streaming] No streamKey in response:", response.data);
-        return null;
+        // Some older API deployments can reply successfully to /play without
+        // a stream key. The public endpoint is the reliable fallback for a
+        // preview-capable title.
+        if (!options?.asGuest) {
+          console.warn("[Streaming] Empty auth playback response; trying guest playback.");
+          response = { data: await getGuestPlaybackDirect(episodeId) };
+        }
+        if (!response.data?.streamKey) {
+          if (options?.asGuest) response = { data: await getGuestPlaybackDirect(episodeId) };
+          if (!response.data?.streamKey) {
+            console.error("[Streaming] No streamKey in response:", response.data);
+            return null;
+          }
+        }
       }
 
       const streamKey = response.data.streamKey;

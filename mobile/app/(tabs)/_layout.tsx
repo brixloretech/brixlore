@@ -1,48 +1,28 @@
 import { Tabs } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../../constants/theme";
-import { colors as themeColors } from "../../src/theme/colors";
-import { shadows } from "../../constants/theme";
-import Constants from "expo-constants";
-
+import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-// Check if running in Expo Go (which has limited reanimated support)
-// Safe check for Expo Go - executionEnvironment may not be available in all versions
-const isExpoGo =
-  Constants.executionEnvironment === "storeClient" ||
-  Constants.executionEnvironment ===
-    Constants.ExecutionEnvironment?.StoreClient ||
-  !Constants.executionEnvironment;
-
-// Simple TabIcon without animations for Expo Go compatibility
 function TabIcon({
   focused,
   name,
-  color,
+  label,
 }: {
   focused: boolean;
   name: keyof typeof Ionicons.glyphMap;
-  color: string;
+  label: string;
 }) {
   return (
-    <View style={{ alignItems: "center", justifyContent: "center" }}>
-      <Ionicons name={name} size={24} color={color} />
-      {focused && (
-        <View
-          style={{
-            position: "absolute",
-            width: 36,
-            height: 36,
-            borderRadius: 18,
-            backgroundColor: themeColors.accent,
-            opacity: 0.2,
-            top: -6,
-            left: -6,
-          }}
-        />
-      )}
+    <View style={[styles.tabItem, focused && styles.tabItemActive]}>
+      <Ionicons
+        name={name}
+        size={20}
+        color={focused ? "#FFFFFF" : "rgba(255, 255, 255, 0.56)"}
+      />
+      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -57,23 +37,24 @@ export default function TabsLayout() {
         tabBarStyle: [
           styles.tabBar,
           {
-            height: 60 + Math.max(0, insets.bottom),
-            paddingBottom: Math.max(8, insets.bottom),
+            // height: 76 + insets.bottom,
+            paddingBottom: Math.max(10, insets.bottom),
           },
         ],
-        tabBarActiveTintColor: themeColors.accent,
-        tabBarInactiveTintColor: themeColors.textSecondary,
-        tabBarShowLabel: true,
-        tabBarLabelStyle: styles.tabLabel,
-        tabBarBackground: () => <View style={styles.tabBarBackground} />,
+        tabBarShowLabel: false,
+        tabBarItemStyle: styles.tabBarItem,
+        tabBarIconStyle: styles.tabIconSlot,
+        tabBarBackground: () => (
+          <BlurView intensity={24} tint="dark" style={styles.glassBackground} />
+        ),
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon focused={focused} name="home" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} name="home" label="Home" />
           ),
         }}
       />
@@ -81,8 +62,8 @@ export default function TabsLayout() {
         name="explore"
         options={{
           title: "Explore",
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon focused={focused} name="search" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} name="search" label="Explore" />
           ),
         }}
       />
@@ -90,17 +71,17 @@ export default function TabsLayout() {
         name="my-list"
         options={{
           title: "My List",
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon focused={focused} name="bookmark" color={color} />
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} name="bookmark" label="My List" />
           ),
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon focused={focused} name="person" color={color} />
+          title: "My Stuff",
+          tabBarIcon: ({ focused }) => (
+            <TabIcon focused={focused} name="person" label="My Stuff" />
           ),
         }}
       />
@@ -116,22 +97,67 @@ export default function TabsLayout() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    backgroundColor: colors.background,
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
-    borderTopWidth: 1,
-    height: 65,
-    paddingBottom: 8,
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "transparent",
+    borderTopColor: "transparent",
+    borderTopWidth: 0,
+    elevation: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    paddingHorizontal: 10,
     paddingTop: 8,
   },
-  tabBarBackground: {
+  glassBackground: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(5, 5, 7, 0.16)",
+    overflow: "hidden",
+  },
+  tabBarItem: {
     flex: 1,
-    backgroundColor: colors.background,
+    height: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 2,
+  },
+  tabIconSlot: {
+    width: "100%",
+    height: 58,
+    marginTop: 0,
+    marginBottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabItem: {
+    width: "100%",
+    maxWidth: 82,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    // borderWidth: 1,
+    // borderColor: "rgba(255, 255, 255, 0.16)",
+    // borderRadius: 16,
+    // backgroundColor: "rgba(0, 0, 0, 0.34)",
+  },
+  tabItemActive: {
+    // backgroundColor: "rgba(255, 255, 255, 0.13)",
+    borderColor: "rgba(255, 255, 255, 0.5)",
   },
   tabLabel: {
+    color: "rgba(255, 255, 255, 0.56)",
     fontSize: 10,
+    lineHeight: 13,
     fontWeight: "600",
-    letterSpacing: 0.2,
-    marginTop: -4,
-    paddingBottom: 4,
+    letterSpacing: 0,
+    includeFontPadding: false,
+    textAlign: "center",
+  },
+  tabLabelActive: {
+    color: "#FFFFFF",
   },
 });

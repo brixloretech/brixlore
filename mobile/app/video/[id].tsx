@@ -21,6 +21,7 @@ import { useEventListener } from "expo";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { BlurView } from "expo-blur";
 import { colors as themeColors } from "../../src/theme/colors";
 import { spacing, typography, borderRadius } from "../../constants/theme";
 import { contentService, type EpisodeDto } from "../../services/contentService";
@@ -76,6 +77,7 @@ type ContentDetailDto = {
     seasonId?: string;
     episodeNumber: number;
     title: string;
+    description?: string;
     duration: string;
     thumbnailUrl?: string;
   }>;
@@ -104,9 +106,16 @@ export default function WatchScreen() {
     episodeId?: string;
     resumeAt?: string;
   }>();
-  const contentId = params.id;
-  const episodeIdFromUrl = params.episodeId;
-  const resumeAtFromUrl = Number(params.resumeAt ?? 0);
+  // Expo Router can expose a repeated query/path parameter as an array at
+  // runtime. Normalize it before building API URLs so the detail request is
+  // always made with the actual content ID.
+  const contentId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const episodeIdFromUrl = Array.isArray(params.episodeId)
+    ? params.episodeId[0]
+    : params.episodeId;
+  const resumeAtFromUrl = Number(
+    Array.isArray(params.resumeAt) ? params.resumeAt[0] : params.resumeAt ?? 0,
+  );
   const resumeFromUrlSec = Number.isFinite(resumeAtFromUrl)
     ? Math.max(0, Math.floor(resumeAtFromUrl))
     : 0;
@@ -272,6 +281,19 @@ export default function WatchScreen() {
   const showUpgradeModal2SecRef = useRef(false);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Last-resort UI guard. API and player failures must resolve to an actionable
+  // state instead of holding the entire route on its initial spinner.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setLoading((currentlyLoading) => {
+        if (!currentlyLoading) return currentlyLoading;
+        setPlaybackError((currentError) => currentError ?? "unavailable");
+        return false;
+      });
+    }, 15_000);
+    return () => clearTimeout(timeout);
+  }, [contentId, episodeIdFromUrl]);
+
   // ── Controls animation helpers (GAP 9) ────────────────────────────────────
 
   const showControlsAnimated = useCallback(() => {
@@ -380,6 +402,9 @@ export default function WatchScreen() {
   const [seasonEpisodesLoading, setSeasonEpisodesLoading] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
   const [similarVideos, setSimilarVideos] = useState<any[]>([]);
+  const [activeInfoTab, setActiveInfoTab] = useState<
+    "episodes" | "related" | "details"
+  >("episodes");
   const [progressBarWidth, setProgressBarWidth] = useState(0);
   const trailerEpisodeId = content?.trailer?.id ?? null;
   const isTrailerPlayback =
@@ -686,7 +711,10 @@ export default function WatchScreen() {
       setPlaybackError(null);
       setComingSoon(false);
       try {
-        const detailRes = await contentService.getContentById(contentId);
+        const detailRes = await Promise.race([
+          contentService.getContentById(contentId),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 10_000)),
+        ]);
         if (cancelled) return;
         const contentDetail = detailRes?.content ?? null;
         if (!contentDetail) {
@@ -827,8 +855,13 @@ export default function WatchScreen() {
           let nextSavedProgress = resumeFromUrlSec;
           // Fetch saved progress from continue watching BEFORE loading video
           try {
-            const continueWatchingList =
-              await streamingService.getContinueWatching();
+            const continueWatchingList = await Promise.race([
+              streamingService.getContinueWatching(),
+              // Saved progress is optional and must not block playback.
+              new Promise<Awaited<ReturnType<typeof streamingService.getContinueWatching>>>((resolve) =>
+                setTimeout(() => resolve([]), 3_000),
+              ),
+            ]);
             if (cancelled) return;
             const savedItem = continueWatchingList.find(
               (item) => item.episodeId === episode.id,
@@ -848,6 +881,10 @@ export default function WatchScreen() {
         }
 
         // Get playback info
+        // The streaming service has its own bounded native request and knows
+        // how to fall back from an expired authenticated session to guest play.
+        // Do not race it against a second timer here: that race could resolve
+        // with null while the valid guest response was still arriving.
         const playbackRes = await streamingService.getPlaybackInfo(episode.id, {
           asGuest: !isAuthenticated,
         });
@@ -927,8 +964,9 @@ export default function WatchScreen() {
     savedProgressRef.current = savedProgress;
   }, [savedProgress]);
 
-  // Load new source into player when playback URL becomes available.
-  // Pre-roll runs before content starts; player.play() fires after it resolves.
+  // Load the source before requesting a pre-roll. Previously the source was
+  // only attached after the ad promise resolved; a slow or stalled ad request
+  // left the screen on its loading spinner indefinitely.
   useEffect(() => {
     const url = playbackInfo?.url;
     if (!url) return;
@@ -939,17 +977,23 @@ export default function WatchScreen() {
     contentEndedRef.current = false;
     adJustResumedRef.current = false;
 
-    // Pause any in-flight playback before pre-roll begins so content never flashes first.
+    // Prepare the movie immediately, but keep it paused until the ad flow has
+    // completed. This lets expo-video report readiness independently of ads.
     safePlayerCall(() => player.pause(), "prePrerollPause");
-    void adSystem.triggerPreRoll().then(() => {
+    safePlayerCall(() => player.replace({ uri: url }), "sourceReplace");
+    const continueToMovie = () => {
       if (cancelled) return;
-      safePlayerCall(() => player.replace({ uri: url }), "sourceReplace");
+      // Never allow the content player to start beneath a visible/loading ad.
+      // The previous timer-based fallback fired after 12 seconds regardless of
+      // whether an ad was still playing, which made the two videos overlap.
+      if (adSystem.adActiveRef.current) return;
       safePlayerCall(() => player.play(), "postPrerollPlay");
-    });
+    };
+    void adSystem.triggerPreRoll().then(continueToMovie).catch(continueToMovie);
     return () => {
       cancelled = true;
     };
-  }, [playbackInfo?.url, player, safePlayerCall]);
+  }, [adSystem.adActiveRef, adSystem.triggerPreRoll, playbackInfo?.url, player, safePlayerCall]);
 
   // GAP 1: Quality selector URL rebuild (`?quality=720p`) and keep playback position.
   useEffect(() => {
@@ -1282,25 +1326,28 @@ export default function WatchScreen() {
 
   useEffect(() => {
     if (!isAuthenticated || !primaryEpisode) return;
+
+    const episodeId = primaryEpisode.id;
     const durationSec = durationToSeconds(primaryEpisode.duration);
     const intervalId = setInterval(() => {
-      if (currentTime <= 0) return;
+      const progressSeconds = lastPositionRef.current;
       if (
-        currentTime - lastReportedRef.current <
-        PROGRESS_REPORT_INTERVAL_SEC
+        progressSeconds <= 0 ||
+        progressSeconds - lastReportedRef.current < PROGRESS_REPORT_INTERVAL_SEC
       ) {
         return;
       }
-      lastReportedRef.current = currentTime;
-      streamingService.reportProgress(
-        primaryEpisode.id,
-        currentTime,
+
+      lastReportedRef.current = progressSeconds;
+      void streamingService.reportProgress(
+        episodeId,
+        progressSeconds,
         durationSec > 0 ? durationSec : undefined,
       );
     }, PROGRESS_REPORT_INTERVAL_SEC * 1000);
 
     return () => clearInterval(intervalId);
-  }, [currentTime, isAuthenticated, primaryEpisode]);
+  }, [isAuthenticated, primaryEpisode]);
   const toggleFullscreen = useCallback(() => {
     const next = !isFullscreen;
     setIsFullscreen(next);
@@ -1903,13 +1950,18 @@ export default function WatchScreen() {
   const hasEpisodes =
     (content.episodes?.length ?? 0) > 0 || (content.seasons?.length ?? 0) > 0;
   const rightEdgeInset = Math.max(16, insets.right + 22);
+  // iOS renders each native VideoView in a separate platform layer. Use one
+  // physical view and swap its player during an ad; this prevents either video
+  // from appearing above or below the other unpredictably.
+  const isAdPresentationActive =
+    adSystem.adLoading || adSystem.adOverlay !== null;
 
   const renderVideoPlayer = (fullscreen: boolean) => (
     <View style={fullscreen ? styles.playerContainerFullscreen : styles.playerContainer}>
       <View style={[styles.videoWrapper, fullscreen && styles.videoWrapperFullscreen]}>
         <VideoView
           ref={videoViewRef}
-          player={player}
+          player={isAdPresentationActive ? adSystem.adVideoPlayer : player}
           style={styles.video}
           contentFit="contain"
           nativeControls={false}
@@ -1918,8 +1970,11 @@ export default function WatchScreen() {
 
         {/* Controls Overlay — always mounted for fade animation */}
         <Animated.View
-          style={[styles.controlsOverlay, { opacity: controlsOpacity }]}
-          pointerEvents={showControls ? "box-none" : "none"}
+          style={[
+            styles.controlsOverlay,
+            { opacity: isAdPresentationActive ? 0 : controlsOpacity },
+          ]}
+          pointerEvents={showControls && !isAdPresentationActive ? "box-none" : "none"}
         >
           <LinearGradient
             colors={["rgba(0,0,0,0.82)", "transparent"]}
@@ -2075,7 +2130,7 @@ export default function WatchScreen() {
           </View>
         </Animated.View>
 
-        {showDoubleTapFeedback && (
+        {!isAdPresentationActive && showDoubleTapFeedback && (
           <View
             style={[
               styles.doubleTapFeedback,
@@ -2101,7 +2156,7 @@ export default function WatchScreen() {
         )}
 
         {/* Gesture Overlay: only active when controls are hidden — prevents blocking buttons/seek bar. */}
-        <View style={styles.gestureContainer} pointerEvents={showControls ? "none" : "box-none"}>
+        {!isAdPresentationActive && <View style={styles.gestureContainer} pointerEvents={showControls ? "none" : "box-none"}>
           <Pressable
             style={styles.gestureZoneLeft}
             onPress={() => handleSideTap("left")}
@@ -2120,9 +2175,9 @@ export default function WatchScreen() {
             onPressIn={handlePressIn}
             onPressOut={handlePressOut}
           />
-        </View>
+        </View>}
 
-        {isHolding && (
+        {!isAdPresentationActive && isHolding && (
           <View style={styles.speedIndicator}>
             <Text style={styles.speedIndicatorText}>2x</Text>
           </View>
@@ -2135,18 +2190,20 @@ export default function WatchScreen() {
         )}
 
         {adSystem.adOverlay ? (
-          <AdOverlay
-            {...adSystem.adOverlay}
-            adVideoPlayer={adSystem.adVideoPlayer}
-            onDone={adSystem.onAdDone}
-            onProgress={adSystem.onAdProgress}
-            resumeFromSeconds={adSystem.adPlaybackPositionRef.current}
-            onToggleFullscreen={toggleFullscreen}
-            isFullscreen={fullscreen}
-            onLearnMoreClick={() =>
-              trackEvent('Ad', 'ad_click', adSystem.adOverlay?.slot)
-            }
-          />
+          <View style={styles.adUiLayer} pointerEvents="box-none">
+            <AdOverlay
+              {...adSystem.adOverlay}
+              adVideoPlayer={adSystem.adVideoPlayer}
+              onDone={adSystem.onAdDone}
+              onProgress={adSystem.onAdProgress}
+              resumeFromSeconds={adSystem.adPlaybackPositionRef.current}
+              onToggleFullscreen={toggleFullscreen}
+              isFullscreen={fullscreen}
+              onLearnMoreClick={() =>
+                trackEvent('Ad', 'ad_click', adSystem.adOverlay?.slot)
+              }
+            />
+          </View>
         ) : null}
       </View>
     </View>
@@ -2161,286 +2218,44 @@ export default function WatchScreen() {
       >
         {/* Video Player */}
         {!isFullscreen && renderVideoPlayer(false)}
-        {/* Content Info */}
-        {content && (
-          <View style={styles.contentInfo}>
-            {/* Title and Add to List */}
-            <View style={styles.titleRow}>
-              <Text style={styles.title} numberOfLines={2}>
-                {content.title}
-              </Text>
-              <AddToMyListButton contentId={content.id} size="md" />
-            </View>
-
-            {/* Description with See More */}
-            {content.description && (
-              <View style={styles.descriptionContainer}>
-                <Text
-                  style={styles.description}
-                  numberOfLines={descriptionExpanded ? undefined : 2}
-                >
-                  {content.description}
-                </Text>
-                {content.description.length > 100 && (
-                  <Pressable
-                    onPress={() => setDescriptionExpanded(!descriptionExpanded)}
-                  >
-                    <Text style={styles.seeMoreText}>
-                      {descriptionExpanded ? "Show less" : "See more"}
-                    </Text>
-                  </Pressable>
-                )}
-              </View>
-            )}
-
-            {/* Video Meta Info */}
-            <View style={styles.metaInfo}>
-              {content.releaseYear && (
-                <Text style={styles.metaText}>{content.releaseYear}</Text>
-              )}
-              {content.ageRating && (
-                <Text style={styles.metaText}>{content.ageRating}</Text>
-              )}
-              {content.category && (
-                <Text style={styles.metaText}>{content.category}</Text>
-              )}
-            </View>
+        <View style={styles.watchInfo}>
+          <Text style={styles.watchTitle} numberOfLines={2}>{content.title}</Text>
+          <View style={styles.watchMeta}>
+            <Text style={styles.watchMetaText}>{content.type}</Text>
+            <Text style={styles.watchDot}>·</Text>
+            <Text style={styles.watchMetaText}>{content.releaseYear}</Text>
+            <Text style={styles.watchDot}>·</Text>
+            <Text style={styles.rating}>{content.ageRating || "NR"}</Text>
+            {content.duration ? <><Text style={styles.watchDot}>·</Text><Text style={styles.watchMetaText}>{content.duration}</Text></> : null}
+          </View>
+          {content.description ? <Text style={styles.watchDescription} numberOfLines={descriptionExpanded ? undefined : 3}>{content.description}</Text> : null}
+          {content.description && content.description.length > 150 ? <Pressable onPress={() => setDescriptionExpanded((value) => !value)}><Text style={styles.more}>{descriptionExpanded ? "Show less" : "Read more"}</Text></Pressable> : null}
+          <View style={styles.watchActions}>
+            <Pressable onPress={handlePlayPause} style={styles.playPrimary}>
+              <Ionicons name={isPlaying ? "pause" : "play"} size={17} color="#050505" />
+              <Text style={styles.playPrimaryText}>Play now</Text>
+            </Pressable>
+            <View style={styles.roundAction}><AddToMyListButton contentId={content.id} size="md" /></View>
+            <Pressable style={styles.roundAction}><Ionicons name="share-outline" size={22} color={themeColors.textPrimary} /></Pressable>
+          </View>
+        </View>
+        <View style={styles.infoTabs}>
+          {(["episodes", "related", "details"] as const).map((tab) => (
+            <Pressable key={tab} onPress={() => setActiveInfoTab(tab)} style={[styles.infoTab, activeInfoTab === tab && styles.infoTabActive]}>
+              <Text style={[styles.infoTabText, activeInfoTab === tab && styles.infoTabTextActive]}>{tab === "related" ? "Related" : tab[0].toUpperCase() + tab.slice(1)}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {activeInfoTab === "episodes" && (
+          <View style={styles.tabContent}>
+            {sortedSeasons.length > 0 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.seasonPills}>{sortedSeasons.map((season) => <Pressable key={season.id} onPress={() => setSelectedSeasonId(season.id)} style={[styles.seasonPill, selectedSeason?.id === season.id && styles.seasonPillActive]}><Text style={[styles.seasonPillText, selectedSeason?.id === season.id && styles.seasonPillTextActive]}>{season.title || `Season ${season.seasonNumber}`}</Text></Pressable>)}</ScrollView> : null}
+            <Text style={styles.tabLabel}>{selectedSeason ? selectedSeason.title || `Season ${selectedSeason.seasonNumber}` : "Episodes"}</Text>
+            {(selectedSeason ? episodesForSelectedSeason : fallbackEpisodes).map((item) => <Pressable key={item.id} onPress={() => handleEpisodeSelect(item.id)} style={[styles.episodeRow, selectedEpisodeId === item.id && styles.episodeRowActive]}>{item.thumbnailUrl ? <Image source={{ uri: item.thumbnailUrl }} style={styles.episodeRowImage} /> : <View style={styles.episodeRowPlaceholder}><Ionicons name="play" size={19} color="rgba(255,255,255,0.72)" /></View>}<View style={styles.episodeRowCopy}><Text style={styles.episodeRowTitle} numberOfLines={1}>{item.episodeNumber}. {item.title}</Text><View style={styles.episodeRowMeta}><Text style={styles.episodeRowDuration}>{item.duration}</Text><Text style={styles.rating}>{content.ageRating || "NR"}</Text></View><Text style={styles.episodeRowDescription} numberOfLines={2}>{item.description || "Continue the story and discover what happens next."}</Text></View>{selectedEpisodeId === item.id ? <Ionicons name="volume-high" size={17} color={themeColors.textPrimary} /> : null}</Pressable>)}
+            {seasonEpisodesLoading ? <Text style={styles.emptyTab}>Loading episodes...</Text> : null}
           </View>
         )}
-
-        {/* Similar Videos */}
-        {similarVideos.length > 0 &&
-          content.type !== "DOCUMENTARY" &&
-          content.type !== "SERIES" && (
-            <View style={styles.similarSection}>
-              <Text style={styles.sectionTitle}>Recommended to you</Text>
-              <FlatList
-                data={similarVideos}
-                scrollEnabled={false}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <Pressable
-                    style={styles.similarVideoCard}
-                    onPress={() => {
-                      router.push(`/video/${item.id}`);
-                    }}
-                  >
-                    {item.thumbnailUrl ? (
-                      <Image
-                        source={{ uri: item.thumbnailUrl }}
-                        style={styles.similarThumbnail}
-                      />
-                    ) : (
-                      <View style={styles.similarThumbnailPlaceholder}>
-                        <Ionicons
-                          name="play-circle"
-                          size={32}
-                          color={themeColors.textSecondary}
-                        />
-                      </View>
-                    )}
-                    <View style={styles.similarVideoInfo}>
-                      <Text style={styles.similarVideoTitle} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                      {item.releaseYear && (
-                        <Text style={styles.similarVideoMetaText}>
-                          {item.releaseYear}
-                        </Text>
-                      )}
-                    </View>
-                  </Pressable>
-                )}
-              />
-            </View>
-          )}
-
-        {/* Episodes & Seasons */}
-        {isEpisodicContent && hasEpisodes && (
-          <View style={styles.episodesSection}>
-            <Text style={styles.sectionTitle}>Episodes & Seasons</Text>
-            {sortedSeasons.length > 0 ? (
-              <>
-                <View style={styles.seasonDropdownWrapper}>
-                  <Pressable
-                    style={styles.seasonDropdownTrigger}
-                    onPress={() =>
-                      setShowSeasonDropdown((prevOpen) => !prevOpen)
-                    }
-                  >
-                    <Text style={styles.seasonDropdownLabel}>Season</Text>
-                    <View style={styles.seasonDropdownValueWrap}>
-                      <Text style={styles.seasonDropdownValue}>
-                        {selectedSeason
-                          ? selectedSeason.title ||
-                          `Season ${selectedSeason.seasonNumber}`
-                          : "Select season"}
-                      </Text>
-                      <Ionicons
-                        name={
-                          showSeasonDropdown ? "chevron-up" : "chevron-down"
-                        }
-                        size={16}
-                        color={themeColors.textSecondary}
-                      />
-                    </View>
-                  </Pressable>
-
-                  {showSeasonDropdown && (
-                    <View style={styles.seasonDropdownMenu}>
-                      {sortedSeasons.map((season) => {
-                        const isActiveSeason = selectedSeason?.id === season.id;
-                        return (
-                          <Pressable
-                            key={season.id}
-                            style={[
-                              styles.seasonDropdownItem,
-                              isActiveSeason && styles.seasonDropdownItemActive,
-                            ]}
-                            onPress={() => {
-                              setSelectedSeasonId(season.id);
-                              setShowSeasonDropdown(false);
-                            }}
-                          >
-                            <Text
-                              style={[
-                                styles.seasonDropdownItemText,
-                                isActiveSeason &&
-                                styles.seasonDropdownItemTextActive,
-                              ]}
-                            >
-                              {season.title || `Season ${season.seasonNumber}`}
-                            </Text>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  )}
-                </View>
-
-                {episodesForSelectedSeason.length > 0 ? (
-                  <FlatList
-                    data={episodesForSelectedSeason}
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    keyExtractor={(item) => item.id}
-                    renderItem={({ item }) => {
-                      const isActive = selectedEpisodeId === item.id;
-                      return (
-                        <Pressable
-                          style={[
-                            styles.episodeCard,
-                            isActive && styles.episodeCardActive,
-                          ]}
-                          onPress={() => handleEpisodeSelect(item.id)}
-                        >
-                          {item.thumbnailUrl ? (
-                            <Image
-                              source={{ uri: item.thumbnailUrl }}
-                              style={styles.episodeThumbnail}
-                            />
-                          ) : (
-                            <View style={styles.episodeThumbnailPlaceholder}>
-                              <Ionicons
-                                name="play"
-                                size={24}
-                                color={themeColors.textSecondary}
-                              />
-                            </View>
-                          )}
-                          {isActive && (
-                            <View style={styles.activeIndicator}>
-                              <Ionicons
-                                name="checkmark-circle"
-                                size={20}
-                                color={themeColors.accent}
-                              />
-                            </View>
-                          )}
-                          <Text style={styles.episodeNumber}>
-                            Episode {item.episodeNumber}
-                          </Text>
-                          <Text style={styles.episodeTitle} numberOfLines={2}>
-                            {item.title}
-                          </Text>
-                          {item.duration && (
-                            <Text style={styles.episodeDuration}>
-                              {formatDuration(item.duration)}
-                            </Text>
-                          )}
-                        </Pressable>
-                      );
-                    }}
-                    contentContainerStyle={styles.episodesList}
-                  />
-                ) : seasonEpisodesLoading ? (
-                  <Text style={styles.emptySeasonText}>
-                    Loading episodes...
-                  </Text>
-                ) : (
-                  <Text style={styles.emptySeasonText}>
-                    No episodes available for this season.
-                  </Text>
-                )}
-              </>
-            ) : fallbackEpisodes.length > 0 ? (
-              <FlatList
-                data={fallbackEpisodes}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => {
-                  const isActive = selectedEpisodeId === item.id;
-                  return (
-                    <Pressable
-                      style={[
-                        styles.episodeCard,
-                        isActive && styles.episodeCardActive,
-                      ]}
-                      onPress={() => handleEpisodeSelect(item.id)}
-                    >
-                      {item.thumbnailUrl ? (
-                        <Image
-                          source={{ uri: item.thumbnailUrl }}
-                          style={styles.episodeThumbnail}
-                        />
-                      ) : (
-                        <View style={styles.episodeThumbnailPlaceholder}>
-                          <Ionicons
-                            name="play"
-                            size={24}
-                            color={themeColors.textSecondary}
-                          />
-                        </View>
-                      )}
-                      {isActive && (
-                        <View style={styles.activeIndicator}>
-                          <Ionicons
-                            name="checkmark-circle"
-                            size={20}
-                            color={themeColors.accent}
-                          />
-                        </View>
-                      )}
-                      <Text style={styles.episodeNumber}>
-                        Episode {item.episodeNumber}
-                      </Text>
-                      <Text style={styles.episodeTitle} numberOfLines={2}>
-                        {item.title}
-                      </Text>
-                      {item.duration && (
-                        <Text style={styles.episodeDuration}>
-                          {formatDuration(item.duration)}
-                        </Text>
-                      )}
-                    </Pressable>
-                  );
-                }}
-                contentContainerStyle={styles.episodesList}
-              />
-            ) : null}
-          </View>
-        )}
+        {activeInfoTab === "related" && <View style={styles.tabContent}>{similarVideos.length ? <View style={styles.relatedGrid}>{similarVideos.map((item) => <Pressable key={item.id} style={styles.relatedCard} onPress={() => router.push(`/video/${item.id}`)}>{item.posterUrl || item.thumbnailUrl ? <Image source={{ uri: item.posterUrl || item.thumbnailUrl }} style={styles.relatedImage} /> : <View style={styles.relatedPlaceholder} />}<Text style={styles.relatedTitle} numberOfLines={1}>{item.title}</Text><Text style={styles.relatedMeta}>{item.releaseYear} · {item.category || item.type}</Text></Pressable>)}</View> : <Text style={styles.emptyTab}>More stories are coming soon.</Text>}</View>}
+        {activeInfoTab === "details" && <View style={styles.tabContent}><View style={styles.detailsCard}><Text style={styles.tabLabel}>ABOUT THIS STORY</Text><Text style={styles.detailsText}>{content.description || "No description available yet."}</Text><View style={styles.detailsMeta}><View><Text style={styles.detailLabel}>RELEASE YEAR</Text><Text style={styles.detailValue}>{content.releaseYear}</Text></View><View><Text style={styles.detailLabel}>CATEGORY</Text><Text style={styles.detailValue}>{content.category || content.type}</Text></View><View><Text style={styles.detailLabel}>RATING</Text><Text style={styles.detailValue}>{content.ageRating || "NR"}</Text></View></View></View></View>}
       </ScrollView>
 
       <Modal
@@ -2667,7 +2482,8 @@ export default function WatchScreen() {
 
       {/* Bottom Navigation Bar */}
       {!isFullscreen && (
-        <View style={[styles.tabBarContainer, { paddingBottom: Math.max(4, insets.bottom), height: 60 + Math.max(0, insets.bottom) }]}>
+        <View style={[styles.tabBarContainer, { paddingBottom: Math.max(10, insets.bottom) }]}> 
+          <BlurView intensity={24} tint="dark" style={styles.tabBarBlur} pointerEvents="none" />
           <Pressable
             style={styles.tabBarItem}
             onPress={() => {
@@ -2676,8 +2492,10 @@ export default function WatchScreen() {
               router.replace("/(tabs)");
             }}
           >
-            <Ionicons name="home" size={22} color={themeColors.textSecondary} />
-            <Text style={styles.tabBarLabel}>Home</Text>
+            <View style={styles.tabItem}>
+              <Ionicons name="home" size={20} color="rgba(255, 255, 255, 0.56)" />
+              <Text style={styles.tabBarLabel}>Home</Text>
+            </View>
           </Pressable>
           <Pressable
             style={styles.tabBarItem}
@@ -2687,8 +2505,10 @@ export default function WatchScreen() {
               router.replace("/(tabs)/explore");
             }}
           >
-            <Ionicons name="search" size={22} color={themeColors.textSecondary} />
-            <Text style={styles.tabBarLabel}>Explore</Text>
+            <View style={styles.tabItem}>
+              <Ionicons name="search" size={20} color="rgba(255, 255, 255, 0.56)" />
+              <Text style={styles.tabBarLabel}>Explore</Text>
+            </View>
           </Pressable>
           <Pressable
             style={styles.tabBarItem}
@@ -2698,8 +2518,10 @@ export default function WatchScreen() {
               router.replace("/(tabs)/my-list");
             }}
           >
-            <Ionicons name="bookmark" size={22} color={themeColors.textSecondary} />
-            <Text style={styles.tabBarLabel}>My List</Text>
+            <View style={styles.tabItem}>
+              <Ionicons name="bookmark" size={20} color="rgba(255, 255, 255, 0.56)" />
+              <Text style={styles.tabBarLabel}>My List</Text>
+            </View>
           </Pressable>
           <Pressable
             style={styles.tabBarItem}
@@ -2709,8 +2531,10 @@ export default function WatchScreen() {
               router.replace("/(tabs)/profile");
             }}
           >
-            <Ionicons name="person" size={22} color={themeColors.textSecondary} />
-            <Text style={styles.tabBarLabel}>Profile</Text>
+            <View style={styles.tabItem}>
+              <Ionicons name="person" size={20} color="rgba(255, 255, 255, 0.56)" />
+              <Text style={styles.tabBarLabel}>My Stuff</Text>
+            </View>
           </Pressable>
         </View>
       )}
@@ -2720,28 +2544,99 @@ export default function WatchScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: themeColors.background },
   tabBarContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     flexDirection: "row",
-    backgroundColor: "#0b0b0e",
-    borderTopColor: "rgba(255, 255, 255, 0.08)",
-    borderTopWidth: 1,
+    backgroundColor: "transparent",
+    borderTopColor: "transparent",
+    borderTopWidth: 0,
+    elevation: 0,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
     alignItems: "center",
     justifyContent: "space-around",
     paddingTop: 8,
+    paddingHorizontal: 10,
+  },
+  tabBarBlur: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(5, 5, 7, 0.16)",
   },
   tabBarItem: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
+    height: 60,
+    paddingHorizontal: 2,
+  },
+  tabItem: {
+    width: "100%",
+    maxWidth: 82,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
   },
   tabBarLabel: {
-    color: themeColors.textSecondary,
+    color: "rgba(255, 255, 255, 0.56)",
     fontSize: 10,
     fontWeight: "600",
-    letterSpacing: 0.2,
-    marginTop: 2,
+    lineHeight: 13,
+    letterSpacing: 0,
+    includeFontPadding: false,
+    textAlign: "center",
   },
   scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: spacing.xl },
+  scrollContent: { paddingBottom: 112 },
+  watchInfo: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 },
+  watchTitle: { color: "#fff", fontSize: 26, lineHeight: 31, fontWeight: "700", letterSpacing: -0.6 },
+  watchMeta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7, marginTop: 10 },
+  watchMetaText: { color: "rgba(255,255,255,0.58)", fontSize: 12, fontWeight: "500" },
+  watchDot: { color: "rgba(255,255,255,0.3)", fontSize: 12 },
+  rating: { color: "rgba(255,255,255,0.78)", fontSize: 10, fontWeight: "700", borderWidth: StyleSheet.hairlineWidth, borderColor: "rgba(255,255,255,0.32)", paddingHorizontal: 5, paddingVertical: 1 },
+  watchDescription: { color: "rgba(255,255,255,0.62)", fontSize: 14, lineHeight: 21, marginTop: 15 },
+  more: { color: "#fff", fontSize: 13, fontWeight: "700", marginTop: 7 },
+  watchActions: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 20 },
+  playPrimary: { minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#f5f5f5", borderRadius: 4, paddingHorizontal: 20 },
+  playPrimaryText: { color: "#050505", fontSize: 14, fontWeight: "800" },
+  roundAction: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, backgroundColor: "rgba(255,255,255,0.09)", overflow: "hidden" },
+  infoTabs: { flexDirection: "row", borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: "rgba(255,255,255,0.15)", paddingHorizontal: 20 },
+  infoTab: { paddingVertical: 14, marginRight: 26, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  infoTabActive: { borderBottomColor: "#fff" },
+  infoTabText: { color: "rgba(255,255,255,0.45)", fontSize: 14, fontWeight: "700" },
+  infoTabTextActive: { color: "#fff" },
+  tabContent: { paddingHorizontal: 20, paddingTop: 20 },
+  seasonPills: { gap: 8, paddingBottom: 20 },
+  seasonPill: { borderWidth: 1, borderColor: "rgba(255,255,255,0.18)", borderRadius: 4, paddingHorizontal: 13, paddingVertical: 8 },
+  seasonPillActive: { backgroundColor: "#f5f5f5", borderColor: "#f5f5f5" },
+  seasonPillText: { color: "rgba(255,255,255,0.68)", fontSize: 12, fontWeight: "700" },
+  seasonPillTextActive: { color: "#050505" },
+  tabLabel: { color: "rgba(255,255,255,0.46)", fontSize: 11, fontWeight: "800", letterSpacing: 1.2, marginBottom: 14 },
+  episodeRow: { minHeight: 86, flexDirection: "row", gap: 12, paddingVertical: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.13)" },
+  episodeRowActive: { backgroundColor: "rgba(255,255,255,0.055)", marginHorizontal: -8, paddingHorizontal: 8 },
+  episodeRowImage: { width: 118, height: 67, backgroundColor: "#151515" },
+  episodeRowPlaceholder: { width: 118, height: 67, backgroundColor: "#171717", justifyContent: "center", alignItems: "center" },
+  episodeRowCopy: { flex: 1, minWidth: 0, paddingRight: 3 },
+  episodeRowTitle: { color: "#fff", fontSize: 14, lineHeight: 18, fontWeight: "700" },
+  episodeRowMeta: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
+  episodeRowDuration: { color: "rgba(255,255,255,0.48)", fontSize: 11, fontWeight: "600" },
+  episodeRowDescription: { color: "rgba(255,255,255,0.46)", fontSize: 11, lineHeight: 15, marginTop: 5 },
+  emptyTab: { color: "rgba(255,255,255,0.48)", fontSize: 14, paddingVertical: 24 },
+  relatedGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 20 },
+  relatedCard: { width: "48%" },
+  relatedImage: { width: "100%", aspectRatio: 2 / 3, backgroundColor: "#171717" },
+  relatedPlaceholder: { width: "100%", aspectRatio: 2 / 3, backgroundColor: "#171717" },
+  relatedTitle: { color: "#fff", fontSize: 13, fontWeight: "700", marginTop: 8 },
+  relatedMeta: { color: "rgba(255,255,255,0.45)", fontSize: 11, marginTop: 3 },
+  detailsCard: { paddingBottom: 24 },
+  detailsText: { color: "rgba(255,255,255,0.65)", fontSize: 14, lineHeight: 21 },
+  detailsMeta: { flexDirection: "row", flexWrap: "wrap", gap: 28, marginTop: 24, paddingTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "rgba(255,255,255,0.14)" },
+  detailLabel: { color: "rgba(255,255,255,0.38)", fontSize: 10, fontWeight: "800", letterSpacing: 0.8 },
+  detailValue: { color: "#fff", fontSize: 13, fontWeight: "600", marginTop: 5 },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
@@ -2784,6 +2679,7 @@ const styles = StyleSheet.create({
     width: "100%",
     aspectRatio: 16 / 9,
     backgroundColor: "#000",
+    overflow: "hidden",
   },
   playerContainerFullscreen: {
     flex: 1,
@@ -2795,16 +2691,30 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000",
   },
-  videoWrapper: { width: "100%", height: "100%", position: "relative" },
+  videoWrapper: {
+    width: "100%",
+    height: "100%",
+    position: "relative",
+    overflow: "hidden",
+  },
   videoWrapperFullscreen: {
     width: "100%",
     height: "100%",
   },
-  video: { ...StyleSheet.absoluteFillObject },
+  video: { ...StyleSheet.absoluteFill, zIndex: 0 },
+  adUiLayer: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 1000,
+    elevation: 1000,
+  },
 
   // Gesture overlay styles
   gestureContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     flexDirection: "row",
     zIndex: 10,
     pointerEvents: "box-none",
@@ -2868,10 +2778,11 @@ const styles = StyleSheet.create({
 
   // Shown while VAST XML is being fetched (before ad overlay appears).
   adLoadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.55)",
+    // Keep the content frame completely hidden while the ad is resolving.
+    backgroundColor: "#000",
     zIndex: 99,
   },
 
@@ -2905,7 +2816,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  tapOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
+  tapOverlay: { ...StyleSheet.absoluteFill, zIndex: 1 },
   bufferingOverlay: {
     position: "absolute",
     top: 0,
@@ -3437,7 +3348,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   settingsModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   settingsModalContent: {
@@ -3549,7 +3460,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   comingSoonOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",

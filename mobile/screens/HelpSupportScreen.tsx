@@ -1,22 +1,16 @@
 import React, { useMemo, useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { colors as themeColors } from "../src/theme/colors";
-import { borderRadius, spacing, typography } from "../constants/theme";
+import { spacing, typography } from "../constants/theme";
 import { useAuthStore } from "../store/useAuthStore";
 import { siteService } from "../services/siteService";
+
+function Field({ label, value, onChangeText, placeholder, error, multiline, keyboardType, autoCapitalize = "sentences", editable }: { label: string; value: string; onChangeText: (value: string) => void; placeholder: string; error?: string; multiline?: boolean; keyboardType?: "default" | "email-address"; autoCapitalize?: "none" | "sentences"; editable: boolean }) {
+  return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="rgba(255,255,255,0.25)" editable={editable} multiline={multiline} keyboardType={keyboardType} autoCapitalize={autoCapitalize} style={[styles.input, multiline && styles.messageInput]} />{error ? <Text style={styles.fieldError}>{error}</Text> : null}</View>;
+}
 
 export default function HelpSupportScreen() {
   const router = useRouter();
@@ -25,360 +19,36 @@ export default function HelpSupportScreen() {
   const [email, setEmail] = useState(user?.email ?? "");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  const [errors, setErrors] = useState<{
-    name?: string;
-    email?: string;
-    subject?: string;
-    message?: string;
-  }>({});
+  const [errors, setErrors] = useState<{ name?: string; email?: string; subject?: string; message?: string }>({});
   const [submitting, setSubmitting] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-
-  const formDisabled = useMemo(() => submitting, [submitting]);
-
-  const validateEmail = (value: string): string | null => {
-    if (!value.trim()) return "Email is required";
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(value.trim())) return "Enter a valid email";
-    return null;
+  const [notice, setNotice] = useState<{ tone: "success" | "error"; text: string } | null>(null);
+  const disabled = useMemo(() => submitting, [submitting]);
+  const validate = () => {
+    const next = { name: name.trim() ? undefined : "Name is required", email: !email.trim() ? "Email is required" : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? undefined : "Enter a valid email", subject: subject.trim() ? undefined : "Subject is required", message: message.trim() ? undefined : "Message is required" };
+    setErrors(next); return !Object.values(next).some(Boolean);
   };
-
-  const validateRequired = (value: string, label: string): string | null => {
-    if (!value.trim()) return `${label} is required`;
-    return null;
+  const submit = async () => {
+    setNotice(null); if (!validate()) return; setSubmitting(true);
+    try { const result = await siteService.submitContact({ name: name.trim(), email: email.trim(), subject: subject.trim(), message: message.trim() }); setNotice({ tone: "success", text: result.message || "Your request was sent." }); setSubject(""); setMessage(""); }
+    catch (error: any) { setNotice({ tone: "error", text: error?.message || "Your request could not be sent." }); }
+    finally { setSubmitting(false); }
   };
-
-  const runValidation = (): boolean => {
-    const nextErrors = {
-      name: validateRequired(name, "Name") ?? undefined,
-      email: validateEmail(email) ?? undefined,
-      subject: validateRequired(subject, "Subject") ?? undefined,
-      message: validateRequired(message, "Message") ?? undefined,
-    };
-    setErrors(nextErrors);
-    return (
-      !nextErrors.name &&
-      !nextErrors.email &&
-      !nextErrors.subject &&
-      !nextErrors.message
-    );
-  };
-
-  const handleSubmit = async () => {
-    setNotice(null);
-    setSubmitError(null);
-    if (!runValidation()) return;
-
-    setSubmitting(true);
-    try {
-      const res = await siteService.submitContact({
-        name: name.trim(),
-        email: email.trim(),
-        subject: subject.trim(),
-        message: message.trim(),
-      });
-      setNotice(res.message);
-      setSubject("");
-      setMessage("");
-    } catch (err: any) {
-      setSubmitError(err?.message ?? "Failed to send request.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleContactEmail = () => {
-    Alert.alert(
-      "Support email",
-      "For urgent issues, email support@brixlore.com",
-    );
-  };
-
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={themeColors.textPrimary}
-          />
-        </Pressable>
-        <Text style={styles.headerTitle}>Help & Support</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.keyboardView}
-      >
-        <ScrollView
-          style={styles.content}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          <View style={styles.heroCard}>
-            <View style={styles.heroIcon}>
-              <Ionicons
-                name="help-circle-outline"
-                size={22}
-                color={themeColors.textPrimary}
-              />
-            </View>
-            <View style={styles.heroText}>
-              <Text style={styles.heroTitle}>We are here to help</Text>
-              <Text style={styles.heroSubtitle}>
-                Tell us what is going on and our support team will respond soon.
-              </Text>
-            </View>
-          </View>
-
-          {notice ? (
-            <View style={styles.noticeCard}>
-              <Text style={styles.noticeText}>{notice}</Text>
-            </View>
-          ) : null}
-
-          {submitError ? (
-            <View style={styles.errorCard}>
-              <Text style={styles.errorText}>{submitError}</Text>
-            </View>
-          ) : null}
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Contact support</Text>
-            <View style={styles.formCard}>
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                style={styles.input}
-                placeholder="Your name"
-                placeholderTextColor={themeColors.textSecondary}
-                editable={!formDisabled}
-              />
-              {errors.name ? (
-                <Text style={styles.fieldError}>{errors.name}</Text>
-              ) : null}
-
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                value={email}
-                onChangeText={setEmail}
-                style={styles.input}
-                placeholder="you@example.com"
-                placeholderTextColor={themeColors.textSecondary}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                editable={!formDisabled}
-              />
-              {errors.email ? (
-                <Text style={styles.fieldError}>{errors.email}</Text>
-              ) : null}
-
-              <Text style={styles.inputLabel}>Subject</Text>
-              <TextInput
-                value={subject}
-                onChangeText={setSubject}
-                style={styles.input}
-                placeholder="How can we help?"
-                placeholderTextColor={themeColors.textSecondary}
-                editable={!formDisabled}
-              />
-              {errors.subject ? (
-                <Text style={styles.fieldError}>{errors.subject}</Text>
-              ) : null}
-
-              <Text style={styles.inputLabel}>Message</Text>
-              <TextInput
-                value={message}
-                onChangeText={setMessage}
-                style={[styles.input, styles.textArea]}
-                placeholder="Describe your issue"
-                placeholderTextColor={themeColors.textSecondary}
-                multiline
-                editable={!formDisabled}
-              />
-              {errors.message ? (
-                <Text style={styles.fieldError}>{errors.message}</Text>
-              ) : null}
-
-              <Pressable
-                style={styles.primaryButton}
-                onPress={handleSubmit}
-                disabled={formDisabled}
-              >
-                <Text style={styles.primaryButtonText}>
-                  {submitting ? "Sending..." : "Send request"}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={styles.secondaryButton}
-                onPress={handleContactEmail}
-                disabled={formDisabled}
-              >
-                <Text style={styles.secondaryButtonText}>
-                  Email support directly
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={styles.screen} edges={["top"]}><KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === "ios" ? "padding" : undefined}><ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
+    <View style={styles.topbar}><Pressable onPress={() => router.back()} style={styles.back}><Ionicons name="arrow-back" size={21} color={themeColors.textPrimary} /></Pressable><Text style={styles.topbarTitle}>Help & support</Text><View style={styles.back} /></View>
+    <View style={styles.hero}><Text style={styles.kicker}>BRIXLORE / SUPPORT DESK</Text><Text style={styles.heroTitle}>A real person{`\n`}is <Text style={styles.heroFaded}>listening.</Text></Text><View style={styles.heroRule}><Text style={styles.heroCopy}>Tell us what is happening. Our team will help you get back to the stories that matter.</Text></View></View>
+    <View style={styles.quick}><Text style={styles.quickKicker}>START HERE</Text><View style={styles.quickRow}><View style={styles.quickIcon}><Ionicons name="card-outline" size={19} color="rgba(255,255,255,0.75)" /></View><View style={styles.quickCopy}><Text style={styles.quickTitle}>Membership & billing</Text><Text style={styles.quickText}>Plan changes, payments, and account access.</Text></View><Ionicons name="arrow-forward" size={17} color="rgba(255,255,255,0.43)" /></View><View style={styles.quickRow}><View style={styles.quickIcon}><Ionicons name="play-circle-outline" size={19} color="rgba(255,255,255,0.75)" /></View><View style={styles.quickCopy}><Text style={styles.quickTitle}>Playback & technical</Text><Text style={styles.quickText}>Streaming, downloads, and device questions.</Text></View><Ionicons name="arrow-forward" size={17} color="rgba(255,255,255,0.43)" /></View></View>
+    {notice ? <View style={[styles.notice, notice.tone === "success" ? styles.noticeSuccess : styles.noticeError]}><Ionicons name={notice.tone === "success" ? "checkmark-circle-outline" : "alert-circle-outline"} size={17} color={notice.tone === "success" ? "#d9f99d" : "#fecaca"} /><Text style={[styles.noticeText, notice.tone === "success" ? styles.noticeTextSuccess : styles.noticeTextError]}>{notice.text}</Text></View> : null}
+    <View style={styles.formHeader}><Text style={styles.formKicker}>SEND A REQUEST</Text><Text style={styles.formTitle}>Tell us what you need.</Text><Text style={styles.formIntro}>The more detail you share, the faster we can help.</Text></View>
+    <View style={styles.form}><Field label="Your name" value={name} onChangeText={setName} placeholder="Your name" error={errors.name} editable={!disabled} /><Field label="Email" value={email} onChangeText={setEmail} placeholder="you@example.com" error={errors.email} keyboardType="email-address" autoCapitalize="none" editable={!disabled} /><Field label="What can we help with?" value={subject} onChangeText={setSubject} placeholder="Describe the topic" error={errors.subject} editable={!disabled} /><Field label="Your message" value={message} onChangeText={setMessage} placeholder="Share as much detail as you can." error={errors.message} multiline editable={!disabled} /><Pressable onPress={() => void submit()} disabled={disabled} style={[styles.send, disabled && styles.disabled]}><Text style={styles.sendText}>{submitting ? "Sending your request..." : "Send request"}</Text><Ionicons name="arrow-up" size={16} color="#050505" /></Pressable></View>
+    <View style={styles.direct}><View><Text style={styles.directKicker}>PREFER EMAIL?</Text><Text style={styles.directTitle}>support@brixlore.com</Text><Text style={styles.directCopy}>For urgent issues, email us directly and include the address linked to your account.</Text></View><Pressable onPress={() => Alert.alert("Support email", "support@brixlore.com")} style={styles.directAction}><Ionicons name="mail-outline" size={19} color="#050505" /></Pressable></View>
+  </ScrollView></KeyboardAvoidingView></SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border,
-  },
-  backButton: {
-    padding: spacing.sm,
-    marginRight: spacing.sm,
-  },
-  headerTitle: {
-    ...typography.title,
-    color: themeColors.textPrimary,
-    flex: 1,
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.md,
-  },
-  heroCard: {
-    backgroundColor: themeColors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    padding: spacing.md,
-    flexDirection: "row",
-    gap: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  heroIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: themeColors.card,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroText: {
-    flex: 1,
-  },
-  heroTitle: {
-    ...typography.sectionTitle,
-    color: themeColors.textPrimary,
-    marginBottom: spacing.xs,
-  },
-  heroSubtitle: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-    lineHeight: 20,
-  },
-  noticeCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#155e37",
-    backgroundColor: "#052e16",
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  noticeText: {
-    ...typography.body,
-    color: "#86efac",
-  },
-  errorCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: themeColors.error,
-    backgroundColor: "#3b0d0d",
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-  errorText: {
-    ...typography.body,
-    color: themeColors.error,
-  },
-  section: {
-    marginBottom: spacing.xl,
-  },
-  sectionTitle: {
-    ...typography.sectionTitle,
-    color: themeColors.textPrimary,
-    marginBottom: spacing.md,
-  },
-  formCard: {
-    backgroundColor: themeColors.surface,
-    borderRadius: 12,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    gap: spacing.sm,
-  },
-  inputLabel: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    backgroundColor: themeColors.card,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: themeColors.textPrimary,
-  },
-  textArea: {
-    minHeight: 120,
-    textAlignVertical: "top",
-  },
-  fieldError: {
-    ...typography.caption,
-    color: themeColors.error,
-  },
-  primaryButton: {
-    backgroundColor: themeColors.accent,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-    marginTop: spacing.sm,
-  },
-  primaryButtonText: {
-    ...typography.body,
-    color: themeColors.background,
-    fontWeight: "600",
-  },
-  secondaryButton: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-  },
-  secondaryButtonText: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    fontWeight: "600",
-  },
+  screen: { flex: 1, backgroundColor: "#050505" }, flex: { flex: 1 }, content: { paddingBottom: 72 }, topbar: { height: 56, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, back: { height: 38, width: 38, alignItems: "center", justifyContent: "center" }, topbarTitle: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 13 },
+  hero: { paddingHorizontal: spacing.lg, paddingTop: 28, paddingBottom: 31, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.14)" }, kicker: { ...typography.smallBold, color: "rgba(255,255,255,0.46)", fontSize: 9, letterSpacing: 1.55 }, heroTitle: { ...typography.h1, color: themeColors.textPrimary, fontSize: 42, lineHeight: 39, letterSpacing: -2.15, marginTop: 20 }, heroFaded: { color: "rgba(255,255,255,0.42)" }, heroRule: { borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.54)", paddingLeft: 13, marginTop: 21, maxWidth: 307 }, heroCopy: { ...typography.small, color: "rgba(255,255,255,0.68)", lineHeight: 20 },
+  quick: { marginHorizontal: spacing.lg, marginTop: 24, paddingTop: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.14)" }, quickKicker: { ...typography.smallBold, color: "rgba(255,255,255,0.43)", fontSize: 9, letterSpacing: 1.4, paddingBottom: 6 }, quickRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 15, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.10)" }, quickIcon: { height: 37, width: 37, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: "rgba(255,255,255,0.08)" }, quickCopy: { flex: 1 }, quickTitle: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 12 }, quickText: { ...typography.small, color: "rgba(255,255,255,0.48)", fontSize: 10, marginTop: 4 },
+  notice: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, marginHorizontal: spacing.lg, marginTop: 19, borderWidth: 1 }, noticeSuccess: { backgroundColor: "rgba(101,163,13,0.15)", borderColor: "rgba(217,249,157,0.25)" }, noticeError: { backgroundColor: "rgba(127,29,29,0.25)", borderColor: "rgba(254,202,202,0.30)" }, noticeText: { ...typography.small, fontSize: 12, flex: 1, lineHeight: 17 }, noticeTextSuccess: { color: "#ecfccb" }, noticeTextError: { color: "#fecaca" },
+  formHeader: { marginHorizontal: spacing.lg, marginTop: 33, paddingBottom: 15, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.15)" }, formKicker: { ...typography.smallBold, color: "rgba(255,255,255,0.43)", fontSize: 9, letterSpacing: 1.4 }, formTitle: { ...typography.h2, color: themeColors.textPrimary, fontSize: 27, lineHeight: 29, letterSpacing: -1.25, marginTop: 9 }, formIntro: { ...typography.small, color: "rgba(255,255,255,0.51)", fontSize: 11, marginTop: 7 }, form: { marginHorizontal: spacing.lg, padding: 17, backgroundColor: "#141414", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", marginTop: 16 }, field: { marginBottom: 14 }, label: { ...typography.smallBold, color: "rgba(255,255,255,0.64)", fontSize: 10, marginBottom: 6 }, input: { minHeight: 47, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(0,0,0,0.36)", color: themeColors.textPrimary, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }, messageInput: { height: 126, textAlignVertical: "top" }, fieldError: { ...typography.small, color: "#fca5a5", fontSize: 10, marginTop: 5 }, send: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#f4f4f5", paddingVertical: 14, marginTop: 4 }, disabled: { opacity: 0.5 }, sendText: { ...typography.smallBold, color: "#050505", fontSize: 11 },
+  direct: { flexDirection: "row", gap: 15, marginHorizontal: spacing.lg, padding: 19, backgroundColor: "#f4f4f5", marginTop: 0, alignItems: "flex-start" }, directKicker: { ...typography.smallBold, color: "rgba(0,0,0,0.46)", fontSize: 9, letterSpacing: 1.3 }, directTitle: { ...typography.smallBold, color: "#050505", fontSize: 14, marginTop: 9 }, directCopy: { ...typography.small, color: "rgba(0,0,0,0.6)", fontSize: 11, lineHeight: 17, marginTop: 7, maxWidth: 245 }, directAction: { width: 38, height: 38, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.08)" },
 });

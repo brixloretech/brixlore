@@ -8,11 +8,10 @@ import {
   ActivityIndicator,
   Animated,
 } from 'react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { useVideoPlayer } from 'expo-video';
 import { useEventListener } from 'expo';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { AdOverlayState } from '../hooks/useAdPlayer';
 
 interface AdOverlayProps extends AdOverlayState {
@@ -33,9 +32,9 @@ interface AdOverlayProps extends AdOverlayState {
 /**
  * Full-screen ad player overlay.
  *
- * Renders on top of the content VideoView inside the video wrapper.
- * Uses its own expo-video player so it never conflicts with the content player.
- * The parent controls mounting — this component is mounted only when an ad is active.
+ * Renders ad controls on top of the shared VideoView in the parent. The parent
+ * swaps that view's player to `adVideoPlayer` while an ad is active. Keeping a
+ * single native video view avoids iOS platform-layer ordering bugs.
  */
 export function AdOverlay({
   adVideoPlayer,
@@ -52,7 +51,6 @@ export function AdOverlay({
   resumeFromSeconds = null,
   onProgress,
 }: AdOverlayProps) {
-  const insets = useSafeAreaInsets();
   const [isBuffering, setIsBuffering] = useState(true);
   const [adIsPlaying, setAdIsPlaying] = useState(true);
   const [adCurrentTime, setAdCurrentTime] = useState(0);
@@ -63,7 +61,6 @@ export function AdOverlay({
   const mediaQueueRef = useRef<string[]>([videoUrl, ...mediaFallbackUrls]);
   const mediaIndexRef = useRef(0);
   const controlsOpacity = useRef(new Animated.Value(1)).current;
-  const skipBottomAnim = useRef(new Animated.Value(44)).current;
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const controlsShownAtRef = useRef(Date.now());
   const hasAppliedResumeRef = useRef(false);
@@ -153,14 +150,6 @@ export function AdOverlay({
       if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     };
   }, [showControls, resetControlsTimeout]);
-
-  useEffect(() => {
-    Animated.timing(skipBottomAnim, {
-      toValue: showControls ? 44 : 10,
-      duration: 180,
-      useNativeDriver: false,
-    }).start();
-  }, [showControls, skipBottomAnim]);
 
   useEffect(() => {
     if (isBuffering || !adIsPlaying) {
@@ -407,15 +396,6 @@ export function AdOverlay({
 
   return (
     <View style={styles.container}>
-      {/* Ad video — fills the container */}
-      <VideoView
-        player={adVideoPlayer}
-        style={StyleSheet.absoluteFillObject}
-        contentFit="contain"
-        nativeControls={false}
-        surfaceType="textureView"
-      />
-
       {/* Buffering spinner while the ad creative loads */}
       {isBuffering && (
         <View style={styles.bufferingOverlay}>
@@ -441,17 +421,21 @@ export function AdOverlay({
         style={[styles.controlsLayer, { opacity: controlsOpacity }]}
         pointerEvents={showControls ? 'box-none' : 'none'}
       >
-        {/* Center Play/Pause Button */}
-        <Pressable
-          style={styles.centerPlayButton}
-          onPress={handleAdPlayPause}
-        >
-          <Ionicons
-            name={adIsPlaying ? 'pause' : 'play'}
-            size={48}
-            color="#ffffff"
-          />
-        </Pressable>
+        {/* Flex centering keeps this control in the center of the 16:9 frame
+            across iOS device sizes; percentage transforms can be offset by a
+            native video surface. */}
+        <View style={styles.centerControlArea} pointerEvents="box-none">
+          <Pressable
+            style={styles.centerPlayButton}
+            onPress={handleAdPlayPause}
+          >
+            <Ionicons
+              name={adIsPlaying ? 'pause' : 'play'}
+              size={34}
+              color="#ffffff"
+            />
+          </Pressable>
+        </View>
 
         {/* Ad clip progress bar — thin track above the bottom controls */}
         <View style={styles.adProgressTrack}>
@@ -502,14 +486,10 @@ export function AdOverlay({
         </LinearGradient>
       </Animated.View>
 
-      {/* Skip action — small floating button above the progress bar */}
+      {/* Keep the skip action inside the player frame; safe-area insets belong
+          to the app screen, not this embedded 16:9 video surface. */}
       {skippable ? (
-        <Animated.View
-          style={[
-            styles.skipFloatingWrap,
-            { bottom: skipBottomAnim, right: Math.max(12, insets.right + 14) },
-          ]}
-        >
+        <View style={styles.skipFloatingWrap}>
           <Pressable
             style={[
               styles.skipBtn,
@@ -527,7 +507,7 @@ export function AdOverlay({
               </Text>
             )}
           </Pressable>
-        </Animated.View>
+        </View>
       ) : null}
     </View>
   );
@@ -535,15 +515,23 @@ export function AdOverlay({
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
-    zIndex: 100,
+    width: '100%',
+    height: '100%',
+    flex: 1,
+    // The video itself lives in the shared parent VideoView. This layer only
+    // contains ad controls, so it must remain transparent above that native
+    // surface instead of painting a second black video-sized view.
+    backgroundColor: 'transparent',
+    zIndex: 1000,
+    elevation: 1000,
+    overflow: 'hidden',
   },
   bufferingOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.45)',
+    zIndex: 2,
   },
   topBar: {
     position: 'absolute',
@@ -556,20 +544,29 @@ const styles = StyleSheet.create({
     zIndex: 6,
   },
   controlsLayer: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     zIndex: 4,
   },
+  centerControlArea: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   centerPlayButton: {
-    alignSelf: 'center',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: 'rgba(0,0,0,0.48)',
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    transform: [{ translateX: -40 }, { translateY: -40 }],
   },
   tapCatcher: {
     ...StyleSheet.absoluteFillObject,
@@ -629,6 +626,7 @@ const styles = StyleSheet.create({
   skipFloatingWrap: {
     position: 'absolute',
     right: 12,
+    bottom: 12,
     zIndex: 7,
   },
   leftControlsRow: {

@@ -1,165 +1,89 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  FlatList,
   ActivityIndicator,
-  RefreshControl,
-  Pressable,
   Dimensions,
+  FlatList,
+  Image,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { colors as themeColors } from "../../src/theme/colors";
-import { spacing, typography, borderRadius } from "../../constants/theme";
-import { BrowseCard, type BrowseItem } from "../../components/BrowseCard";
+import { borderRadius, spacing, typography } from "../../constants/theme";
+import { AddToMyListButton } from "../../components/AddToMyListButton";
 import { useMatomo } from "../../hooks/useMatomo";
 import {
   contentService,
   type ContentSummaryDto,
-  type ContentType,
 } from "../../services/contentService";
 
-type BrowseRow = {
-  id: string;
-  title: string;
-  subtitle?: string;
-  items: BrowseItem[];
-  accent?: "amber" | "violet" | "cyan" | "rose";
-};
+const CARD_WIDTH = (Dimensions.get("window").width - spacing.lg * 2 - spacing.md) / 2;
 
-const CONTENT_TYPE_ORDER: ContentType[] = [
-  "MOVIE",
-  "SERIES",
-  "DOCUMENTARY",
-  "ANIMATION",
-  "TRAILER",
-  "SHORT",
-];
-
-const CONTENT_TYPE_LABELS: Record<ContentType, string> = {
-  MOVIE: "Movies",
-  SERIES: "Series",
-  DOCUMENTARY: "Documentaries",
-  ANIMATION: "Animation",
-  TRAILER: "Trailers",
-  SHORT: "Shorts",
-};
-
-const ACCENTS: BrowseRow["accent"][] = ["amber", "violet", "cyan", "rose"];
-
-function formatSubtitle(item: ContentSummaryDto): string | undefined {
-  const parts: string[] = [];
-  if (item.releaseYear) parts.push(String(item.releaseYear));
-  if (item.ageRating) parts.push(item.ageRating);
-  const subtitle = parts.join(" • ");
-  return subtitle.length > 0 ? subtitle : undefined;
-}
-
-function toBrowseItem(item: ContentSummaryDto): BrowseItem {
-  return {
-    id: item.id,
-    title: item.title,
-    subtitle: formatSubtitle(item),
-    thumbnailUrl: item.thumbnailUrl ?? null,
-  };
-}
-
-function slugifyRowId(value: string): string {
-  const slug = value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-  return slug.length > 0 ? slug : "featured";
-}
-
-function buildRowsByType(items: ContentSummaryDto[]): BrowseRow[] {
-  const grouped = new Map<ContentType, ContentSummaryDto[]>();
-  for (const item of items) {
-    const type = (item.type?.trim().toUpperCase() || "MOVIE") as ContentType;
-    const existing = grouped.get(type);
-    if (existing) existing.push(item);
-    else grouped.set(type, [item]);
-  }
-
-  const rowKeys = CONTENT_TYPE_ORDER.filter((type) => grouped.has(type));
-
-  return rowKeys
-    .map((type, index) => ({
-      id: slugifyRowId(CONTENT_TYPE_LABELS[type]),
-      title: CONTENT_TYPE_LABELS[type],
-      subtitle: `Top picks in ${CONTENT_TYPE_LABELS[type]}`,
-      accent: ACCENTS[index % ACCENTS.length],
-      items: (grouped.get(type) ?? []).map(toBrowseItem),
-    }))
-    .filter((row) => row.items.length > 0);
-}
-
-function getCategoryChips(items: ContentSummaryDto[]): string[] {
-  const categoriesPresent = new Set<string>();
-  for (const item of items) {
-    if (item.category?.trim()) {
-      const c = item.category.trim();
-      if (c.toLowerCase() !== "all") categoriesPresent.add(c);
-    }
-  }
-  const sortedCategories = Array.from(categoriesPresent).sort();
-  return ["All", ...sortedCategories];
-}
-
-function AccentTag({
-  accent,
-  text,
+function PosterCard({
+  item,
+  onPress,
 }: {
-  accent: BrowseRow["accent"];
-  text: string;
+  item: ContentSummaryDto;
+  onPress: () => void;
 }) {
+  const image = item.posterUrl ?? item.thumbnailUrl;
   return (
-    <View style={styles.accentTag}>
-      <Text style={styles.accentTagText}>{text}</Text>
+    <View style={styles.card}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${item.title}`}
+        onPress={onPress}
+        style={({ pressed }) => [styles.posterFrame, pressed && styles.pressed]}
+      >
+        {image ? (
+          <Image
+            source={{ uri: image }}
+            style={styles.poster}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.posterPlaceholder}>
+            <Ionicons
+              name="film-outline"
+              size={28}
+              color="rgba(255,255,255,0.35)"
+            />
+          </View>
+        )}
+        <View style={styles.posterShade} />
+        <View style={styles.favoriteButton}>
+          <AddToMyListButton contentId={item.id} size="sm" />
+        </View>
+        <View style={styles.playButton}>
+          <Ionicons name="play" size={16} color={themeColors.primary} />
+        </View>
+      </Pressable>
+      <Text style={styles.cardTitle} numberOfLines={2}>
+        {item.title}
+      </Text>
+      <View style={styles.cardMeta}>
+        <Text style={styles.cardMetaText}>{item.releaseYear || ""}</Text>
+        <View style={styles.metaDivider} />
+        <Text style={styles.cardCategory} numberOfLines={1}>
+          {item.category || item.type}
+        </Text>
+      </View>
     </View>
   );
 }
 
-function BrowseRowSection({
-  row,
-  onItemPress,
-}: {
-  row: BrowseRow;
-  onItemPress: (id: string, title?: string) => void;
-}) {
+function PosterSkeleton() {
   return (
-    <View style={styles.rowSection}>
-      <View style={styles.rowHeader}>
-        <View style={styles.rowTitleContainer}>
-          <View style={styles.rowTitleRow}>
-            <Text style={styles.rowTitle}>{row.title}</Text>
-            {row.accent && <AccentTag accent={row.accent} text="Curated" />}
-          </View>
-          {row.subtitle && (
-            <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
-          )}
-        </View>
-      </View>
-      <FlatList
-        data={row.items}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item, index }) => (
-          <BrowseCard
-            item={item}
-            index={index}
-            onPress={() => onItemPress(item.id, item.title)}
-          />
-        )}
-        contentContainerStyle={styles.rowContent}
-      />
+    <View style={[styles.card, styles.skeletonCard]}>
+      <View style={styles.posterSkeleton} />
+      <View style={styles.titleSkeleton} />
+      <View style={styles.metaSkeleton} />
     </View>
   );
 }
@@ -168,30 +92,20 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { category } = useLocalSearchParams<{ category?: string }>();
   const { trackEvent } = useMatomo();
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("All");
-  const [categories, setCategories] = useState<string[]>(["All"]);
+  const [query, setQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [items, setItems] = useState<ContentSummaryDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [allContent, setAllContent] = useState<ContentSummaryDto[]>([]);
 
   useEffect(() => {
-    if (category) {
-      setSelectedCategory(category);
-    }
+    if (category) setSelectedCategory(category);
   }, [category]);
 
   const loadContent = useCallback(async () => {
     try {
       setIsLoading(true);
-      const items = await contentService.getContentForBrowse();
-      setAllContent(items);
-
-      // Get categories
-      const categoryChips = getCategoryChips(items);
-      setCategories(categoryChips.length > 0 ? categoryChips : ["All"]);
-    } catch (error) {
-      console.error("Failed to load content:", error);
+      setItems(await contentService.getContentForBrowse());
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -202,390 +116,364 @@ export default function ExploreScreen() {
     loadContent();
   }, [loadContent]);
 
-  const handleRefresh = useCallback(() => {
-    setIsRefreshing(true);
-    loadContent();
-  }, [loadContent]);
+  const categories = useMemo(() => {
+    const values = new Set(
+      items
+        .map((item) => item.category?.trim())
+        .filter(
+          (value): value is string =>
+            Boolean(value) && value.toLowerCase() !== "all",
+        ),
+    );
+    return ["All", ...Array.from(values).sort()];
+  }, [items]);
 
+  const results = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return items.filter((item) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        [item.title, item.category, item.type]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(normalizedQuery));
+      const matchesCategory =
+        selectedCategory === "All" ||
+        item.category?.toLowerCase() === selectedCategory.toLowerCase();
+      return matchesQuery && matchesCategory;
+    });
+  }, [items, query, selectedCategory]);
+
+  const clearFilters = useCallback(() => {
+    setQuery("");
+    setSelectedCategory("All");
+  }, []);
   const handleItemPress = useCallback(
-    (id: string, title?: string) => {
-      trackEvent('Video', 'card_click', title);
-      router.push(`/video/${id}`);
+    (item: ContentSummaryDto) => {
+      trackEvent("Video", "card_click", item.title);
+      router.push(`/video/${item.id}`);
     },
     [router, trackEvent],
   );
 
-  const handleCategoryPress = useCallback((category: string) => {
-    setSelectedCategory(category);
-  }, []);
-
-  const filteredContent = useMemo(() => {
-    let filteredItems = allContent;
-
-    if (selectedCategory && selectedCategory.trim().toLowerCase() !== "all") {
-      const categoryFilter = selectedCategory.trim().toLowerCase();
-      filteredItems = filteredItems.filter(
-        (item) => item.category?.trim().toLowerCase() === categoryFilter,
-      );
-    }
-
-    if (searchQuery && searchQuery.trim()) {
-      const query = searchQuery.trim().toLowerCase();
-      filteredItems = filteredItems.filter((item) =>
-        item.title.toLowerCase().includes(query),
-      );
-    }
-
-    return filteredItems;
-  }, [allContent, selectedCategory, searchQuery]);
-
-  const newestItems = useMemo(
-    () => filteredContent.slice(0, 3).map(toBrowseItem),
-    [filteredContent],
-  );
-
-  const rows = useMemo(
-    () => buildRowsByType(filteredContent),
-    [filteredContent],
-  );
-
-  useEffect(() => {
-    if (!categories.includes(selectedCategory)) {
-      setSelectedCategory("All");
-    }
-  }, [categories, selectedCategory]);
-
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <LinearGradient
-        colors={["rgba(139, 92, 246, 0.1)", "transparent"]}
-        style={styles.headerGradient}
-      />
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+    <SafeAreaView style={styles.container}>
+      <FlatList
+        data={isLoading ? [] : results}
+        keyExtractor={(item) => item.id}
+        numColumns={2}
+        columnWrapperStyle={styles.columnWrapper}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
-            onRefresh={handleRefresh}
+            onRefresh={() => {
+              setIsRefreshing(true);
+              loadContent();
+            }}
             tintColor={themeColors.accent}
           />
         }
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerLabel}>Browse</Text>
-          <Text style={styles.headerTitle}>Find your next obsession</Text>
-          <Text style={styles.headerSubtitle}>
-            Curated drops, bingeable series, and midnight movie runs. Pick a row
-            and hit play.
-          </Text>
-        </View>
-
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Ionicons
-            name="search"
-            size={20}
-            color={themeColors.textSecondary}
-            style={styles.searchIcon}
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search content..."
-            placeholderTextColor={themeColors.muted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 && (
-            <Pressable
-              onPress={() => setSearchQuery("")}
-              style={styles.clearButton}
-            >
-              <Ionicons
-                name="close-circle"
-                size={20}
-                color={themeColors.textSecondary}
-              />
-            </Pressable>
-          )}
-        </View>
-
-        {/* Category Chips */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipsContainer}
-        >
-          {categories.map((category, index) => (
-            <Pressable
-              key={`category-${category}-${index}`}
-              style={[
-                styles.chip,
-                selectedCategory === category && styles.chipActive,
-              ]}
-              onPress={() => handleCategoryPress(category)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  selectedCategory === category && styles.chipTextActive,
-                ]}
-              >
-                {category}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.intro}>
+              <Text style={styles.eyebrow}>Brixlore catalog</Text>
+              <Text style={styles.title}>Find your next story.</Text>
+              <Text style={styles.description}>
+                Search the full collection, then narrow it down by the worlds
+                and genres you want to watch.
               </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* Loading State */}
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={themeColors.accent} />
-          </View>
-        ) : (
-          <>
-            {/* Banner Carousel - Newest Items */}
-            {newestItems.length > 0 && (
-              <View style={styles.bannerSection}>
-                <Text style={styles.sectionTitle}>New Releases</Text>
-                <ScrollView
-                  horizontal
-                  pagingEnabled
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.bannerContainer}
-                >
-                  {newestItems.map((item, index) => (
-                    <BrowseCard
-                      key={item.id}
-                      item={item}
-                      index={index}
-                      onPress={() => handleItemPress(item.id, item.title)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            {/* Browse Rows */}
-            {rows.length > 0 ? (
-              <View style={styles.rowsContainer}>
-                {rows.map((row) => (
-                  <BrowseRowSection
-                    key={row.id}
-                    row={row}
-                    onItemPress={handleItemPress}
+              <Text style={styles.resultCount}>
+                {isLoading
+                  ? "Searching the catalog..."
+                  : `${results.length} ${results.length === 1 ? "video" : "videos"} found`}
+              </Text>
+            </View>
+            <View style={styles.searchBox}>
+              <Ionicons
+                name="search"
+                size={19}
+                color="rgba(245,247,251,0.55)"
+              />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search for movies or TV shows"
+                placeholderTextColor="rgba(245,247,251,0.38)"
+                style={styles.searchInput}
+                returnKeyType="search"
+              />
+              {query.length > 0 && (
+                <Pressable onPress={() => setQuery("")} hitSlop={10}>
+                  <Ionicons
+                    name="close"
+                    size={18}
+                    color="rgba(245,247,251,0.55)"
                   />
+                </Pressable>
+              )}
+            </View>
+            <FlatList
+              horizontal
+              data={categories}
+              keyExtractor={(item) => item}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chips}
+              renderItem={({ item }) => (
+                <Pressable
+                  onPress={() => setSelectedCategory(item)}
+                  style={[
+                    styles.chip,
+                    selectedCategory === item && styles.chipActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      selectedCategory === item && styles.chipTextActive,
+                    ]}
+                  >
+                    {item}
+                  </Text>
+                </Pressable>
+              )}
+            />
+            {isLoading && (
+              <View style={styles.skeletonGrid}>
+                {Array.from({ length: 6 }, (_, index) => (
+                  <PosterSkeleton key={index} />
                 ))}
               </View>
-            ) : (
-              <View style={styles.emptyContainer}>
-                <Ionicons
-                  name="film-outline"
-                  size={48}
-                  color={themeColors.muted}
-                />
-                <Text style={styles.emptyText}>No content available</Text>
-                <Text style={styles.emptySubtext}>
-                  Check back soon for new releases
-                </Text>
-              </View>
             )}
-          </>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <PosterCard item={item} onPress={() => handleItemPress(item)} />
         )}
-      </ScrollView>
+        ListEmptyComponent={
+          !isLoading ? (
+            <View style={styles.emptyState}>
+              <Ionicons
+                name="search-outline"
+                size={32}
+                color="rgba(255,255,255,0.45)"
+              />
+              <Text style={styles.emptyTitle}>
+                Nothing matched your search.
+              </Text>
+              <Text style={styles.emptyText}>
+                Try a different title, or clear your filters to see more videos.
+              </Text>
+              <Pressable onPress={clearFilters} style={styles.clearButton}>
+                <Text style={styles.clearButtonText}>Clear filters</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background,
-  },
-  headerGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 200,
-    zIndex: 0,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: spacing.xl,
-  },
-  header: {
+  container: { flex: 1, backgroundColor: "#030303" },
+  content: { paddingBottom: 110 },
+  intro: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.10)",
   },
-  headerLabel: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-    fontSize: 11,
-    fontWeight: "600",
+  eyebrow: {
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    letterSpacing: 1.8,
     textTransform: "uppercase",
-    letterSpacing: 1.5,
-    marginBottom: spacing.xs,
-  },
-  headerTitle: {
-    ...typography.title,
-    fontSize: 28,
-    fontWeight: "700",
-    color: themeColors.textPrimary,
     marginBottom: spacing.sm,
   },
-  headerSubtitle: {
-    ...typography.body,
-    fontSize: 14,
-    color: themeColors.textSecondary,
-    lineHeight: 20,
+  title: {
+    ...typography.h1,
+    color: themeColors.textPrimary,
+    fontSize: 34,
+    lineHeight: 36,
+    letterSpacing: -1,
+    marginBottom: spacing.md,
   },
-  searchContainer: {
+  description: {
+    ...typography.caption,
+    color: "rgba(255,255,255,0.58)",
+    lineHeight: 21,
+    maxWidth: 350,
+  },
+  resultCount: {
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.45)",
+    marginTop: spacing.lg,
+  },
+  searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: themeColors.surface,
-    borderRadius: borderRadius.md,
     marginHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    marginTop: spacing.lg,
     paddingHorizontal: spacing.md,
+    minHeight: 50,
+    borderRadius: borderRadius.full,
     borderWidth: 1,
-    borderColor: themeColors.border,
-  },
-  searchIcon: {
-    marginRight: spacing.sm,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.045)",
   },
   searchInput: {
     flex: 1,
-    ...typography.body,
     color: themeColors.textPrimary,
-    paddingVertical: spacing.md,
+    ...typography.caption,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
-  clearButton: {
-    padding: spacing.xs,
-  },
-  chipsContainer: {
+  chips: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingVertical: spacing.lg,
     gap: spacing.sm,
   },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: borderRadius.full,
-    backgroundColor: themeColors.surface,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    marginRight: spacing.sm,
+    borderRadius: 5,
+    backgroundColor: "rgba(255,255,255,0.08)",
   },
-  chipActive: {
-    backgroundColor: themeColors.accent,
-    borderColor: themeColors.accent,
+  chipActive: { backgroundColor: themeColors.foreground },
+  chipText: { ...typography.smallBold, color: "rgba(255,255,255,0.62)" },
+  chipTextActive: { color: themeColors.muted },
+  columnWrapper: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  card: { flex: 1, minWidth: 0, marginBottom: spacing.lg },
+  skeletonCard: { flexGrow: 0, flexBasis: CARD_WIDTH, width: CARD_WIDTH },
+  posterFrame: {
+    height: 235,
+    borderRadius: 5,
+    overflow: "hidden",
+    backgroundColor: "#111",
+    position: "relative",
   },
-  chipText: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-    fontSize: 12,
-    fontWeight: "500",
-  },
-  chipTextActive: {
-    color: themeColors.background,
-    fontWeight: "600",
-  },
-  loadingContainer: {
+  poster: { width: "100%", height: "100%" },
+  posterPlaceholder: {
     flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-    minHeight: 300,
+    justifyContent: "center",
+    backgroundColor: "#171717",
   },
-  bannerSection: {
-    marginBottom: spacing.xl,
+  posterShade: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 70,
+    backgroundColor: "rgba(0,0,0,0.30)",
   },
-  sectionTitle: {
-    ...typography.title,
-    fontSize: 20,
-    fontWeight: "600",
+  favoriteButton: {
+    position: "absolute",
+    left: spacing.sm,
+    bottom: spacing.sm,
+  },
+  playButton: {
+    position: "absolute",
+    right: spacing.sm,
+    bottom: spacing.sm,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: themeColors.foreground,
+  },
+  pressed: { opacity: 0.78 },
+  cardTitle: {
+    ...typography.smallBold,
     color: themeColors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
+    fontSize: 13,
+    lineHeight: 17,
+    marginTop: spacing.sm,
   },
-  bannerContainer: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.md,
-  },
-  rowsContainer: {
-    marginTop: spacing.md,
-  },
-  rowSection: {
-    marginBottom: spacing.xl,
-  },
-  rowHeader: {
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
-  },
-  rowTitleContainer: {
-    flex: 1,
-  },
-  rowTitleRow: {
+  cardMeta: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    marginBottom: spacing.xs,
+    marginTop: 5,
   },
-  rowTitle: {
-    ...typography.title,
-    fontSize: 20,
-    fontWeight: "600",
-    color: themeColors.textPrimary,
+  cardMetaText: {
+    ...typography.small,
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 11,
   },
-  rowSubtitle: {
-    ...typography.body,
-    fontSize: 13,
-    color: themeColors.textSecondary,
+  metaDivider: {
+    width: 1,
+    height: 11,
+    backgroundColor: "rgba(255,255,255,0.20)",
   },
-  rowContent: {
+  cardCategory: {
+    ...typography.smallBold,
+    color: "#ae99fa",
+    fontSize: 10,
+    flexShrink: 1,
+  },
+  skeletonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
     paddingHorizontal: spacing.lg,
   },
-  accentTag: {
-    backgroundColor: "rgba(255, 255, 255, 0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.2)",
-    borderRadius: borderRadius.full,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+  posterSkeleton: {
+    width: "100%",
+    height: 235,
+    borderRadius: 5,
+    backgroundColor: "rgba(255,255,255,0.09)",
   },
-  accentTagText: {
-    ...typography.caption,
-    fontSize: 9,
-    fontWeight: "600",
-    color: themeColors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 1,
+  titleSkeleton: {
+    height: 15,
+    width: "72%",
+    marginTop: spacing.sm,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.09)",
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: "center",
+  metaSkeleton: {
+    height: 11,
+    width: "45%",
+    marginTop: 7,
+    borderRadius: 3,
+    backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  emptyState: {
+    minHeight: 360,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    padding: spacing.lg,
     alignItems: "center",
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.lg,
+    justifyContent: "center",
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "rgba(255,255,255,0.15)",
+    borderRadius: 10,
+  },
+  emptyTitle: {
+    ...typography.h3,
+    color: themeColors.textPrimary,
+    fontSize: 20,
+    textAlign: "center",
+    marginTop: spacing.md,
   },
   emptyText: {
-    ...typography.title,
-    fontSize: 18,
-    fontWeight: "600",
-    color: themeColors.textPrimary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  emptySubtext: {
-    ...typography.body,
-    fontSize: 14,
-    color: themeColors.textSecondary,
+    ...typography.small,
+    color: "rgba(255,255,255,0.55)",
     textAlign: "center",
+    lineHeight: 18,
+    marginTop: spacing.sm,
   },
+  clearButton: {
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: themeColors.foreground,
+  },
+  clearButtonText: { ...typography.smallBold, color: themeColors.background },
 });

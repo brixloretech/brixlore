@@ -13,6 +13,7 @@ export interface ContentSummaryDto {
   title: string;
   thumbnailUrl: string | null;
   posterUrl?: string | null;
+  bannerUrl?: string | null;
   type: ContentType;
   releaseYear: number;
   ageRating: string;

@@ -1,6 +1,8 @@
-import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
-
 export async function generateAccountDataPdf(data: any): Promise<Uint8Array> {
+  // PDF export is an optional settings action. Keep pdf-lib out of the initial
+  // app graph because its nested tslib entry is not compatible with Metro's
+  // default ESM interop in Expo Go.
+  const { PDFDocument, rgb, StandardFonts } = await import("pdf-lib");
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage();
   const { width, height } = page.getSize();

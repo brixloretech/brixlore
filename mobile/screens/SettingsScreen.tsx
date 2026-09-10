@@ -1,21 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  Pressable,
-  Alert,
-  TextInput,
-  Switch,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
+import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../src/theme/colors";
-import { spacing, typography, borderRadius } from "../constants/theme";
+import { spacing, typography } from "../constants/theme";
 import { useAuthStore } from "../store/useAuthStore";
 import { accountService } from "../services/accountService";
 import { subscriptionService } from "../services/subscriptionService";
@@ -26,803 +15,99 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as Sharing from "expo-sharing";
 import { generateAccountDataPdf } from "../utils/pdfExport";
 
+type Panel = "identity" | "security" | "devices" | "data";
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
+const panels: Array<{ id: Panel; label: string; note: string; icon: IconName }> = [
+  { id: "identity", label: "Identity", note: "Profile and presence", icon: "person-circle-outline" },
+  { id: "security", label: "Security", note: "Password and sessions", icon: "key-outline" },
+  { id: "devices", label: "Devices", note: "Your active screens", icon: "laptop-outline" },
+  { id: "data", label: "Data", note: "Billing and privacy", icon: "shield-checkmark-outline" },
+];
+
+function Input({ label, value, onChangeText, placeholder, secureTextEntry, multiline, editable = true }: { label: string; value: string; onChangeText?: (value: string) => void; placeholder?: string; secureTextEntry?: boolean; multiline?: boolean; editable?: boolean }) {
+  return <View style={styles.inputGroup}><Text style={styles.inputLabel}>{label}</Text><TextInput value={value} onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="rgba(255,255,255,0.26)" secureTextEntry={secureTextEntry} multiline={multiline} editable={editable} style={[styles.input, multiline && styles.textarea, !editable && styles.inputDisabled]} /></View>;
+}
+
 export default function SettingsScreen() {
   const router = useRouter();
   const { user, logout, refreshUser } = useAuthStore();
-  const [profileDraft, setProfileDraft] = useState({
-    name: "",
-    phone: "",
-    bio: "",
-  });
-  const [profileEmail, setProfileEmail] = useState("");
-  const [profileCreatedAt, setProfileCreatedAt] = useState<string | null>(null);
-  // Preferences removed
-  const [devices, setDevices] = useState<
-    Array<{
-      id: string;
-      deviceIdentifier: string;
-      platform: string;
-      lastActiveAt?: string | null;
-    }>
-  >([]);
+  const [panel, setPanel] = useState<Panel>("identity");
+  const [draft, setDraft] = useState({ name: "", phone: "", bio: "" });
+  const [email, setEmail] = useState("");
+  const [createdAt, setCreatedAt] = useState<string | null>(null);
+  const [devices, setDevices] = useState<Array<{ id: string; deviceIdentifier: string; platform: string; lastActiveAt?: string | null }>>([]);
   const [plans, setPlans] = useState<Array<{ id: string; name: string }>>([]);
   const [planId, setPlanId] = useState<string | null>(null);
-  const [nextChargeLabel, setNextChargeLabel] = useState("--");
+  const [nextCharge, setNextCharge] = useState("—");
   const [loading, setLoading] = useState(true);
-  const [savingProfile, setSavingProfile] = useState(false);
-  // Preferences removed
-  const [securitySaving, setSecuritySaving] = useState(false);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
-  const [settingsSuccess, setSettingsSuccess] = useState<string | null>(null);
-  const [passwordCurrent, setPasswordCurrent] = useState("");
-  const [passwordNext, setPasswordNext] = useState("");
-  const [passwordConfirm, setPasswordConfirm] = useState("");
-
-  const planName = useMemo(
-    () => plans.find((plan) => plan.id === planId)?.name ?? null,
-    [plans, planId],
-  );
-  const memberSince = profileCreatedAt
-    ? new Date(profileCreatedAt).getFullYear()
-    : user?.createdAt
-      ? new Date(user.createdAt).getFullYear()
-      : null;
-
-  const handleLogout = () => {
-    Alert.alert("Logout", "Are you sure you want to logout?", [
-      {
-        text: "Cancel",
-        style: "cancel",
-      },
-      {
-        text: "Logout",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/login");
-        },
-      },
-    ]);
-  };
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<{ tone: "error" | "success"; text: string } | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [nextPassword, setNextPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const planName = useMemo(() => plans.find((item) => item.id === planId)?.name || "Free access", [plans, planId]);
+  const name = draft.name.trim() || user?.name || email.split("@")[0] || "Brixlore member";
+  const initials = useMemo(() => name.split(/\s+/).filter(Boolean).map((word) => word[0]).slice(0, 2).join("").toUpperCase(), [name]);
+  const active = panels.find((item) => item.id === panel)!;
 
   useEffect(() => {
-    let active = true;
-    const loadSettings = async () => {
-      setLoading(true);
-      setSettingsError(null);
+    let mounted = true;
+    void (async () => {
       try {
-        const [planList, subscriptionRes, profileRes, devicesRes] =
-          await Promise.all([
-            subscriptionService.getPlans(),
-            subscriptionService.getSubscription(),
-            accountService.getProfile(),
-            // Preferences removed
-            deviceService.listDevices(),
-          ]);
-        const resolvedDevices =
-          devicesRes && devicesRes.length > 0
-            ? devicesRes
-            : ((await accountService.exportAccountData()).devices ?? []);
-        if (!active) return;
-        setPlans(planList.map((plan) => ({ id: plan.id, name: plan.name })));
-        setPlanId(subscriptionRes.planId ?? null);
-        setNextChargeLabel(
-          subscriptionRes.currentPeriodEnd
-            ? new Date(subscriptionRes.currentPeriodEnd).toLocaleDateString()
-            : "--",
-        );
-        setProfileEmail(profileRes.email ?? "");
-        setProfileCreatedAt(profileRes.createdAt ?? null);
-        setProfileDraft({
-          name: profileRes.name ?? "",
-          phone: profileRes.phone ?? "",
-          bio: profileRes.bio ?? "",
-        });
-        // Preferences removed
-        setDevices(resolvedDevices);
-      } catch (err: any) {
-        if (!active) return;
-        setSettingsError(err?.message ?? "Failed to load settings.");
-      } finally {
-        if (!active) return;
-        setLoading(false);
-      }
-    };
-    loadSettings();
-    return () => {
-      active = false;
-    };
-  }, []);
+        const planList = await Promise.race([subscriptionService.getPlans(), new Promise<Awaited<ReturnType<typeof subscriptionService.getPlans>>>((resolve) => setTimeout(() => resolve([]), 8_000))]);
+        const [subscription, profile, deviceList] = await Promise.race([
+          Promise.all([subscriptionService.getSubscription().catch(() => null), accountService.getProfile().catch(() => null), deviceService.listDevices().catch(() => [])]),
+          new Promise<[null, null, []]>((resolve) => setTimeout(() => resolve([null, null, []]), 5_000)),
+        ]);
+        if (!mounted) return;
+        setPlans(planList.map((item) => ({ id: item.id, name: item.name })));
+        setPlanId(subscription?.planId ?? null);
+        setNextCharge(subscription?.currentPeriodEnd ? new Date(subscription.currentPeriodEnd).toLocaleDateString() : "—");
+        setEmail(profile?.email || user?.email || "");
+        setCreatedAt(profile?.createdAt ?? user?.createdAt ?? null);
+        setDraft({ name: profile?.name || user?.name || "", phone: profile?.phone || "", bio: profile?.bio || "" });
+        setDevices(deviceList);
+      } catch { if (mounted) setNotice({ tone: "error", text: "Some account details could not be loaded." }); }
+      finally { if (mounted) setLoading(false); }
+    })();
+    return () => { mounted = false; };
+  }, [user?.createdAt, user?.email, user?.name]);
 
-  const handleSaveProfile = useCallback(async () => {
-    setSettingsError(null);
-    setSettingsSuccess(null);
-    setSavingProfile(true);
-    try {
-      await accountService.updateProfile(profileDraft);
-      await refreshUser();
-      setSettingsSuccess("Profile updated.");
-    } catch (err: any) {
-      setSettingsError(err?.message ?? "Failed to update profile.");
-    } finally {
-      setSavingProfile(false);
-    }
-  }, [profileDraft, refreshUser]);
+  const saveProfile = useCallback(async () => { setSaving(true); setNotice(null); try { await accountService.updateProfile(draft); await refreshUser(); setNotice({ tone: "success", text: "Identity updated." }); } catch (error: any) { setNotice({ tone: "error", text: error?.message || "Profile could not be updated." }); } finally { setSaving(false); } }, [draft, refreshUser]);
+  const changePassword = useCallback(async () => { setNotice(null); if (!currentPassword || !nextPassword || nextPassword !== confirmPassword) { setNotice({ tone: "error", text: nextPassword !== confirmPassword ? "New passwords do not match." : "Enter your current and new password." }); return; } setSaving(true); try { await authService.changePassword({ currentPassword, newPassword: nextPassword }); await authService.revokeSessions(); setCurrentPassword(""); setNextPassword(""); setConfirmPassword(""); setNotice({ tone: "success", text: "Password updated. Other sessions have been reset." }); } catch (error: any) { setNotice({ tone: "error", text: error?.message || "Password could not be changed." }); } finally { setSaving(false); } }, [confirmPassword, currentPassword, nextPassword]);
+  const resetSessions = useCallback(async () => { setSaving(true); setNotice(null); try { const result = await authService.revokeSessions(); setNotice({ tone: "success", text: result?.message || "Sessions reset." }); } catch (error: any) { setNotice({ tone: "error", text: error?.message || "Sessions could not be reset." }); } finally { setSaving(false); } }, []);
+  const removeDevice = (id: string, label: string) => Alert.alert("Disconnect device", `Remove ${label}? It will need to sign in again.`, [{ text: "Keep", style: "cancel" }, { text: "Disconnect", style: "destructive", onPress: async () => { try { await deviceService.removeDevice(id); setDevices((current) => current.filter((item) => item.id !== id)); setNotice({ tone: "success", text: "Device disconnected." }); } catch (error: any) { setNotice({ tone: "error", text: error?.message || "Device could not be removed." }); } } }]);
+  const managePlan = async () => { try { if (Platform.OS === "android") { if (!playBillingService.isAvailable()) throw new Error(playBillingService.getSetupErrorMessage()); await playBillingService.openManageSubscriptions(); } else router.push("/subscription"); } catch (error: any) { setNotice({ tone: "error", text: error?.message || "Subscription options are unavailable." }); } };
+  const exportData = async () => { setNotice(null); try { const data = await accountService.exportAccountData(); const bytes = await generateAccountDataPdf(data); const uri = `${FileSystem.cacheDirectory}brixlore-account-data.pdf`; const base64 = typeof Buffer !== "undefined" ? Buffer.from(bytes).toString("base64") : btoa(String.fromCharCode(...bytes)); await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 }); if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(uri, { mimeType: "application/pdf" }); setNotice({ tone: "success", text: "Your account archive is ready." }); } catch (error: any) { setNotice({ tone: "error", text: error?.message || "Account archive could not be created." }); } };
+  const deleteAccount = () => Alert.alert("Delete account", "This permanently deletes your account and data.", [{ text: "Cancel", style: "cancel" }, { text: "Delete", style: "destructive", onPress: async () => { try { await accountService.deleteAccount(); await logout(); router.replace("/login"); } catch (error: any) { setNotice({ tone: "error", text: error?.message || "Account could not be deleted." }); } } }]);
+  const signOut = () => Alert.alert("Sign out", "Are you sure you want to sign out?", [{ text: "Cancel", style: "cancel" }, { text: "Sign out", style: "destructive", onPress: async () => { await logout(); router.replace("/login"); } }]);
 
-  // Preferences save removed
-
-  const handleChangePassword = useCallback(async () => {
-    setSettingsError(null);
-    setSettingsSuccess(null);
-    if (!passwordCurrent || !passwordNext) {
-      setSettingsError("Enter your current and new password.");
-      return;
-    }
-    if (passwordNext !== passwordConfirm) {
-      setSettingsError("New passwords do not match.");
-      return;
-    }
-    setSecuritySaving(true);
-    try {
-      await authService.changePassword({
-        currentPassword: passwordCurrent,
-        newPassword: passwordNext,
-      });
-      await authService.revokeSessions();
-      setPasswordCurrent("");
-      setPasswordNext("");
-      setPasswordConfirm("");
-      setSettingsSuccess("Password updated and sessions reset.");
-    } catch (err: any) {
-      setSettingsError(err?.message ?? "Failed to change password.");
-    } finally {
-      setSecuritySaving(false);
-    }
-  }, [passwordCurrent, passwordNext, passwordConfirm]);
-
-  const handleResetSessions = useCallback(async () => {
-    setSettingsError(null);
-    setSettingsSuccess(null);
-    setSecuritySaving(true);
-    try {
-      const res = await authService.revokeSessions();
-      setSettingsSuccess(res?.message ?? "Sessions reset.");
-    } catch (err: any) {
-      setSettingsError(err?.message ?? "Failed to reset sessions.");
-    } finally {
-      setSecuritySaving(false);
-    }
-  }, []);
-
-  const handleRemoveDevice = useCallback((id: string, label: string) => {
-    Alert.alert(
-      "Remove device",
-      `Are you sure you want to remove ${label}? This device may need to sign in again.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Remove",
-          style: "destructive",
-          onPress: async () => {
-            setSettingsError(null);
-            setSettingsSuccess(null);
-            try {
-              await deviceService.removeDevice(id);
-              setDevices((prev) => prev.filter((device) => device.id !== id));
-              setSettingsSuccess("Device removed.");
-            } catch (err: any) {
-              setSettingsError(err?.message ?? "Failed to remove device.");
-            }
-          },
-        },
-      ],
-    );
-  }, []);
-
-  const handleManagePlan = useCallback(async () => {
-    setSettingsError(null);
-    try {
-      if (Platform.OS === "android") {
-        if (!playBillingService.isAvailable()) {
-          setSettingsError(playBillingService.getSetupErrorMessage());
-          return;
-        }
-        await playBillingService.openManageSubscriptions();
-        return;
-      }
-
-      Alert.alert(
-        "Manage on Website",
-        "iOS subscriptions are managed on our website. Please upgrade or manage your plan on the website, then sign in again on the app to refresh your subscription status.",
-      );
-    } catch (err: any) {
-      setSettingsError(err?.message ?? "Failed to open subscription options.");
-    }
-  }, []);
-
-  const handleExportData = useCallback(async () => {
-    setSettingsError(null);
-    setSettingsSuccess(null);
-    try {
-      const res = await accountService.exportAccountData();
-      const pdfBytes = await generateAccountDataPdf(res);
-      const fileUri = `${FileSystem.cacheDirectory}account-data.pdf`;
-      // Convert Uint8Array to base64 string
-      const base64 =
-        typeof Buffer !== "undefined"
-          ? Buffer.from(pdfBytes).toString("base64")
-          : btoa(String.fromCharCode(...pdfBytes));
-      await FileSystem.writeAsStringAsync(fileUri, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, { mimeType: "application/pdf" });
-      }
-      setSettingsSuccess("Account data exported as PDF.");
-    } catch (err: any) {
-      setSettingsError(err?.message ?? "Failed to export data.");
-    }
-  }, []);
-
-  const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
-      "Delete account",
-      "This will permanently delete your account and data. Continue?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await accountService.deleteAccount();
-              await logout();
-              router.replace("/login");
-            } catch (err: any) {
-              setSettingsError(err?.message ?? "Failed to delete account.");
-            }
-          },
-        },
-      ],
-    );
-  }, [logout, router]);
-
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.container} edges={["top"]}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={themeColors.accent} />
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
-      <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons
-            name="arrow-back"
-            size={24}
-            color={themeColors.textPrimary}
-          />
-        </Pressable>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <View style={styles.headerSpacer} />
-      </View>
-
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.scrollContent}
-      >
-        <View style={styles.headerBlock}>
-          <Text style={styles.headerLabel}>Account settings</Text>
-          <Text style={styles.headerHeading}>
-            Shape your viewing experience
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            Update your profile, tune playback, and keep your account secure
-            across devices.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account overview</Text>
-          <View style={styles.infoCard}>
-            <View style={styles.tagRow}>
-              <View style={styles.tag}>
-                <Text style={styles.tagText}>
-                  Plan: {planName ?? (planId ? "Active" : "Free")}
-                </Text>
-              </View>
-              <View style={styles.tag}>
-                <Text style={styles.tagText}>
-                  {memberSince
-                    ? `Member since ${memberSince}`
-                    : "Member profile"}
-                </Text>
-              </View>
-              <View style={styles.tag}>
-                <Text style={styles.tagText}>
-                  {profileEmail ? "Email on file" : "Add an email"}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Plan</Text>
-              <Text style={styles.infoValue}>{planName ?? "Free"}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Next billing date</Text>
-              <Text style={styles.infoValue}>{nextChargeLabel}</Text>
-            </View>
-            <Pressable style={styles.primaryButton} onPress={handleManagePlan}>
-              <Text style={styles.primaryButtonText}>Manage plan</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {(settingsError || settingsSuccess) && (
-          <View style={styles.alertCard}>
-            {settingsError ? (
-              <Text style={styles.alertError}>{settingsError}</Text>
-            ) : (
-              <Text style={styles.alertSuccess}>{settingsSuccess}</Text>
-            )}
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Profile</Text>
-          <View style={styles.formCard}>
-            <Text style={styles.inputLabel}>Name</Text>
-            <TextInput
-              value={profileDraft.name}
-              onChangeText={(text) =>
-                setProfileDraft((prev) => ({ ...prev, name: text }))
-              }
-              style={styles.input}
-              placeholder="Your name"
-              placeholderTextColor={themeColors.textSecondary}
-            />
-            <Text style={styles.inputLabel}>Phone</Text>
-            <TextInput
-              value={profileDraft.phone}
-              onChangeText={(text) =>
-                setProfileDraft((prev) => ({ ...prev, phone: text }))
-              }
-              style={styles.input}
-              placeholder="Phone number"
-              placeholderTextColor={themeColors.textSecondary}
-            />
-            <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput
-              value={profileDraft.bio}
-              onChangeText={(text) =>
-                setProfileDraft((prev) => ({ ...prev, bio: text }))
-              }
-              style={[styles.input, styles.textArea]}
-              placeholder="Tell us about yourself"
-              placeholderTextColor={themeColors.textSecondary}
-              multiline
-            />
-            <Pressable style={styles.primaryButton} onPress={handleSaveProfile}>
-              <Text style={styles.primaryButtonText}>
-                {savingProfile ? "Saving..." : "Save changes"}
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Security</Text>
-          <View style={styles.formCard}>
-            <Text style={styles.inputLabel}>Current password</Text>
-            <TextInput
-              value={passwordCurrent}
-              onChangeText={setPasswordCurrent}
-              style={styles.input}
-              placeholder="Current password"
-              placeholderTextColor={themeColors.textSecondary}
-              secureTextEntry
-            />
-            <Text style={styles.inputLabel}>New password</Text>
-            <TextInput
-              value={passwordNext}
-              onChangeText={setPasswordNext}
-              style={styles.input}
-              placeholder="New password"
-              placeholderTextColor={themeColors.textSecondary}
-              secureTextEntry
-            />
-            <Text style={styles.inputLabel}>Confirm new password</Text>
-            <TextInput
-              value={passwordConfirm}
-              onChangeText={setPasswordConfirm}
-              style={styles.input}
-              placeholder="Confirm password"
-              placeholderTextColor={themeColors.textSecondary}
-              secureTextEntry
-            />
-            <Pressable
-              style={styles.primaryButton}
-              onPress={handleChangePassword}
-            >
-              <Text style={styles.primaryButtonText}>
-                {securitySaving ? "Saving..." : "Change password"}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={handleResetSessions}
-            >
-              <Text style={styles.secondaryButtonText}>Reset all sessions</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Devices</Text>
-          <View style={styles.formCard}>
-            {devices.length === 0 ? (
-              <Text style={styles.mutedText}>No devices registered.</Text>
-            ) : (
-              devices.map((device) => (
-                <View key={device.id} style={styles.deviceRow}>
-                  <View style={styles.deviceInfo}>
-                    <Text style={styles.deviceName}>
-                      {device.deviceIdentifier}
-                    </Text>
-                    <Text style={styles.deviceMeta}>{device.platform}</Text>
-                  </View>
-                  <Pressable
-                    style={styles.iconAction}
-                    onPress={() =>
-                      handleRemoveDevice(device.id, device.deviceIdentifier)
-                    }
-                  >
-                    <Ionicons
-                      name="trash-outline"
-                      size={18}
-                      color={themeColors.error}
-                    />
-                  </Pressable>
-                </View>
-              ))
-            )}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account data</Text>
-          <View style={styles.formCard}>
-            <Pressable
-              style={styles.secondaryButton}
-              onPress={handleExportData}
-            >
-              <Text style={styles.secondaryButtonText}>
-                Export account data
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.dangerButton}
-              onPress={handleDeleteAccount}
-            >
-              <Text style={styles.dangerButtonText}>Delete account</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Actions</Text>
-          <Pressable
-            style={styles.actionButton}
-            onPress={() => router.push("/help-support")}
-          >
-            <Ionicons
-              name="help-circle-outline"
-              size={24}
-              color={themeColors.textPrimary}
-            />
-            <Text style={styles.actionButtonTextNeutral}>Help & Support</Text>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={themeColors.textSecondary}
-            />
-          </Pressable>
-          <Pressable style={styles.actionButton} onPress={handleLogout}>
-            <Ionicons
-              name="log-out-outline"
-              size={24}
-              color={themeColors.error}
-            />
-            <Text style={styles.actionButtonText}>Logout</Text>
-            <Ionicons
-              name="chevron-forward"
-              size={20}
-              color={themeColors.textSecondary}
-            />
-          </Pressable>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+  if (loading) return <SafeAreaView style={styles.screen} edges={["top"]}><View style={styles.loading}><ActivityIndicator size="large" color={themeColors.accent} /></View></SafeAreaView>;
+  return <SafeAreaView style={styles.screen} edges={["top"]}><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+    <View style={styles.topbar}><Pressable onPress={() => router.back()} style={styles.back}><Ionicons name="arrow-back" size={21} color={themeColors.textPrimary} /></Pressable><Text style={styles.topbarTitle}>Settings</Text><View style={styles.back} /></View>
+    <View style={styles.hero}><Text style={styles.heroKicker}>ACCOUNT / CONTROL CENTER</Text><Text style={styles.heroTitle}>Welcome back,{"\n"}{name}<Text style={styles.heroFaded}>.</Text></Text><Text style={styles.heroCopy}>Manage your profile, security, and devices without leaving your world of stories.</Text><View style={styles.member}><View style={styles.avatar}><Text style={styles.avatarText}>{initials || "B"}</Text></View><View style={styles.memberCopy}><Text style={styles.memberName}>{name}</Text><Text style={styles.memberPlan}>{planName}</Text></View><View style={styles.memberDot} /></View></View>
+    {notice ? <View style={[styles.notice, notice.tone === "error" ? styles.noticeError : styles.noticeSuccess]}><Ionicons name={notice.tone === "error" ? "alert-circle-outline" : "checkmark-circle-outline"} size={17} color={notice.tone === "error" ? "#fca5a5" : "#d9f99d"} /><Text style={[styles.noticeText, notice.tone === "error" ? styles.noticeTextError : styles.noticeTextSuccess]}>{notice.text}</Text></View> : null}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>{panels.map((item) => <Pressable key={item.id} onPress={() => setPanel(item.id)} style={[styles.tab, panel === item.id && styles.tabSelected]}><Ionicons name={item.icon} size={16} color={panel === item.id ? "#050505" : "rgba(255,255,255,0.62)"} /><Text style={[styles.tabText, panel === item.id && styles.tabTextSelected]}>{item.label}</Text></Pressable>)}</ScrollView>
+    <View style={styles.panel}><View style={styles.panelHeader}><View><Text style={styles.panelNote}>{active.note.toUpperCase()}</Text><Text style={styles.panelTitle}>{panel === "identity" ? "Profile details" : panel === "security" ? "Security and access" : panel === "devices" ? "Manage your devices" : "Privacy and billing"}</Text></View>{panel === "identity" ? <Pressable onPress={() => void saveProfile()} disabled={saving} style={styles.saveMini}><Text style={styles.saveMiniText}>{saving ? "Saving" : "Save"}</Text></Pressable> : null}</View>
+      {panel === "identity" && <><View style={styles.identityAside}><View style={styles.avatarSmall}><Text style={styles.avatarSmallText}>{initials || "B"}</Text></View><View><Text style={styles.asideTitle}>Your public identity</Text><Text style={styles.asideCopy}>These details shape how your Brixlore presence appears across your account.</Text></View><View style={styles.asideMembership}><Text style={styles.asideLabel}>MEMBERSHIP</Text><Text style={styles.asidePlan}>{planName}</Text><Pressable onPress={managePlan}><Text style={styles.asideAction}>Manage access  ↗</Text></Pressable></View></View><View style={styles.form}><Text style={styles.formTitle}>The essentials</Text><Text style={styles.formNote}>Your email is managed by your sign-in account.</Text><Input label="Display name" value={draft.name} onChangeText={(value) => setDraft((current) => ({ ...current, name: value }))} placeholder="Your name" /><Input label="Email" value={email} editable={false} /><Input label="Phone" value={draft.phone} onChangeText={(value) => setDraft((current) => ({ ...current, phone: value }))} placeholder="Add your number" /><Input label="Your bio" value={draft.bio} onChangeText={(value) => setDraft((current) => ({ ...current, bio: value }))} placeholder="The stories you love, in a few words." multiline /><Pressable onPress={() => void saveProfile()} disabled={saving} style={styles.primary}><Text style={styles.primaryText}>{saving ? "Saving changes..." : "Save changes"}</Text><Ionicons name="arrow-up" size={15} color="#050505" /></Pressable></View></>}
+      {panel === "security" && <><View style={styles.securityIntro}><Ionicons name="key-outline" size={25} color="rgba(255,255,255,0.7)" /><Text style={styles.securityTitle}>Security is a quiet luxury.</Text><Text style={styles.securityCopy}>Change your password whenever you need and end every other active session in one move.</Text><Pressable onPress={() => void resetSessions()} disabled={saving} style={styles.textAction}><Ionicons name="log-out-outline" size={15} color="rgba(255,255,255,0.74)" /><Text style={styles.textActionText}>{saving ? "Working..." : "Reset all sessions"}</Text></Pressable></View><View style={styles.form}><Text style={styles.formTitle}>Choose a new password</Text><Input label="Current password" value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current password" secureTextEntry /><Input label="New password" value={nextPassword} onChangeText={setNextPassword} placeholder="New password" secureTextEntry /><Input label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Confirm new password" secureTextEntry /><Pressable onPress={() => void changePassword()} disabled={saving} style={styles.primary}><Text style={styles.primaryText}>{saving ? "Updating..." : "Update password"}</Text><Ionicons name="arrow-up" size={15} color="#050505" /></Pressable></View></>}
+      {panel === "devices" && <><View style={styles.securityIntro}><Ionicons name="laptop-outline" size={25} color="rgba(255,255,255,0.7)" /><Text style={styles.securityTitle}>Your screens, on your terms.</Text><Text style={styles.securityCopy}>Review the devices that have access to your Brixlore account.</Text></View><View style={styles.deviceList}>{devices.length ? devices.map((device) => <View key={device.id} style={styles.device}><View style={styles.deviceIcon}><Ionicons name={device.platform.toLowerCase().includes("ios") ? "phone-portrait-outline" : "laptop-outline"} size={19} color="rgba(255,255,255,0.75)" /></View><View style={styles.deviceCopy}><Text style={styles.deviceName} numberOfLines={1}>{device.deviceIdentifier}</Text><Text style={styles.deviceMeta}>{device.platform}{device.lastActiveAt ? `  /  Active ${new Date(device.lastActiveAt).toLocaleDateString()}` : ""}</Text></View><Pressable onPress={() => removeDevice(device.id, device.deviceIdentifier)} style={styles.removeDevice}><Ionicons name="trash-outline" size={17} color="#fca5a5" /></Pressable></View>) : <View style={styles.empty}><Ionicons name="laptop-outline" size={25} color="rgba(255,255,255,0.42)" /><Text style={styles.emptyText}>No devices registered.</Text></View>}</View></>}
+      {panel === "data" && <><View style={styles.dataCard}><Text style={styles.dataKicker}>YOUR ACCESS</Text><Text style={styles.dataTitle}>{planName}</Text><Text style={styles.dataCopy}>Next billing date: {nextCharge}</Text><Pressable onPress={() => void managePlan()} style={styles.primary}><Text style={styles.primaryText}>Manage membership</Text><Ionicons name="arrow-up" size={15} color="#050505" /></Pressable></View><View style={styles.dataRow}><View style={styles.dataIcon}><Ionicons name="download-outline" size={19} color="rgba(255,255,255,0.75)" /></View><View style={styles.deviceCopy}><Text style={styles.deviceName}>Export account data</Text><Text style={styles.deviceMeta}>Download your account archive as a PDF.</Text></View><Pressable onPress={() => void exportData()}><Ionicons name="arrow-up" size={18} color="rgba(255,255,255,0.65)" /></Pressable></View><View style={styles.dataRow}><View style={styles.dataIcon}><Ionicons name="headset-outline" size={19} color="rgba(255,255,255,0.75)" /></View><View style={styles.deviceCopy}><Text style={styles.deviceName}>Need support?</Text><Text style={styles.deviceMeta}>We are here for every question.</Text></View><Pressable onPress={() => router.push("/help-support")}><Ionicons name="arrow-forward" size={18} color="rgba(255,255,255,0.65)" /></Pressable></View><Pressable onPress={deleteAccount} style={styles.danger}><Text style={styles.dangerText}>Delete account</Text><Ionicons name="trash-outline" size={17} color="#fca5a5" /></Pressable></>}
+    </View>
+    <Pressable onPress={signOut} style={styles.signout}><Ionicons name="log-out-outline" size={18} color="rgba(255,255,255,0.72)" /><Text style={styles.signoutText}>Sign out of Brixlore</Text></Pressable>
+  </ScrollView></SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border,
-  },
-  headerBlock: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.lg,
-  },
-  headerLabel: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 1.5,
-    marginBottom: spacing.xs,
-  },
-  headerHeading: {
-    ...typography.title,
-    fontSize: 26,
-    fontWeight: "700",
-    color: themeColors.textPrimary,
-    marginBottom: spacing.sm,
-  },
-  headerSubtitle: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-    lineHeight: 20,
-  },
-  backButton: {
-    padding: spacing.sm,
-    marginRight: spacing.sm,
-  },
-  headerTitle: {
-    ...typography.title,
-    color: themeColors.textPrimary,
-    flex: 1,
-  },
-  headerSpacer: {
-    width: 40,
-  },
-  content: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: spacing.md,
-  },
-  section: {
-    marginBottom: spacing.xl,
-  },
-  sectionTitle: {
-    ...typography.sectionTitle,
-    color: themeColors.textPrimary,
-    marginBottom: spacing.md,
-  },
-  infoCard: {
-    backgroundColor: themeColors.surface,
-    borderRadius: 12,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-  },
-  tagRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-  },
-  tag: {
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    backgroundColor: themeColors.card,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  tagText: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-    fontSize: 11,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border,
-  },
-  formCard: {
-    backgroundColor: themeColors.surface,
-    borderRadius: 12,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    gap: spacing.sm,
-  },
-  inputLabel: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    backgroundColor: themeColors.card,
-    borderRadius: borderRadius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: themeColors.textPrimary,
-  },
-  textArea: {
-    minHeight: 80,
-    textAlignVertical: "top",
-  },
-  optionRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  optionPill: {
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    backgroundColor: themeColors.card,
-  },
-  optionPillActive: {
-    borderColor: themeColors.accent,
-    backgroundColor: themeColors.accent,
-  },
-  optionText: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-  },
-  optionTextActive: {
-    ...typography.caption,
-    color: themeColors.background,
-  },
-  toggleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: spacing.xs,
-  },
-  toggleLabel: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-  },
-  primaryButton: {
-    backgroundColor: themeColors.accent,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-  },
-  primaryButtonText: {
-    ...typography.body,
-    color: themeColors.background,
-    fontWeight: "600",
-  },
-  secondaryButton: {
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-  },
-  secondaryButtonText: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    fontWeight: "600",
-  },
-  dangerButton: {
-    backgroundColor: themeColors.error,
-    borderRadius: borderRadius.md,
-    paddingVertical: spacing.sm,
-    alignItems: "center",
-  },
-  dangerButtonText: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    fontWeight: "600",
-  },
-  deviceRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: themeColors.border,
-  },
-  deviceInfo: {
-    flex: 1,
-  },
-  deviceName: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    fontWeight: "600",
-  },
-  deviceMeta: {
-    ...typography.caption,
-    color: themeColors.textSecondary,
-  },
-  iconAction: {
-    padding: spacing.sm,
-  },
-  mutedText: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-  },
-  alertCard: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.lg,
-    padding: spacing.md,
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    backgroundColor: themeColors.surface,
-  },
-  alertError: {
-    ...typography.body,
-    color: themeColors.error,
-  },
-  alertSuccess: {
-    ...typography.body,
-    color: "#22c55e",
-  },
-  infoLabel: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-  },
-  infoValue: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    fontWeight: "600",
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: themeColors.surface,
-    borderRadius: 12,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: themeColors.border,
-    gap: spacing.md,
-  },
-  actionButtonText: {
-    ...typography.body,
-    color: themeColors.error,
-    fontWeight: "600",
-    flex: 1,
-  },
-  actionButtonTextNeutral: {
-    ...typography.body,
-    color: themeColors.textPrimary,
-    fontWeight: "600",
-    flex: 1,
-  },
+  screen: { flex: 1, backgroundColor: "#050505" }, content: { paddingBottom: 112 }, loading: { flex: 1, alignItems: "center", justifyContent: "center" }, topbar: { height: 56, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg }, back: { height: 38, width: 38, alignItems: "center", justifyContent: "center" }, topbarTitle: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 13 },
+  hero: { padding: spacing.lg, paddingTop: 24, paddingBottom: 27, backgroundColor: "#171717", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.14)" }, heroKicker: { ...typography.smallBold, color: "rgba(255,255,255,0.48)", fontSize: 9, letterSpacing: 1.5 }, heroTitle: { ...typography.h1, color: themeColors.textPrimary, fontSize: 34, lineHeight: 36, letterSpacing: -1.55, marginTop: 15 }, heroFaded: { color: "rgba(255,255,255,0.42)" }, heroCopy: { ...typography.small, color: "rgba(255,255,255,0.63)", lineHeight: 19, marginTop: 12, maxWidth: 320 }, member: { flexDirection: "row", alignItems: "center", gap: 11, marginTop: 23, padding: 11, backgroundColor: "rgba(0,0,0,0.31)", borderWidth: 1, borderColor: "rgba(255,255,255,0.09)" }, avatar: { width: 43, height: 43, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f4f5" }, avatarText: { ...typography.smallBold, color: "#050505", fontSize: 14 }, memberCopy: { flex: 1 }, memberName: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 13 }, memberPlan: { ...typography.small, color: "rgba(255,255,255,0.46)", fontSize: 11, marginTop: 3 }, memberDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#a3e635" },
+  notice: { flexDirection: "row", gap: 8, alignItems: "center", marginHorizontal: spacing.lg, marginTop: 15, padding: 12, borderWidth: 1 }, noticeError: { backgroundColor: "rgba(127,29,29,0.25)", borderColor: "rgba(252,165,165,0.32)" }, noticeSuccess: { backgroundColor: "rgba(101,163,13,0.14)", borderColor: "rgba(217,249,157,0.25)" }, noticeText: { ...typography.small, flex: 1, fontSize: 12 }, noticeTextError: { color: "#fecaca" }, noticeTextSuccess: { color: "#ecfccb" },
+  tabs: { gap: 8, paddingHorizontal: spacing.lg, paddingTop: 24, paddingBottom: 4 }, tab: { flexDirection: "row", alignItems: "center", gap: 7, paddingHorizontal: 13, paddingVertical: 10, backgroundColor: "rgba(255,255,255,0.08)" }, tabSelected: { backgroundColor: "#f4f4f5" }, tabText: { ...typography.smallBold, color: "rgba(255,255,255,0.65)", fontSize: 11 }, tabTextSelected: { color: "#050505" },
+  panel: { marginHorizontal: spacing.lg, marginTop: 18, padding: 17, backgroundColor: "#141414", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }, panelHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 17, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.12)" }, panelNote: { ...typography.smallBold, color: "rgba(255,255,255,0.42)", fontSize: 9, letterSpacing: 1.3 }, panelTitle: { ...typography.h2, color: themeColors.textPrimary, fontSize: 25, lineHeight: 27, letterSpacing: -1.1, marginTop: 7 }, saveMini: { paddingHorizontal: 12, paddingVertical: 9, backgroundColor: "#f4f4f5" }, saveMiniText: { ...typography.smallBold, color: "#050505", fontSize: 10 },
+  identityAside: { padding: 16, backgroundColor: "rgba(255,255,255,0.04)", marginTop: 17 }, avatarSmall: { width: 39, height: 39, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f4f5" }, avatarSmallText: { ...typography.smallBold, color: "#050505", fontSize: 12 }, asideTitle: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 13, marginTop: 15 }, asideCopy: { ...typography.small, color: "rgba(255,255,255,0.5)", fontSize: 11, lineHeight: 17, marginTop: 5 }, asideMembership: { borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.11)", marginTop: 17, paddingTop: 12 }, asideLabel: { ...typography.smallBold, color: "rgba(255,255,255,0.37)", fontSize: 8, letterSpacing: 1.2 }, asidePlan: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 12, marginTop: 5 }, asideAction: { ...typography.smallBold, color: "rgba(255,255,255,0.65)", fontSize: 10, marginTop: 8 },
+  form: { padding: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)", backgroundColor: "rgba(0,0,0,0.24)", marginTop: 13 }, formTitle: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 14 }, formNote: { ...typography.small, color: "rgba(255,255,255,0.42)", fontSize: 11, marginTop: 4, marginBottom: 15 }, inputGroup: { marginTop: 12 }, inputLabel: { ...typography.smallBold, color: "rgba(255,255,255,0.61)", fontSize: 10, marginBottom: 6 }, input: { borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", backgroundColor: "rgba(0,0,0,0.38)", color: themeColors.textPrimary, minHeight: 46, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 }, inputDisabled: { color: "rgba(255,255,255,0.4)", backgroundColor: "rgba(255,255,255,0.04)" }, textarea: { height: 100, textAlignVertical: "top" }, primary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: "#f4f4f5", paddingVertical: 13, marginTop: 18 }, primaryText: { ...typography.smallBold, color: "#050505", fontSize: 11 },
+  securityIntro: { paddingVertical: 22, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.12)" }, securityTitle: { ...typography.h2, color: themeColors.textPrimary, fontSize: 23, lineHeight: 25, letterSpacing: -1, marginTop: 14 }, securityCopy: { ...typography.small, color: "rgba(255,255,255,0.54)", lineHeight: 19, marginTop: 9 }, textAction: { flexDirection: "row", alignItems: "center", gap: 7, alignSelf: "flex-start", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.55)", paddingBottom: 5, marginTop: 18 }, textActionText: { ...typography.smallBold, color: "rgba(255,255,255,0.75)", fontSize: 11 },
+  deviceList: { marginTop: 4 }, device: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.11)" }, deviceIcon: { width: 35, height: 35, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: "rgba(255,255,255,0.08)" }, deviceCopy: { flex: 1 }, deviceName: { ...typography.smallBold, color: themeColors.textPrimary, fontSize: 12 }, deviceMeta: { ...typography.small, color: "rgba(255,255,255,0.45)", fontSize: 10, marginTop: 4 }, removeDevice: { padding: 7 }, empty: { paddingVertical: 34, alignItems: "center", gap: 11 }, emptyText: { ...typography.small, color: "rgba(255,255,255,0.48)", fontSize: 12 },
+  dataCard: { padding: 17, marginTop: 18, backgroundColor: "#f4f4f5" }, dataKicker: { ...typography.smallBold, color: "rgba(0,0,0,0.48)", fontSize: 9, letterSpacing: 1.4 }, dataTitle: { ...typography.h2, color: "#050505", fontSize: 27, lineHeight: 29, letterSpacing: -1.2, marginTop: 13 }, dataCopy: { ...typography.small, color: "rgba(0,0,0,0.6)", fontSize: 12, marginTop: 8 }, dataRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.12)" }, dataIcon: { width: 35, height: 35, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)" }, danger: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: "rgba(252,165,165,0.35)", padding: 14, marginTop: 22 }, dangerText: { ...typography.smallBold, color: "#fca5a5", fontSize: 11 },
+  signout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", marginHorizontal: spacing.lg, marginTop: 25, paddingVertical: 14 }, signoutText: { ...typography.smallBold, color: "rgba(255,255,255,0.72)", fontSize: 11 },
 });
