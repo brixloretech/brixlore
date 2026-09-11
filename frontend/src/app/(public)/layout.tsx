@@ -9,7 +9,7 @@
 import type { Metadata } from "next";
 import { SITE_BRAND, SITE_DESCRIPTION } from "@/lib/seo";
 import Footer2 from "@/components/layout/Footer-2";
-import PublicHeaders from "@/components/layout/PublicHeaders";
+import Header2 from "@/components/layout/Header-2";
 
 export const metadata: Metadata = {
   openGraph: {
@@ -33,10 +33,9 @@ export default function PublicLayout({
       <link rel="stylesheet" href="/assets/css/scrollCue.css" />
       <link rel="stylesheet" href="/assets/css/remixicon.css" />
       <link rel="stylesheet" href="/assets/css/style.css" />
-      <PublicHeaders />
+      <Header2 />
       <div className="lg:pb-0">{children}</div>
       <Footer2 />
-
     </div>
   );
 }
