@@ -48,7 +48,7 @@ function Header2() {
         id="navbar"
       >
         <div className="container 2xl:!px-[100px] xl:!max-w-[1920px]">
-          <div className="relative flex items-center flex-wrap lg:flex-nowrap justify-between lg:justify-start gap-[25px] xl:gap-[35px]">
+          <div className="relative flex items-center flex-wrap lg:flex-nowrap justify-center lg:justify-start gap-[25px] xl:gap-[35px]">
             <Link
               href="/"
               className="-ml-1 flex shrink-0 items-center gap-2 text-white sm:-ml-2"
@@ -75,7 +75,7 @@ function Header2() {
               )}
             </Link>
 
-            <div className="flex-none lg:hidden">
+            {/* <div className="flex-none lg:hidden">
               <button
                 type="button"
                 id="navbarBurgerToggle"
@@ -88,7 +88,7 @@ function Header2() {
                 <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
                 <span className="h-[3px] w-[30px] my-[5px] block bg-white" />
               </button>
-            </div>
+            </div> */}
             {/* Temp0rary */}
             <div className="hidden lg:flex items-center grow basis-full basis-auto gap-[25px] xl:gap-[35px]">
               <ul className="navbar-nav flex items-center flex-row gap-[25px] xl:gap-[35px] flex-none">
@@ -133,14 +133,14 @@ function Header2() {
                 </button>
               </form>
               <div className="flex items-center gap-[25px] xl:gap-[35px] flex-none">
-                {!isLoading && (
+                {/* {!isLoading && (
                   <Link
                     href={isAuthenticated ? "/dashboard" : "/login"}
                     className="text-xl relative inline-block xl:hidden text-white transition-all duration-300 ease-in-out hover:text-secondary"
                   >
                     <i className="ri-user-3-line" />
                   </Link>
-                )}
+                )} */}
 
                 {isLoading ? (
                   <div className="h-10 w-24 animate-pulse rounded-full bg-white/10" />

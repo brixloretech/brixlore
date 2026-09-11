@@ -10,8 +10,8 @@ export default function PublicHeaders() {
 
   return (
     <>
-      {pathname === "/" ? <Header /> : null}
-      {pathname !== "/" ? <Header2 /> : null}
+      {/* {pathname === "/" ? <Header /> : null} */}
+      <Header2 /> 
     </>
   );
 }
