@@ -5,11 +5,11 @@ import "video.js/dist/video-js.css";
 import { Providers } from "@/components/Providers";
 import { SITE_NAME, SITE_DESCRIPTION, SITE_TAGLINE } from "@/lib/seo";
 import { getAppUrl, getMatomoUrl, getMatomoSiteId } from "@/lib/env";
-import { Noto_Sans } from "next/font/google";
+import { Outfit } from "next/font/google";
 import { cn } from "@/lib/utils";
 import MobileNav from "@/components/layout/Mobile-nav";
 
-const notoSans = Noto_Sans({
+const outfit = Outfit({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
@@ -66,7 +66,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("dark", "font-sans", notoSans.variable)}>
+    <html
+      lang="en"
+      className={cn("dark", "font-sans", outfit.variable)}
+    >
       <body className="min-w-0 overflow-x-hidden antialiased">
         {matomoUrl && matomoSiteId && (
           <Script

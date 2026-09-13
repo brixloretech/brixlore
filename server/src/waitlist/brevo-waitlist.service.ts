@@ -1,8 +1,11 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { parsePhoneNumberFromString } from 'libphonenumber-js/max';
+import {
+  BadRequestException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 const Brevo = require('sib-api-v3-sdk');
-
 type WaitlistContact = {
   name: string;
   email: string;
@@ -37,12 +40,15 @@ export class BrevoWaitlistService {
         updateEnabled: true,
       });
       await Promise.all(
-        listIds.map((listId) =>
-          this.api.addContactToList(listId, { emails: [contact.email] }),
-        ),
+        listIds.map((listId) => this.api.addContactToList(listId, { emails: [contact.email] })),
       );
     } catch (error) {
       console.error('[Waitlist] Brevo contact sync failed:', error);
+      if (this.isDuplicateContactError(error)) {
+        throw new BadRequestException(
+          'You’re already on the waitlist, we’ll be in touch when Brixlore is ready.',
+        );
+      }
       throw new ServiceUnavailableException(
         'Unable to join the waitlist right now. Please try again.',
       );
@@ -71,5 +77,16 @@ export class BrevoWaitlistService {
 
     const parsedPhone = parsePhoneNumberFromString(phone);
     return parsedPhone?.isValid() ? parsedPhone.number : undefined;
+  }
+
+  private isDuplicateContactError(error: unknown): boolean {
+    const message =
+      typeof error === 'object' && error !== null && 'response' in error
+        ? JSON.stringify((error as { response?: unknown }).response)
+        : error instanceof Error
+          ? error.message
+          : String(error);
+
+    return message.toLowerCase().includes('contact already in list');
   }
 }

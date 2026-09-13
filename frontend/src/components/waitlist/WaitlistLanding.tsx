@@ -12,7 +12,7 @@ const steps: Step[] = ["name", "email", "phone"];
 
 const labels: Record<Step, string> = {
   name: "What should we call you?",
-  email: "Where can we reach you?",
+  email: "Your email address",
   phone: "Your phone number (optional)",
 };
 
@@ -22,6 +22,33 @@ const socialLinks = [
   { label: "X", href: "https://x.com/Brixlore", icon: "𝕏" },
   { label: "TikTok", href: "https://www.tiktok.com/@brixloretv?_r=1&_t=ZT-94mHGk4okzV", icon: "♪" },
 ];
+
+function formatPhoneNumber(value: string) {
+  const hasPlus = value.trimStart().startsWith("+");
+  const digits = value.replace(/\D/g, "").slice(0, 15);
+  const groups: string[] = [];
+
+  // Keep the familiar 3-3-4 format for local numbers, while allowing
+  // longer international numbers to continue in groups of three.
+  if (digits.length <= 10) {
+    if (digits) groups.push(digits.slice(0, 3));
+    if (digits.length > 3) groups.push(digits.slice(3, 6));
+    if (digits.length > 6) groups.push(digits.slice(6, 10));
+  } else {
+    groups.push(digits.slice(0, 3));
+    for (let index = 3; index < digits.length; index += 3) {
+      groups.push(digits.slice(index, index + 3));
+    }
+  }
+
+  return `${hasPlus ? "+" : ""}${groups.join(" ")}`;
+}
+
+function normalizePhoneNumber(value: string) {
+  const hasPlus = value.trimStart().startsWith("+");
+  const digits = value.replace(/\D/g, "");
+  return `${hasPlus ? "+" : ""}${digits}`;
+}
 
 export default function WaitlistLanding() {
   const [open, setOpen] = useState(false);
@@ -92,7 +119,7 @@ export default function WaitlistLanding() {
         ...form,
         name: form.name.trim(),
         email: form.email.trim(),
-        phone: form.phone.trim(),
+        phone: normalizePhoneNumber(form.phone),
       });
       setSubmitted(true);
     } catch (submissionError) {
@@ -200,9 +227,13 @@ export default function WaitlistLanding() {
                   <input
                     ref={inputRef}
                     value={form[step]}
-                    onChange={(event) =>
-                      setForm({ ...form, [step]: event.target.value })
-                    }
+                    onChange={(event) => {
+                      const value =
+                        step === "phone"
+                          ? formatPhoneNumber(event.target.value)
+                          : event.target.value;
+                      setForm({ ...form, [step]: value });
+                    }}
                     type={step === "email" ? "email" : step === "phone" ? "tel" : "text"}
                     placeholder={
                       step === "name"
