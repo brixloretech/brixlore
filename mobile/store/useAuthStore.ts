@@ -17,6 +17,9 @@ async function getAuthService() {
   return module.authService;
 }
 
+// Prevent an auth refresh that started before logout from restoring the session.
+let authOperationId = 0;
+
 type AuthState = {
   user: User | null;
   isLoading: boolean;
@@ -170,9 +173,20 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
 
   logout: async () => {
-    try {
-      set({ isLoading: true });
+    const operationId = ++authOperationId;
 
+    // Update the store before any network or download cleanup so the UI and
+    // route guards react immediately even when the device endpoint is slow.
+    set({
+      user: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+      pendingVerification: false,
+      verificationMessage: null,
+    });
+
+    try {
       // Clear auth tokens
       const service = await getAuthService();
       await service.logout();
@@ -188,21 +202,20 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         console.error("Failed to clear downloads on logout:", error);
       }
 
-      set({
-        user: null,
-        isAuthenticated: false,
-        isLoading: false,
-        error: null,
-      });
     } catch (error: any) {
-      set({
-        error: error.message || "Logout failed",
-        isLoading: false,
-      });
+      // Local auth state is already cleared. Cleanup failures must not keep the
+      // user signed in or prevent navigation to the login screen.
+      console.error("Logout cleanup failed:", error);
+    } finally {
+      // Only the latest logout operation may update the loading state.
+      if (operationId === authOperationId) {
+        set({ isLoading: false });
+      }
     }
   },
 
   refreshUser: async () => {
+    const operationId = authOperationId;
     try {
       // Add timeout to prevent hanging
       const service = await getAuthService();
@@ -212,11 +225,13 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
           setTimeout(() => resolve(null), 5000),
         ),
       ]);
+      if (operationId !== authOperationId) return;
       if (user) {
         set({ user, isAuthenticated: true });
       } else {
         // If API call failed, check if we have stored user
         const storedUser = await service.getUser();
+        if (operationId !== authOperationId) return;
         if (storedUser) {
           set({ user: storedUser, isAuthenticated: true });
         } else {
@@ -228,6 +243,7 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       try {
         const service = await getAuthService();
         const storedUser = await service.getUser();
+        if (operationId !== authOperationId) return;
         if (storedUser) {
           set({ user: storedUser, isAuthenticated: true });
         } else {

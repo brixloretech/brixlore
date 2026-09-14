@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   BackHandler,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -242,21 +243,20 @@ export default function SignUpScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.content}>
-            {/* Header */}
-            <View style={styles.header}>
-              <Pressable style={styles.backButton} onPress={handleSafeBack}>
-                <Ionicons
-                  name="arrow-back"
-                  size={24}
-                  color={themeColors.textPrimary}
-                />
+            <View style={styles.topbar}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Back to welcome" style={styles.backButton} onPress={handleSafeBack}>
+                <Ionicons name="arrow-back" size={16} color="rgba(255,255,255,0.6)" />
+                <Text style={styles.backText}>Back home</Text>
               </Pressable>
-              <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>Sign up to get started</Text>
+              <Image source={require("../assets/logo.png")} style={styles.logo} resizeMode="contain" />
             </View>
-
-            {/* Form */}
-            <View style={styles.form}>
+            <View style={styles.card}>
+              <View style={styles.header}>
+                <Text style={styles.eyebrow}>JOIN BRIXLORE</Text>
+                <Text style={styles.title}>Create your space.</Text>
+                <Text style={styles.subtitle}>One account for independent films, original series, your list, and every story still to come.</Text>
+              </View>
+              <View style={styles.form}>
               {/* Name Input */}
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>Name</Text>
@@ -439,13 +439,17 @@ export default function SignUpScreen() {
                 )}
               </Pressable>
 
-              {/* Sign In Link */}
               <View style={styles.footer}>
-                <Text style={styles.footerText}>Already have an account? </Text>
-                <Pressable onPress={() => router.replace(loginPath as any)}>
-                  <Text style={styles.footerLink}>Sign In</Text>
-                </Pressable>
+                <View style={styles.footerAccount}>
+                  <Text style={styles.footerText}>Already have an account? </Text>
+                  <Pressable onPress={() => router.replace(loginPath as any)}><Text style={styles.footerLink}>Sign in</Text></Pressable>
+                </View>
+                <View style={styles.secureRow}>
+                  <Ionicons name="shield-checkmark-outline" size={12} color="rgba(255,255,255,0.28)" />
+                  <Text style={styles.secureText}>YOUR DETAILS STAY PRIVATE</Text>
+                </View>
               </View>
+            </View>
             </View>
           </View>
         </ScrollView>
@@ -455,62 +459,36 @@ export default function SignUpScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: themeColors.background,
-  },
+  container: { flex: 1, backgroundColor: "#050505" },
   keyboardView: {
     flex: 1,
   },
-  scrollContent: {
-    flexGrow: 1,
-  },
-  content: {
-    flex: 1,
-    padding: spacing.xl,
-    justifyContent: "center",
-  },
-  header: {
-    marginBottom: spacing.xl,
-    alignItems: "center",
-    position: "relative",
-  },
-  backButton: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    padding: spacing.sm,
-  },
-  title: {
-    ...typography.title,
-    color: themeColors.textPrimary,
-    fontSize: 32,
-    fontWeight: "700",
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-  },
-  form: {
-    width: "100%",
-  },
-  inputContainer: {
-    marginBottom: spacing.lg,
-  },
+  scrollContent: { flexGrow: 1 },
+  content: { flexGrow: 1, paddingHorizontal: 20, paddingTop: 76, paddingBottom: 22, justifyContent: "center" },
+  topbar: { position: "absolute", top: 14, left: 20, right: 20, flexDirection: "row", justifyContent: "space-between", alignItems: "center", zIndex: 10, elevation: 20 },
+  backButton: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 },
+  backText: { color: "rgba(255,255,255,0.58)", fontSize: 12, fontWeight: "600" },
+  logo: { width: 92, height: 30, tintColor: "#fff" },
+  card: { width: "100%", maxWidth: 500, alignSelf: "center", backgroundColor: "rgba(11,11,12,0.96)", borderWidth: 1, borderColor: "rgba(255,255,255,0.11)", borderRadius: 28, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.5, shadowRadius: 32, shadowOffset: { width: 0, height: 18 }, elevation: 12 },
+  header: { paddingHorizontal: 24, paddingTop: 30, paddingBottom: 25 },
+  eyebrow: { color: "rgba(255,255,255,0.4)", fontSize: 10, fontWeight: "700", letterSpacing: 2 },
+  title: { color: "#fff", fontSize: 34, lineHeight: 38, letterSpacing: -1.7, fontWeight: "600", marginTop: 12 },
+  subtitle: { color: "rgba(255,255,255,0.52)", fontSize: 14, lineHeight: 21, marginTop: 11 },
+  form: { paddingHorizontal: 24 },
+  inputContainer: { marginBottom: 19 },
   label: {
-    ...typography.caption,
-    color: themeColors.textPrimary,
+    color: "rgba(255,255,255,0.78)",
+    fontSize: 13,
     fontWeight: "600",
     marginBottom: spacing.sm,
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: themeColors.surface,
+    backgroundColor: "rgba(255,255,255,0.045)",
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: themeColors.border,
+    borderColor: "rgba(255,255,255,0.13)",
     paddingHorizontal: spacing.md,
   },
   inputIcon: {
@@ -518,9 +496,9 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    ...typography.body,
-    color: themeColors.textPrimary,
-    paddingVertical: spacing.md,
+    color: "#fff",
+    fontSize: 15,
+    paddingVertical: 16,
   },
   eyeIcon: {
     padding: spacing.xs,
@@ -533,7 +511,9 @@ const styles = StyleSheet.create({
   errorContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: `${themeColors.error}20`,
+    backgroundColor: "rgba(248,113,113,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(248,113,113,0.22)",
     padding: spacing.md,
     borderRadius: 8,
     marginBottom: spacing.md,
@@ -545,9 +525,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   submitButton: {
-    backgroundColor: themeColors.accent,
-    paddingVertical: spacing.md,
-    borderRadius: 12,
+    backgroundColor: "#fff",
+    paddingVertical: 17,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
     marginTop: spacing.md,
@@ -556,22 +536,14 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   submitButtonText: {
-    ...typography.body,
-    color: themeColors.background,
+    color: "#050505",
+    fontSize: 14,
     fontWeight: "600",
   },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: spacing.lg,
-  },
-  footerText: {
-    ...typography.body,
-    color: themeColors.textSecondary,
-  },
-  footerLink: {
-    ...typography.body,
-    color: themeColors.accent,
-    fontWeight: "600",
-  },
+  footer: { alignItems: "center", borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)", marginHorizontal: -24, marginTop: 27, paddingHorizontal: 24, paddingTop: 22, paddingBottom: 24, gap: 14 },
+  footerAccount: { flexDirection: "row", justifyContent: "center", flexWrap: "wrap" },
+  footerText: { color: "rgba(255,255,255,0.45)", fontSize: 14 },
+  footerLink: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  secureRow: { flexDirection: "row", gap: 6, alignItems: "center" },
+  secureText: { color: "rgba(255,255,255,0.27)", fontSize: 9, fontWeight: "700", letterSpacing: 1.4 },
 });

@@ -364,31 +364,17 @@ class AuthService {
    */
   async logout(): Promise<void> {
     console.log("[AuthService][logout] Initiating mobile logout...");
+    let accessToken: string | null = null;
+    let deviceIdentifier: string | null = null;
+
     try {
-      // Best-effort: deregister this device from the backend while we still have a valid token.
-      const accessToken = await this.getAccessToken();
-      const { deviceIdentifier } = await deviceService.getDeviceIdentity();
+      // Capture these before clearing local credentials for best-effort server cleanup.
+      accessToken = await this.getAccessToken();
+      ({ deviceIdentifier } = await deviceService.getDeviceIdentity());
       console.log("[AuthService][logout] Retrieved storage details:", {
         hasAccessToken: !!accessToken,
         deviceIdentifier,
       });
-
-      if (accessToken && deviceIdentifier) {
-        try {
-          console.log("[AuthService][logout] Requesting backend device deregistration...");
-          const res = await api.post("/devices/logout", { deviceIdentifier }, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-          });
-          console.log("[AuthService][logout] Backend device deregistration response status:", res.status);
-        } catch (err: any) {
-          console.error("[AuthService][logout] Backend device deregistration failed:", err?.message || err);
-          if (err?.response) {
-            console.error("[AuthService][logout] Response error data:", err.response.data);
-          }
-        }
-      } else {
-        console.warn("[AuthService][logout] Skipping backend logout request because accessToken or deviceIdentifier is missing.");
-      }
     } catch (err: any) {
       console.error("[AuthService][logout] Error during token retrieval or backend request:", err);
     }
@@ -402,6 +388,25 @@ class AuthService {
       console.log("[AuthService][logout] Credentials deleted from SecureStore.");
     } catch (error) {
       console.error("Failed to delete local storage on logout:", error);
+    }
+
+    // Best-effort server cleanup happens after local logout so it cannot block
+    // navigation or remove credentials from a subsequent sign-in.
+    if (accessToken && deviceIdentifier) {
+      try {
+        console.log("[AuthService][logout] Requesting backend device deregistration...");
+        const res = await api.post("/devices/logout", { deviceIdentifier }, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        });
+        console.log("[AuthService][logout] Backend device deregistration response status:", res.status);
+      } catch (err: any) {
+        console.error("[AuthService][logout] Backend device deregistration failed:", err?.message || err);
+        if (err?.response) {
+          console.error("[AuthService][logout] Response error data:", err.response.data);
+        }
+      }
+    } else {
+      console.warn("[AuthService][logout] Skipping backend logout request because accessToken or deviceIdentifier is missing.");
     }
   }
 

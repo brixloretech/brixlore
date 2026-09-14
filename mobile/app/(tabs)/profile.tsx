@@ -76,7 +76,7 @@ function AuthenticatedProfile() {
     return () => { active = false; };
   }, [fetchSubscription]);
 
-  const signOut = async () => { await logout(); router.replace("/login"); };
+  const signOut = () => { void logout(); router.replace("/login"); };
   return <View style={[styles.screen, { paddingTop: insets.top }]}>
     <StatusBar barStyle="light-content" />
     <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
