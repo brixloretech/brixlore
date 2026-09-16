@@ -50,10 +50,8 @@ export const SmallVideoCard = memo<SmallVideoCardProps>(
               />
             </View>
           )}
-          {/* Add to My List button */}
-          <View style={styles.addButtonContainer}>
-            <AddToMyListButton contentId={item.id} size="sm" />
-          </View>
+     
+
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.title} numberOfLines={2}>

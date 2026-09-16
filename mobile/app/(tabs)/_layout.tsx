@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,15 +20,21 @@ function TabIcon({
         size={20}
         color={focused ? "#FFFFFF" : "rgba(255, 255, 255, 0.56)"}
       />
-      <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>
+      {/* <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>
         {label}
-      </Text>
+      </Text> */}
     </View>
   );
 }
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
+  // Android edge-to-edge can report a zero bottom inset on some devices even
+  // though the system navigation bar still overlays the app.
+  const bottomInset = Math.max(
+    insets.bottom,
+    Platform.OS === "android" ? 10 : 0,
+  );
 
   return (
     <Tabs
@@ -37,8 +43,10 @@ export default function TabsLayout() {
         tabBarStyle: [
           styles.tabBar,
           {
-            // height: 76 + insets.bottom,
-            paddingBottom: Math.max(10, insets.bottom),
+            // The inset must be part of the bar height so the tab labels are
+            // laid out above Android's system navigation area.
+            height: 76 + bottomInset,
+            paddingBottom: bottomInset,
           },
         ],
         tabBarShowLabel: false,
@@ -114,7 +122,7 @@ const styles = StyleSheet.create({
   },
   glassBackground: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(5, 5, 7, 0.16)",
+    backgroundColor: "black",
     overflow: "hidden",
   },
   tabBarItem: {

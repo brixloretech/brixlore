@@ -13,6 +13,7 @@ import {
   type AppStateStatus,
   Modal,
   Animated,
+  Platform,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -2482,7 +2483,15 @@ export default function WatchScreen() {
 
       {/* Bottom Navigation Bar */}
       {!isFullscreen && (
-        <View style={[styles.tabBarContainer, { paddingBottom: Math.max(10, insets.bottom) }]}> 
+        <View
+          style={[
+            styles.tabBarContainer,
+            {
+              height: 76 + Math.max(insets.bottom, Platform.OS === "android" ? 10 : 0),
+              paddingBottom: Math.max(insets.bottom, Platform.OS === "android" ? 10 : 0),
+            },
+          ]}
+        >
           <BlurView intensity={24} tint="dark" style={styles.tabBarBlur} pointerEvents="none" />
           <Pressable
             style={styles.tabBarItem}
@@ -2494,7 +2503,6 @@ export default function WatchScreen() {
           >
             <View style={styles.tabItem}>
               <Ionicons name="home" size={20} color="rgba(255, 255, 255, 0.56)" />
-              <Text style={styles.tabBarLabel}>Home</Text>
             </View>
           </Pressable>
           <Pressable
@@ -2507,7 +2515,6 @@ export default function WatchScreen() {
           >
             <View style={styles.tabItem}>
               <Ionicons name="search" size={20} color="rgba(255, 255, 255, 0.56)" />
-              <Text style={styles.tabBarLabel}>Explore</Text>
             </View>
           </Pressable>
           <Pressable
@@ -2520,7 +2527,6 @@ export default function WatchScreen() {
           >
             <View style={styles.tabItem}>
               <Ionicons name="bookmark" size={20} color="rgba(255, 255, 255, 0.56)" />
-              <Text style={styles.tabBarLabel}>My List</Text>
             </View>
           </Pressable>
           <Pressable
@@ -2533,7 +2539,6 @@ export default function WatchScreen() {
           >
             <View style={styles.tabItem}>
               <Ionicons name="person" size={20} color="rgba(255, 255, 255, 0.56)" />
-              <Text style={styles.tabBarLabel}>My Stuff</Text>
             </View>
           </Pressable>
         </View>
@@ -2557,18 +2562,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.2,
     shadowRadius: 14,
-    alignItems: "center",
-    justifyContent: "space-around",
     paddingTop: 8,
     paddingHorizontal: 10,
   },
   tabBarBlur: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(5, 5, 7, 0.16)",
+    backgroundColor: "black",
   },
   tabBarItem: {
-    alignItems: "center",
-    justifyContent: "center",
     flex: 1,
     height: 60,
     paddingHorizontal: 2,
@@ -2579,16 +2580,6 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
-  },
-  tabBarLabel: {
-    color: "rgba(255, 255, 255, 0.56)",
-    fontSize: 10,
-    fontWeight: "600",
-    lineHeight: 13,
-    letterSpacing: 0,
-    includeFontPadding: false,
-    textAlign: "center",
   },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 112 },
