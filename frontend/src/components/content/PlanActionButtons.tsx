@@ -76,7 +76,7 @@ export function PlanActionButtons({
     : isFreeUser
       ? `/subscription/payment-details?plan=${encodeURIComponent(planId)}&autostart=1&billingCycle=${billingCycle}`
       : isAuthenticated
-        ? "/dashboard/subscription"
+        ? `/subscription/payment-details?plan=${encodeURIComponent(planId)}&autostart=1&billingCycle=${billingCycle}`
         : `/signup?plan=${planId}&planName=${encodeURIComponent(planName)}&billingCycle=${billingCycle}`;
 
   if (isCurrentPlan) {

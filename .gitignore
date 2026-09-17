@@ -39,5 +39,6 @@ mobile/VIDEO_PLAYER_MIGRATION_GUIDE.md
 
 
 waitlist/*
+popup_dec/
 
 .gitignore
