@@ -36,61 +36,73 @@ export const borderRadius = {
 
 export const typography = {
   display: {
+    fontFamily: 'Outfit_800ExtraBold',
     fontSize: 36,
     fontWeight: '800' as const,
     letterSpacing: -0.5,
   },
   h1: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 28,
     fontWeight: '700' as const,
     letterSpacing: -0.3,
   },
   h2: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 24,
     fontWeight: '700' as const,
     letterSpacing: -0.2,
   },
   h3: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 20,
     fontWeight: '600' as const,
     letterSpacing: -0.1,
   },
   title: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 24,
     fontWeight: '700' as const,
     letterSpacing: -0.2,
   },
   sectionTitle: {
+    fontFamily: 'Outfit_700Bold',
     fontSize: 20,
     fontWeight: '700' as const,
     letterSpacing: -0.1,
   },
   body: {
+    fontFamily: 'Outfit_400Regular',
     fontSize: 16,
     fontWeight: '400' as const,
     lineHeight: 24,
   },
   bodyBold: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 16,
     fontWeight: '600' as const,
     lineHeight: 24,
   },
   caption: {
+    fontFamily: 'Outfit_400Regular',
     fontSize: 14,
     fontWeight: '400' as const,
     lineHeight: 20,
   },
   captionBold: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 14,
     fontWeight: '600' as const,
     lineHeight: 20,
   },
   small: {
+    fontFamily: 'Outfit_400Regular',
     fontSize: 12,
     fontWeight: '400' as const,
     lineHeight: 18,
   },
   smallBold: {
+    fontFamily: 'Outfit_600SemiBold',
     fontSize: 12,
     fontWeight: '600' as const,
     lineHeight: 18,

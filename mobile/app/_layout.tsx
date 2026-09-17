@@ -4,6 +4,14 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LogBox, View } from "react-native";
 import { useCallback, useEffect, useState } from "react";
 import * as SplashScreen from "expo-splash-screen";
+import { useFonts } from "expo-font";
+import {
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+  Outfit_800ExtraBold,
+} from "@expo-google-fonts/outfit";
 import * as SystemUI from "expo-system-ui";
 import { DarkThemeProvider } from "../context/ThemeContext";
 import { MyListProvider } from "../contexts/MyListContext";
@@ -33,6 +41,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+    Outfit_800ExtraBold,
+  });
   const { register, loadNotifications } = useNotificationStore();
   const { isAuthenticated, user } = useAuthStore();
   const { loadFromStorage: loadLimitedAccess } = useLimitedAccessStore();
@@ -217,6 +232,8 @@ export default function RootLayout() {
     }, 15000);
     return () => clearInterval(intervalId);
   }, [isAuthenticated]);
+
+  if (!fontsLoaded) return null;
 
   return (
     <View

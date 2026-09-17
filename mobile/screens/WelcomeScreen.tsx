@@ -83,7 +83,7 @@ export default function WelcomeScreen() {
               onPress={() => go("/(tabs)")}
               style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed, isLoading && styles.disabled]}
             >
-              <Text style={styles.primaryText}>Start watching</Text><Text style={styles.arrow}>↗</Text>
+              <Text style={styles.primaryText}>Start watching</Text>
             </Pressable>
             <View style={styles.secondaryRow}>
               <Pressable onPress={() => go("/login")} disabled={isLoading} style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}><Text style={styles.secondaryText}>Log in</Text></Pressable>
@@ -115,11 +115,11 @@ const styles = StyleSheet.create({
   rule: { width: 34, height: 1, backgroundColor: "rgba(255,255,255,0.7)", marginTop: 25, marginBottom: 18 },
   description: { maxWidth: 310, color: "rgba(255,255,255,0.78)", fontSize: 15, lineHeight: 23, textAlign: "center" },
   actions: { gap: 11 },
-  primaryButton: { height: 56, backgroundColor: "#f5f5f5", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  primaryButton: { height: 56, borderRadius: 999, backgroundColor: "#f5f5f5", flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   primaryText: { color: "#08080a", fontSize: 14, fontWeight: "700", letterSpacing: 0.1 },
   arrow: { color: "#08080a", fontSize: 19, lineHeight: 19 },
   secondaryRow: { flexDirection: "row", gap: 11 },
-  secondaryButton: { flex: 1, height: 49, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(5,5,7,0.28)" },
+  secondaryButton: { flex: 1, height: 49, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.35)", alignItems: "center", justifyContent: "center", backgroundColor: "rgba(5,5,7,0.28)" },
   secondaryText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   note: { color: "rgba(255,255,255,0.5)", fontSize: 11, textAlign: "center", marginTop: 5 },
   pressed: { opacity: 0.68 },

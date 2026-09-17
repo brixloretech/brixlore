@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useRef,
   useState,
+  useMemo,
 } from "react";
 import {
   ActivityIndicator,
@@ -31,8 +32,10 @@ import {
 } from "../services/contentService";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const HERO_HEIGHT = Math.min(560, Math.max(480, SCREEN_WIDTH * 1.18));
-const HERO_ITEM_WIDTH = SCREEN_WIDTH;
+const HERO_HEIGHT = Math.min(500, Math.max(430, SCREEN_WIDTH * 1.08));
+const HERO_SIDE_PADDING = spacing.md;
+const HERO_ITEM_WIDTH = SCREEN_WIDTH - HERO_SIDE_PADDING * 2;
+const HERO_PAGE_WIDTH = SCREEN_WIDTH;
 
 type HomeSection = {
   id: string;
@@ -63,7 +66,9 @@ export default function HomeScreen() {
   const { trackEvent } = useMatomo();
 
   const [heroItems, setHeroItems] = useState<ContentSummaryDto[]>([]);
+  const [contentItems, setContentItems] = useState<ContentSummaryDto[]>([]);
   const [activeHeroIndex, setActiveHeroIndex] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState("All");
   const [sections, setSections] = useState<HomeSection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -83,6 +88,7 @@ export default function HomeScreen() {
         ),
       ]);
 
+      setContentItems(allContent);
       setHeroItems(allContent.slice(0, 3));
 
       // Subscription state is loaded separately and must not block the home UI.
@@ -130,14 +136,32 @@ export default function HomeScreen() {
     loadContent();
   }, [loadContent]);
 
+  const categories = useMemo(() => {
+    const values = new Set(
+      contentItems
+        .map((item) => item.category?.trim())
+        .filter(
+          (value): value is string =>
+            Boolean(value) && value!.toLowerCase() !== "all",
+        ),
+    );
+    return ["All", ...Array.from(values).sort()];
+  }, [contentItems]);
+
+  const visibleHeroItems = heroItems.filter(
+    (item) =>
+      selectedCategory === "All" ||
+      item.category?.toLowerCase() === selectedCategory.toLowerCase(),
+  );
+
   useEffect(() => {
-    if (heroItems.length <= 1) return;
+    if (visibleHeroItems.length <= 1) return;
 
     autoScrollRef.current = setInterval(() => {
       setActiveHeroIndex((prev) => {
-        const next = (prev + 1) % heroItems.length;
+        const next = (prev + 1) % visibleHeroItems.length;
         heroListRef.current?.scrollToOffset({
-          offset: next * HERO_ITEM_WIDTH,
+          offset: next * HERO_PAGE_WIDTH,
           animated: true,
         });
         return next;
@@ -147,7 +171,7 @@ export default function HomeScreen() {
     return () => {
       if (autoScrollRef.current) clearInterval(autoScrollRef.current);
     };
-  }, [heroItems.length]);
+  }, [visibleHeroItems.length, selectedCategory]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
@@ -155,6 +179,14 @@ export default function HomeScreen() {
       setIsRefreshing(false);
     });
   }, [loadContent]);
+
+  const selectCategory = useCallback((category: string) => {
+    setSelectedCategory(category);
+    setActiveHeroIndex(0);
+    requestAnimationFrame(() => {
+      heroListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    });
+  }, []);
 
   const handleItemPress = useCallback(
     (id: string, episodeId?: string, title?: string) => {
@@ -172,7 +204,7 @@ export default function HomeScreen() {
       <View style={styles.editorialRail} key={section.id}>
         <View style={styles.sectionHeaderRow}>
           <View style={styles.editorialHeading}>
-            <Text style={styles.editorialNumber}>{section.id === "trending-now" ? "01 / 03" : section.id === "editors-picks" ? "02 / 03" : "03 / 03"}</Text>
+
             <View>
               <Text style={styles.eyebrow}>{section.id === "trending-now" ? "New on Brixlore" : section.id === "editors-picks" ? "The culture edit" : "Late-night signal"}</Text>
               <Text style={styles.sectionTitle}>{section.id === "trending-now" ? "Fresh stories, still warm." : section.id === "editors-picks" ? "Work that stays with you." : "Press play after dark."}</Text>
@@ -225,24 +257,59 @@ export default function HomeScreen() {
         }
       >
         {heroItems.length > 0 ? (
-          <View style={styles.heroWrap}>
+          <>
+            <View>
+              <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRail}
+              >
+              {categories.map((category) => (
+                <Pressable
+                  key={category}
+                  onPress={() => selectCategory(category)}
+                  style={[
+                    styles.categoryTab,
+                    selectedCategory === category && styles.categoryTabActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.categoryText,
+                      selectedCategory === category && styles.categoryTextActive,
+                    ]}
+                  >
+                    {category}
+                  </Text>
+                </Pressable>
+              ))}
+              </ScrollView>
+            </View>
+            <View style={styles.heroWrap}>
+              {/* <View style={styles.heroIntro}>
+                <View>
+                  <Text style={styles.heroEyebrow}>Brixlore selection</Text>
+                  <Text style={styles.heroHeading}>Find your next story.</Text>
+                </View>
+                <Ionicons name="sparkles" size={18} color="rgba(255,255,255,0.62)" />
+              </View> */}
             <FlatList
               ref={heroListRef}
-              data={heroItems}
+              data={visibleHeroItems}
               horizontal
               pagingEnabled
-              snapToInterval={HERO_ITEM_WIDTH}
+              snapToInterval={HERO_PAGE_WIDTH}
               decelerationRate="fast"
               showsHorizontalScrollIndicator={false}
               keyExtractor={(item) => item.id}
               getItemLayout={(_, index) => ({
-                length: HERO_ITEM_WIDTH,
-                offset: HERO_ITEM_WIDTH * index,
+                length: HERO_PAGE_WIDTH,
+                offset: HERO_PAGE_WIDTH * index,
                 index,
               })}
               onMomentumScrollEnd={(event) => {
                 const index = Math.round(
-                  event.nativeEvent.contentOffset.x / HERO_ITEM_WIDTH,
+                  event.nativeEvent.contentOffset.x / HERO_PAGE_WIDTH,
                 );
                 setActiveHeroIndex(index);
               }}
@@ -300,10 +367,11 @@ export default function HomeScreen() {
                 );
               }}
             />
+            </View>
 
-            {heroItems.length > 1 ? (
+            {/* {visibleHeroItems.length > 1 ? (
               <View style={styles.heroDotsRow}>
-                {heroItems.map((_, i) => (
+                {visibleHeroItems.map((_, i) => (
                   <View
                     key={i}
                     style={[
@@ -313,11 +381,11 @@ export default function HomeScreen() {
                   />
                 ))}
               </View>
-            ) : null}
-          </View>
+            ) : null} */}
+          </>
         ) : null}
 
-        <View style={styles.signalBand}>
+        {/* <View style={styles.signalBand}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.signalContent}>
             <Text style={styles.signalText}>STORIES WITHOUT LIMITS</Text>
             <Text style={styles.signalMark}>✦</Text>
@@ -325,7 +393,7 @@ export default function HomeScreen() {
             <Text style={styles.signalMark}>✦</Text>
             <Text style={styles.signalText}>STORIES WITHOUT LIMITS</Text>
           </ScrollView>
-        </View>
+        </View> */}
 
 
         {sections.map((section) => renderSection(section))}
@@ -421,18 +489,69 @@ const styles = StyleSheet.create({
     backgroundColor: themeColors.surface,
   },
   heroWrap: {
-    marginTop: 0,
+    marginTop: spacing.sm,
     marginBottom: spacing.lg,
+  },
+  heroIntro: {
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  heroEyebrow: {
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    letterSpacing: 1.4,
+    textTransform: "uppercase",
+    marginBottom: 3,
+  },
+  heroHeading: {
+    ...typography.h2,
+    color: themeColors.textPrimary,
+    fontSize: 25,
+    lineHeight: 29,
+    letterSpacing: -0.7,
+  },
+  categoryRail: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  categoryTab: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: borderRadius.full,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.14)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+  },
+  categoryTabActive: {
+    borderColor: "rgba(255,255,255,0.72)",
+    backgroundColor: themeColors.textPrimary,
+  },
+  categoryText: {
+    ...typography.smallBold,
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 11,
+  },
+  categoryTextActive: {
+    color: themeColors.background,
   },
   heroItemContainer: {
     width: HERO_ITEM_WIDTH,
-    paddingHorizontal: 0,
+    marginHorizontal: HERO_SIDE_PADDING,
   },
   heroCard: {
-    width: SCREEN_WIDTH,
+    width: "100%",
     height: HERO_HEIGHT,
-    borderRadius: 0,
+    borderRadius: 28,
     overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    backgroundColor: "#111114",
   },
   heroImage: {
     width: "100%",
@@ -445,7 +564,12 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: spacing.lg,
     right: spacing.lg,
-    bottom: spacing.xl,
+    bottom: spacing.lg,
+    padding: spacing.md,
+    borderRadius: 20,
+    backgroundColor: "rgba(5,5,7,0.62)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
   },
   heroMetaRow: {
     flexDirection: "row",
@@ -473,7 +597,7 @@ const styles = StyleSheet.create({
   heroTitle: {
     ...typography.title,
     color: "#fff",
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: "800",
   },
   heroDescription: {
@@ -559,7 +683,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   editorialRail: {
-    borderTopWidth: 1,
+    // borderTopWidth: 1,
     borderTopColor: "rgba(255,255,255,0.10)",
     paddingTop: spacing.xl,
     marginBottom: spacing.xl,
@@ -588,7 +712,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     ...typography.smallBold,
     color: "rgba(255,255,255,0.45)",
-    fontSize: 9,
+    fontSize: 12,
     letterSpacing: 1.3,
     textTransform: "uppercase",
     marginBottom: 5,
@@ -597,7 +721,7 @@ const styles = StyleSheet.create({
     ...typography.h2,
     color: themeColors.textPrimary,
     fontWeight: "600",
-    fontSize: 18,
+    fontSize: 24,
     lineHeight: 20,
     letterSpacing: -0.3,
   },
