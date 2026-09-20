@@ -82,6 +82,34 @@ export class AuthService {
     return { message: 'Registration successful. Please check your email to verify your account.' };
   }
 
+  /** Creates a free account for an in-player preview and starts a session immediately. */
+  async signUpForPreview(email: string, password: string, name: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existing) throw new ConflictException('User with this email already exists');
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const user = await this.prisma.user.create({
+      data: { email: normalizedEmail, passwordHash, name: name.trim() },
+    });
+    const freePlan = await this.prisma.plan.findFirst({ where: { name: 'Free Account' } });
+    if (freePlan) {
+      const startDate = new Date();
+      const endDate = new Date();
+      endDate.setFullYear(endDate.getFullYear() + 100);
+      await this.prisma.subscription.create({
+        data: { userId: user.id, planId: freePlan.id, status: 'ACTIVE', startDate, endDate },
+      });
+    }
+    await this.prisma.previewAllowance.create({ data: { userId: user.id } });
+    try {
+      await this.sendVerificationEmail(user);
+    } catch (err) {
+      this.logger.error(`[Auth] Failed to send verification email to ${user.email}:`, err);
+    }
+    return this.issueTokens(user);
+  }
+
   async signUpWithSubscription(
     email: string,
     password: string,

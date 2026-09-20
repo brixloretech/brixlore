@@ -29,6 +29,7 @@ model User {
   supportReplies          SupportReply[]
   preferences             UserPreferences?
   viewHistory             ViewHistory[]
+  previewAllowances       PreviewAllowance[]
 
   @@index([email])
 }
@@ -172,6 +173,7 @@ model Content {
   duration     Int?
   trailerId    String?
   isPublished  Boolean     @default(false)
+  isFreeCatalog Boolean    @default(false)
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
   tags         String[]    @default([])
@@ -234,10 +236,47 @@ model Episode {
   content       Content       @relation(fields: [contentId], references: [id], onDelete: Cascade)
   season        Season?       @relation(fields: [seasonId], references: [id])
   viewHistory   ViewHistory[]
+  previewSessions PreviewSession[]
 
   @@unique([contentId, seasonId, episodeNumber])
   @@index([contentId])
   @@index([seasonId])
+}
+
+model PreviewViewer {
+  id        String           @id @default(cuid())
+  identityHash String         @unique
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  sessions  PreviewSession[]
+
+  @@index([createdAt])
+}
+
+model PreviewSession {
+  id             String        @id @default(cuid())
+  viewerId       String
+  episodeId      String
+  previewNumber  Int
+  watchedSeconds Int           @default(0)
+  completedAt    DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  viewer         PreviewViewer @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+  episode        Episode       @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([viewerId, createdAt])
+  @@index([episodeId])
+}
+
+model PreviewAllowance {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  totalSeconds    Int      @default(180)
+  consumedSeconds Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model SitePage {

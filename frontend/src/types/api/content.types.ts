@@ -110,6 +110,7 @@ export interface CreateAdminContentRequestDto {
   videoKey?: string;
   hlsKey?: string;
   isPublished?: boolean;
+  isFreeCatalog?: boolean;
 }
 
 /** Request body for POST /admin/uploads/presign */
@@ -225,6 +226,7 @@ export interface UpdateAdminContentRequestDto {
   duration?: string;
   categoryId?: string;
   category?: string;
+  isFreeCatalog?: boolean;
 }
 
 export interface UpdateAdminSeasonRequestDto {

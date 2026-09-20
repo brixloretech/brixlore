@@ -69,7 +69,7 @@ export class ContentService {
     private readonly r2Service: R2Service,
   ) {}
 
-  async getContent(page = 1, limit = 24, type?: ContentType): Promise<ContentListResponseDto> {
+  async getContent(page = 1, limit = 24, type?: ContentType, freeCatalog = false): Promise<ContentListResponseDto> {
     const skip = (page - 1) * limit;
     const trailerLinkedRows: Array<{ trailerId: string | null }> = await withDbRetry(() =>
       (this.prisma as any).content.findMany({
@@ -83,6 +83,7 @@ export class ContentService {
 
     const where = {
       isPublished: true,
+      ...(freeCatalog ? { isFreeCatalog: true } : {}),
       ...(type ? { type } : { type: { not: 'TRAILER' } }),
       ...(linkedTrailerIds.length > 0 ? { id: { notIn: linkedTrailerIds } } : {}),
     };

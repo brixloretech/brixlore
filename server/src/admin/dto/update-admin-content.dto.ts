@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Min, MinLength } from 'class-validator';
 
 const CONTENT_TYPES = ['MOVIE', 'DOCUMENTARY', 'SERIES', 'ANIMATION', 'TRAILER', 'SHORT'] as const;
 
@@ -52,4 +52,8 @@ export class UpdateAdminContentDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isFreeCatalog?: boolean;
 }

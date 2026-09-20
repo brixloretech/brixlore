@@ -59,6 +59,7 @@ export const contentService = {
   async getContent(
     params?: PaginationQueryDto,
     type?: ContentType,
+    freeCatalog = false,
   ): Promise<ContentListResponseDto> {
     const page = params?.page ?? 1;
     const limit = params?.limit ?? 24;
@@ -69,6 +70,7 @@ export const contentService = {
             page: String(page),
             limit: String(limit),
             ...(type ? { type } : {}),
+            ...(freeCatalog ? { freeCatalog: "true" } : {}),
           },
         });
       } catch {

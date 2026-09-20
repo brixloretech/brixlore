@@ -59,4 +59,8 @@ export class CreateAdminContentDto {
   @IsOptional()
   @IsBoolean()
   isPublished?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isFreeCatalog?: boolean;
 }

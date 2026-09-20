@@ -43,6 +43,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     rawBody: true, // required for Stripe webhook signature verification
   });
+  // Deployments sit behind Vercel/reverse proxies. This lets @Ip() resolve the
+  // original client address without every controller trusting forwarded headers.
+  app.set('trust proxy', 1);
 
   const allowedOrigins = getAllowedOrigins();
   app.enableCors({
@@ -60,7 +63,7 @@ async function bootstrap() {
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Accept', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Accept', 'Authorization', 'X-Device-Fingerprint'],
     maxAge: 86400,
   });
 

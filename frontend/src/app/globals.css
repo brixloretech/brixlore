@@ -150,6 +150,93 @@ body {
   }
 }
 
+@keyframes previewGateBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes previewGateSheetIn {
+  from {
+    opacity: 0;
+    transform: translateY(22px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes previewGateModalIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes previewGateBackdropOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes previewGateSheetOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes previewGateModalOut {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+}
+
+.preview-gate-backdrop {
+  animation: previewGateBackdropIn 260ms ease-out both;
+}
+
+.preview-gate-panel {
+  animation: previewGateSheetIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.preview-gate-backdrop.is-closing {
+  animation: previewGateBackdropOut 220ms ease-in both;
+}
+
+.preview-gate-panel.is-closing {
+  animation: previewGateSheetOut 220ms ease-in both;
+}
+
+@media (min-width: 640px) {
+  .preview-gate-panel {
+    animation-name: previewGateModalIn;
+  }
+
+  .preview-gate-panel.is-closing {
+    animation-name: previewGateModalOut;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .preview-gate-backdrop,
+  .preview-gate-panel {
+    animation: none;
+  }
+}
+
 @keyframes navigationImageFade {
   from {
     opacity: 0;

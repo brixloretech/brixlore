@@ -77,6 +77,7 @@ export interface AdminContentItemDto {
   trailerId?: string;
   category?: string;
   isPublished: boolean;
+  isFreeCatalog: boolean;
   hlsStatus: "ready" | "processing" | "missing";
   hlsReadyCount: number;
   hlsTotalCount: number;

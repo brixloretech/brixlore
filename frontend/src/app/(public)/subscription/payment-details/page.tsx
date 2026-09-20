@@ -181,6 +181,11 @@ function PaymentDetailsPageContent() {
   const searchParams = useSearchParams();
   const { isAuthenticated, isSubscribed } = useAuth();
   const shouldAutoStart = searchParams.get("autostart") === "1";
+  const requestedReturnUrl = searchParams.get("returnUrl");
+  const checkoutReturnUrl =
+    requestedReturnUrl && requestedReturnUrl.startsWith("/")
+      ? requestedReturnUrl
+      : "/dashboard/subscription";
   const billingCycleParam =
     searchParams.get("billingCycle")?.trim().toLowerCase() ?? "monthly";
   const normalizedBillingCycle: BillingCycle =
@@ -262,8 +267,8 @@ function PaymentDetailsPageContent() {
     setSubmitting(true);
     try {
       const origin = window.location.origin;
-      const successUrl = `${origin}/subscription/success?returnUrl=${encodeURIComponent("/dashboard/subscription")}`;
-      const cancelUrl = `${origin}/subscription/payment-details?plan=${encodeURIComponent(selectedPlan.id)}&billingCycle=${billingCycle}`;
+      const successUrl = `${origin}/subscription/success?returnUrl=${encodeURIComponent(checkoutReturnUrl)}`;
+      const cancelUrl = `${origin}/subscription/payment-details?plan=${encodeURIComponent(selectedPlan.id)}&billingCycle=${billingCycle}&returnUrl=${encodeURIComponent(checkoutReturnUrl)}`;
       const res = await subscriptionService.createCheckoutSession({
         planId: selectedPlan.id,
         successUrl,
@@ -278,7 +283,7 @@ function PaymentDetailsPageContent() {
     } finally {
       setSubmitting(false);
     }
-  }, [selectedPlan, billingCycle]);
+  }, [selectedPlan, billingCycle, checkoutReturnUrl]);
 
   useEffect(() => {
     if (!shouldAutoStart || autoStartTriggeredRef.current) return;

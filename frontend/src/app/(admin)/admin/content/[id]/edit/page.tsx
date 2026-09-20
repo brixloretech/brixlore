@@ -89,6 +89,7 @@ export default function AdminEditVideoPage() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [published, setPublished] = useState(false);
+  const [isFreeCatalog, setIsFreeCatalog] = useState(false);
   const [contentType, setContentType] = useState<ContentType>("MOVIE");
   const [releaseYear, setReleaseYear] = useState("");
   const [ageRating, setAgeRating] = useState("NR");
@@ -173,6 +174,7 @@ export default function AdminEditVideoPage() {
         setDescription(item.description ?? "");
         setCategory(item.category ?? "");
         setPublished(item.isPublished);
+        setIsFreeCatalog(item.isFreeCatalog ?? false);
         setContentType(item.type as ContentType);
         setReleaseYear(String(item.releaseYear));
         setAgeRating(item.ageRating ?? "NR");
@@ -235,6 +237,7 @@ export default function AdminEditVideoPage() {
         setDescription(item.description ?? "");
         setCategory(item.category ?? "");
         setPublished(item.isPublished);
+        setIsFreeCatalog(item.isFreeCatalog ?? false);
         setContentType(item.type as ContentType);
         setReleaseYear(String(item.releaseYear));
         setAgeRating(item.ageRating ?? "NR");
@@ -495,6 +498,7 @@ export default function AdminEditVideoPage() {
         thumbnailKey,
         posterKey,
         bannerKey,
+        isFreeCatalog,
       });
 
       // 4. Upload & Update Movie/Short primary video file if chosen
@@ -1162,6 +1166,19 @@ export default function AdminEditVideoPage() {
                   </p>
                 ) : null}
               </div>
+              <label className="flex items-start gap-3 rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={isFreeCatalog}
+                  onChange={(event) => setIsFreeCatalog(event.target.checked)}
+                  disabled={isReadOnly || saving}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span>
+                  <span className="block font-medium text-neutral-900 dark:text-white">Free catalog</span>
+                  <span className="mt-1 block text-xs text-neutral-500 dark:text-neutral-400">Allow guests and free accounts to watch this published title without spending preview time.</span>
+                </span>
+              </label>
               <div>
                 <label
                   htmlFor="description"

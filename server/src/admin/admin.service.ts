@@ -115,6 +115,7 @@ function toAdminContentItemDto(content: any, r2Service: R2Service): AdminContent
     trailerId: content.trailerId ?? undefined,
     category: content.category?.name ?? undefined,
     isPublished: content.isPublished,
+    isFreeCatalog: content.isFreeCatalog ?? false,
     hlsStatus,
     hlsReadyCount,
     hlsTotalCount,
@@ -891,6 +892,7 @@ export class AdminService {
       ageRating?: string;
       duration?: number | null;
       categoryId?: string | null;
+      isFreeCatalog?: boolean;
     } = {};
 
     if (typeof dto.title === 'string') {
@@ -953,6 +955,7 @@ export class AdminService {
     if (typeof dto.categoryId === 'string' || typeof dto.category === 'string') {
       data.categoryId = await this.resolveCategoryId(dto.categoryId, dto.category);
     }
+    if (typeof dto.isFreeCatalog === 'boolean') data.isFreeCatalog = dto.isFreeCatalog;
 
     const updated = await this.prisma.$transaction(async (tx: any) => {
       const mainUpdated = await tx.content.update({
@@ -1031,6 +1034,7 @@ export class AdminService {
           duration: seconds ?? null,
           categoryId: resolvedCategoryId,
           isPublished: dto.isPublished ?? false,
+          isFreeCatalog: dto.isFreeCatalog ?? false,
         },
       });
 

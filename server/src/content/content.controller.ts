@@ -21,6 +21,7 @@ export class ContentController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('type') type?: string,
+    @Query('freeCatalog') freeCatalog?: string,
   ): Promise<ContentListResponseDto> {
     const pageNum = Math.max(1, parseInt(String(page || '1'), 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(String(limit || '24'), 10) || 24));
@@ -32,7 +33,7 @@ export class ContentController {
       }
       contentType = normalized as ContentType;
     }
-    return this.contentService.getContent(pageNum, limitNum, contentType);
+    return this.contentService.getContent(pageNum, limitNum, contentType, freeCatalog === 'true');
   }
 
   @Public()

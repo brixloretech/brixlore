@@ -46,6 +46,7 @@ function mapMockVideoToContent(item: AdminVideo): AdminContentItemDto {
     duration: item.duration,
     category: item.category,
     isPublished: item.published,
+    isFreeCatalog: false,
     hlsStatus: "ready",
     hlsReadyCount: 1,
     hlsTotalCount: 1,
