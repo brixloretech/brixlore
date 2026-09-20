@@ -20,7 +20,6 @@ import type {
   PlaybackType,
   PublicPlanDto,
 } from "@/types/api";
-import { BorderBeam } from "../ui/border-beam";
 
 const PROGRESS = "guest-playback-progress-v1";
 const MAX_PREVIEWS = 3;
