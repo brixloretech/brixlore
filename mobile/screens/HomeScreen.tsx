@@ -423,7 +423,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: spacing.lg,
+    // The tab bar is absolutely positioned, so it does not reserve layout
+    // space for the last section of the feed.
+    paddingBottom: 112,
   },
   loadingContainer: {
     flex: 1,

@@ -2492,7 +2492,7 @@ export default function WatchScreen() {
             },
           ]}
         >
-          <BlurView intensity={24} tint="dark" style={styles.tabBarBlur} pointerEvents="none" />
+          <BlurView intensity={48} tint="dark" style={styles.tabBarBlur} pointerEvents="none" />
           <Pressable
             style={styles.tabBarItem}
             onPress={() => {
@@ -2502,7 +2502,8 @@ export default function WatchScreen() {
             }}
           >
             <View style={styles.tabItem}>
-              <Ionicons name="home" size={20} color="rgba(255, 255, 255, 0.56)" />
+              <Ionicons name="home-outline" size={22} color="rgba(255, 255, 255, 0.56)" />
+              <Text style={styles.bottomTabLabel}>Home</Text>
             </View>
           </Pressable>
           <Pressable
@@ -2514,19 +2515,8 @@ export default function WatchScreen() {
             }}
           >
             <View style={styles.tabItem}>
-              <Ionicons name="search" size={20} color="rgba(255, 255, 255, 0.56)" />
-            </View>
-          </Pressable>
-          <Pressable
-            style={styles.tabBarItem}
-            onPress={() => {
-              safePlayerCall(() => player.pause(), "navMyListPause");
-              stopAudio().catch(() => {});
-              router.replace("/(tabs)/my-list");
-            }}
-          >
-            <View style={styles.tabItem}>
-              <Ionicons name="bookmark" size={20} color="rgba(255, 255, 255, 0.56)" />
+              <Ionicons name="compass-outline" size={22} color="rgba(255, 255, 255, 0.56)" />
+              <Text style={styles.bottomTabLabel}>Explore</Text>
             </View>
           </Pressable>
           <Pressable
@@ -2538,7 +2528,8 @@ export default function WatchScreen() {
             }}
           >
             <View style={styles.tabItem}>
-              <Ionicons name="person" size={20} color="rgba(255, 255, 255, 0.56)" />
+              <Ionicons name="person-circle-outline" size={22} color="rgba(255, 255, 255, 0.56)" />
+              <Text style={styles.bottomTabLabel}>Account</Text>
             </View>
           </Pressable>
         </View>
@@ -2555,8 +2546,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     flexDirection: "row",
     backgroundColor: "transparent",
-    borderTopColor: "transparent",
-    borderTopWidth: 0,
+    borderTopColor: "rgba(255, 255, 255, 0.15)",
+    borderTopWidth: StyleSheet.hairlineWidth,
     elevation: 0,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -8 },
@@ -2567,19 +2558,32 @@ const styles = StyleSheet.create({
   },
   tabBarBlur: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "black",
+    backgroundColor: "rgba(0, 0, 0, 0.80)",
+    overflow: "hidden",
   },
   tabBarItem: {
     flex: 1,
     height: 60,
     paddingHorizontal: 2,
+    alignItems: "center",
+    justifyContent: "center",
   },
   tabItem: {
     width: "100%",
     maxWidth: 82,
-    height: 52,
+    height: 60,
     alignItems: "center",
     justifyContent: "center",
+    gap: 4,
+  },
+  bottomTabLabel: {
+    color: "rgba(255, 255, 255, 0.56)",
+    fontSize: 10,
+    lineHeight: 13,
+    fontWeight: "400",
+    letterSpacing: 0,
+    includeFontPadding: false,
+    textAlign: "center",
   },
   scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 112 },
