@@ -65,7 +65,7 @@ function MovieCard({ item }: { item: ContentSummaryDto }) {
           </div>
           <Link
             href={watchHref}
-            className="absolute top-1/2 left-1/2 transform bg-primary text-white text-3xl rounded-full w-[50px] h-[50px] flex items-center justify-center transition-all duration-300 ease-in-out hover:bg-secondary hover:text-black opacity-0 invisible -mt-[20px] group-hover:opacity-100 group-hover:visible group-hover:-mt-[10px]"
+            className="absolute top-1/2 left-1/2 transform bg-black/40 text-white text-3xl rounded-full w-[50px] h-[50px] flex items-center justify-center transition-all duration-300 ease-in-out hover:bg-black/50 hover:text-white opacity-0 invisible -mt-[20px] group-hover:opacity-100 group-hover:visible group-hover:-mt-[10px]"
             style={{ transform: "translate(-50%, -50%)" }}
             aria-label={`Play ${item.title}`}
           >

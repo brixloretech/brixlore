@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { CalendarDays, Check, UserRound, Video, X } from "lucide-react";
+import { CalendarDays, UserRound, Video, X } from "lucide-react";
 import { HLSVideoPlayerLazy } from "@/components/player";
 import { MagicCard } from "@/components/ui/magic-card";
 import { useAuth } from "@/contexts";
@@ -20,6 +20,10 @@ import type {
   PlaybackType,
   PublicPlanDto,
 } from "@/types/api";
+import { BorderBeam } from "../ui/border-beam";
+import { LOGO_HEIGHT, LOGO_WIDTH } from "@/lib/seo";
+import { useBrandLogo } from "@/hooks";
+import Image from "next/image";
 
 const PROGRESS = "guest-playback-progress-v1";
 const MAX_PREVIEWS = 3;
@@ -84,13 +88,13 @@ type PreviewOffer = {
   planId?: string;
   billingCycle?: "monthly" | "yearly";
   featured?: boolean;
+  discountLabel?: string;
 };
 
 function PreviewGatePopup({
   contentTitle,
   returnUrl,
   onClose,
-  previewCount,
   allowContinuePreview,
   onContinuePreview,
   showFreeCatalog,
@@ -113,6 +117,7 @@ function PreviewGatePopup({
   }) => Promise<void>;
   freeCatalogItems: ContentSummaryDto[];
 }) {
+  const logoUrl = useBrandLogo();
   const [view, setView] = useState<"offers" | "signup">("offers");
   const [isClosing, setIsClosing] = useState(false);
   const [name, setName] = useState("");
@@ -159,7 +164,7 @@ function PreviewGatePopup({
       href: `/subscription?returnUrl=${encodeURIComponent(returnUrl)}`,
       planId: paidPlan?.id,
       billingCycle: "monthly",
-      featured: true,
+      featured: false,
     },
     {
       icon: CalendarDays,
@@ -167,11 +172,14 @@ function PreviewGatePopup({
       price: paidPlan?.yearlyPrice
         ? `$${paidPlan.yearlyPrice.toFixed(2)}/yr`
         : "View plans",
-      description: "One full year of unlimited access. Save 17%.",
+      description:
+        "Get one full year of unlimited access for the price of 10 months. Save 17%.",
       action: "Join & save",
       href: `/subscription?cycle=yearly&returnUrl=${encodeURIComponent(returnUrl)}`,
       planId: paidPlan?.yearlyPrice ? paidPlan.id : undefined,
       billingCycle: "yearly",
+      discountLabel: paidPlan?.yearlyPrice ? "Save 17%" : undefined,
+      featured: true,
     },
   ];
 
@@ -197,20 +205,36 @@ function PreviewGatePopup({
             </button>
           )}
 
-          <div className="border-b border-white/10 pb-5 pr-8">
+          <div className="border-b border-white/10 pb-5 flex justify-center flex-col">
+            {logoUrl ? (
+              <Image
+                src={logoUrl}
+                alt="BRIXLORE.TV"
+                width={LOGO_WIDTH}
+                height={LOGO_HEIGHT}
+                className="h-12 w-auto object-contain"
+                unoptimized
+              />
+            ) : (
+              <Image
+                src="/logo-2.png"
+                alt="BRIXLORE.TV"
+                width={LOGO_WIDTH}
+                height={LOGO_HEIGHT}
+                className="h-9 w-auto object-contain"
+                priority
+              />
+            )}
             <h2
               id="preview-gate-title"
-              className="mt-5 text-3xl font-semibold leading-[0.95] tracking-[-0.06em] sm:text-4xl"
+              className="mt-5 text-3xl font-semibold leading-[0.95] tracking-[-0.06em] sm:text-4xl text-center"
             >
               Continue watching
             </h2>
-            <p className="mt-2 text-xs leading-5 text-white/65 sm:text-sm">
+            <p className="mt-2 text-md leading-5 text-white/65 sm:text-md text-center">
               {view === "signup"
                 ? "Create your free Brixlore account to keep exploring."
                 : `Choose how you want to keep watching ${contentTitle}.`}
-            </p>
-            <p className="mt-5 inline-flex rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/42">
-              Preview {Math.min(previewCount, MAX_PREVIEWS)} of {MAX_PREVIEWS}
             </p>
           </div>
 
@@ -288,7 +312,6 @@ function PreviewGatePopup({
           ) : (
             <div className="mt-6 space-y-3 sm:grid sm:grid-cols-3 sm:items-stretch sm:gap-4 sm:space-y-0">
               {offers.map((offer) => {
-                const Icon = offer.icon;
                 return (
                   <MagicCard
                     key={offer.label}
@@ -299,40 +322,54 @@ function PreviewGatePopup({
                     gradientTo={offer.featured ? "#7b8498" : "#262626"}
                     className={`h-full min-h-[250px] rounded-[28px] bg-[#0a0a0b] ${offer.featured ? "shadow-[0_25px_90px_rgba(255,255,255,.07)]" : ""}`}
                   >
-                    <div className="flex h-full min-h-[248px] flex-col p-4 sm:p-5 border border-white/10 rounded-[28px]">
-                      <div className="mt-6 flex items-start gap-3">
-                        <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/15 bg-black/25 text-white/70">
-                          <Icon size={16} />
-                        </span>
+                    <div className="relative flex h-full flex-col p-6 sm:p-5 border border-white/10 rounded-[28px]">
+                      {offer.featured && (
+                        <BorderBeam
+                          colorFrom="#ffffff"
+                          colorTo="#9ca3af"
+                          duration={6}
+                          delay={3}
+                          size={400}
+                          borderWidth={2}
+                          className="from-transparent #9ca3af to-transparent"
+                        />
+                      )}
+                      <div className="flex items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                            <p className="text-xs font-bold uppercase tracking-[0.1em] text-white/85">
+                            <p className="text-lg font-bold uppercase tracking-[0.1em] text-white/85">
                               {offer.label}
                             </p>
-                            <p className="text-xl font-semibold tracking-[-0.05em] text-white">
+                            {offer.discountLabel && (
+                              <p className="text-sm bg-red-600 font-medium text-white rounded-md px-2 py-1">
+                                {offer.discountLabel}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex justify-between items-center gap-4 mt-4 md:flex-col md:items-start md:gap-1">
+                            <p className="text-3xl font-semibold text-white m-0">
                               {offer.price}
                             </p>
+                            <p className="text-sm leading-5 text-white/42">
+                              {offer.description}
+                            </p>
                           </div>
-                          <p className="mt-2 text-[11px] leading-5 text-white/42">
-                            {offer.description}
-                          </p>
                         </div>
                       </div>
                       {offer.label === "Free pass" && !isAuthenticated ? (
                         <button
                           type="button"
                           onClick={() => setView("signup")}
-                          className={`mt-auto inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
+                          className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
                             offer.featured
                               ? "border-white bg-white text-black hover:bg-white/82"
                               : "border-white/18 bg-white/[0.06] text-white hover:bg-white hover:text-black"
                           }`}
                         >
                           {offer.action}
-                          <Check size={13} />
                         </button>
                       ) : offer.label === "Free pass" ? (
-                        <span className="mt-auto inline-flex h-12 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-sm font-semibold text-neutral-400">
+                        <span className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-sm font-semibold text-neutral-400">
                           Free account active
                         </span>
                       ) : (
@@ -344,10 +381,9 @@ function PreviewGatePopup({
                               ? `/subscription/payment-details?plan=${encodeURIComponent(offer.planId)}&autostart=1&billingCycle=${offer.billingCycle}&returnUrl=${encodeURIComponent(returnUrl)}`
                               : (offer.href ?? "/subscription")
                           }
-                          className={`mt-auto inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${offer.featured ? "border-white bg-white text-black hover:bg-white/82" : "border-white/18 bg-white/[0.06] text-white hover:bg-white hover:text-black"}`}
+                          className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${offer.featured ? "border-white bg-white text-black hover:bg-white/82" : "border-white/18 bg-white/[0.06] text-white hover:bg-white hover:text-black"}`}
                         >
                           {offer.action}
-                          <Check size={13} />
                         </Link>
                       )}
                     </div>
