@@ -14,7 +14,6 @@ import {
   Modal,
   Animated,
   Platform,
-  Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -241,18 +240,7 @@ export default function WatchScreen() {
     string | null
   >(null);
   const [guestPreviewMaxSeconds, setGuestPreviewMaxSeconds] = useState(45);
-  const [guestPreviewUsage, setGuestPreviewUsage] = useState({
-    used: 0,
-    remaining: 0,
-  });
-  const guestPreviewsUsed = guestPreviewUsage.used;
-  const guestPreviewRemaining = guestPreviewUsage.remaining;
-  const guestPreviewUsageRef = useRef({ used: 0, remaining: 0 });
-  const updateGuestPreviewUsage = useCallback((used: number, remaining: number) => {
-    const next = { used, remaining };
-    guestPreviewUsageRef.current = next;
-    setGuestPreviewUsage(next);
-  }, []);
+  const [guestPreviewRemaining, setGuestPreviewRemaining] = useState(0);
   const [guestPreviewElapsed, setGuestPreviewElapsed] = useState(0);
   const [freePreviewCatalog, setFreePreviewCatalog] = useState(false);
   const [freePreviewRemaining, setFreePreviewRemaining] = useState(0);
@@ -869,8 +857,7 @@ export default function WatchScreen() {
         if (isGuest) {
           const preview = await previewService.startGuestPreview(episode.id);
           if (cancelled) return;
-          updateGuestPreviewUsage(preview.previewsUsed, preview.previewsRemaining);
-          if (__DEV__) console.log("[PreviewDebug] parent usage", guestPreviewUsageRef.current);
+          setGuestPreviewRemaining(preview.previewsRemaining);
           setFreePreviewCatalog(false);
           freePreviewRemainingRef.current = 0;
           setFreePreviewRemaining(0);
@@ -1709,8 +1696,7 @@ export default function WatchScreen() {
         // trailers; trailers must not become a limit bypass.
         if (isGuest) {
           const preview = await previewService.startGuestPreview(episodeId);
-          updateGuestPreviewUsage(preview.previewsUsed, preview.previewsRemaining);
-          if (__DEV__) console.log("[PreviewDebug] episode usage", guestPreviewUsageRef.current);
+          setGuestPreviewRemaining(preview.previewsRemaining);
           setFreePreviewCatalog(false);
           freePreviewRemainingRef.current = 0;
           if (!preview.allowed || !preview.sessionId || !preview.streamKey) {
@@ -2070,58 +2056,6 @@ export default function WatchScreen() {
           nativeControls={false}
           surfaceType="textureView"
         />
-
-        {__DEV__ && (isGuest || isFreeTier) ? (
-          <View pointerEvents={isFreeTier ? "auto" : "none"} style={styles.previewDebugCard}>
-            <Text style={styles.previewDebugLabel}>PREVIEW TEST</Text>
-            {isGuest ? (
-              <Text style={styles.previewDebugText}>
-                {guestPreviewSessionId
-                  ? (() => {
-                      const elapsed = Math.max(0, guestPreviewElapsed);
-                      const remaining = Math.max(
-                        0,
-                        Math.ceil(guestPreviewMaxSeconds - elapsed),
-                      );
-                      return `Guest · ${elapsed}s / ${guestPreviewMaxSeconds}s · ${remaining}s left`;
-                    })()
-                  : "Guest · preview session pending"}
-              </Text>
-            ) : isFreeTier ? (
-              <Text style={styles.previewDebugText}>
-                Free allowance · {Math.max(0, Math.ceil(freePreviewRemaining))}s left
-              </Text>
-            ) : null}
-            {isGuest ? (
-              <Text style={styles.previewDebugMeta}>
-                {guestPreviewSessionId || guestPreviewsUsed > 0 || guestPreviewRemaining > 0
-                  ? `${guestPreviewsUsed} used · ${guestPreviewRemaining} remaining`
-                  : `Guest preview counters pending · ${isTrailerPlayback ? "trailer bypass" : "session not created"}`}
-              </Text>
-            ) : null}
-            {isFreeTier ? (
-              <Pressable
-                style={styles.previewDebugReset}
-                onPress={() => {
-                  void previewService.resetFreePreview().then((remaining) => {
-                    freePreviewRemainingRef.current = remaining;
-                    setFreePreviewRemaining(remaining);
-                    accessGateActiveRef.current = false;
-                    setShowLimitedAccessLoginModal(false);
-                    safePlayerCall(() => player.play(), "resetFreePreview");
-                  }).catch(() => {
-                    Alert.alert(
-                      "Reset unavailable",
-                      "The server reset endpoint is not deployed yet. Deploy the latest server changes, then try again.",
-                    );
-                  });
-                }}
-              >
-                <Text style={styles.previewDebugResetText}>Reset 20m</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
 
         {accessGateActiveRef.current && !showLimitedAccessLoginModal ? (
           <View style={styles.previewBlockedOverlay}>
@@ -2576,8 +2510,7 @@ export default function WatchScreen() {
         onContinuePreview={async () => {
           if (!selectedEpisodeId) return;
           const preview = await previewService.startGuestPreview(selectedEpisodeId);
-          updateGuestPreviewUsage(preview.previewsUsed, preview.previewsRemaining);
-          if (__DEV__) console.log("[PreviewDebug] continue usage", guestPreviewUsageRef.current);
+          setGuestPreviewRemaining(preview.previewsRemaining);
           if (!preview.allowed || !preview.sessionId || !preview.streamKey) return;
           // A continued preview is a completely new timed session. Reset all
           // timer sources before exposing the player again; otherwise the
@@ -2620,30 +2553,6 @@ export default function WatchScreen() {
         onClose={() => {
           setShowLimitedAccessLoginModal(false);
         }}
-        previewUsage={__DEV__ && isGuest
-          ? guestPreviewUsage
-          : __DEV__ && isFreeTier
-            ? { used: Math.max(0, 1200 - freePreviewRemaining), remaining: freePreviewRemaining }
-            : undefined}
-        onResetPreviewUsage={__DEV__ && isGuest ? () => {
-          void previewService.clearDeviceFingerprint().then(() => {
-            setShowLimitedAccessLoginModal(false);
-            router.replace(`/video/${contentId}${selectedEpisodeId ? `?episodeId=${encodeURIComponent(selectedEpisodeId)}` : ""}`);
-          });
-        } : __DEV__ && isFreeTier ? () => {
-          void previewService.resetFreePreview().then((remaining) => {
-            freePreviewRemainingRef.current = remaining;
-            setFreePreviewRemaining(remaining);
-            accessGateActiveRef.current = false;
-            setShowLimitedAccessLoginModal(false);
-            safePlayerCall(() => player.play(), "resetFreePreviewModal");
-          }).catch(() => {
-            Alert.alert(
-              "Reset unavailable",
-              "The server reset endpoint is not deployed yet. Deploy the latest server changes, then try again.",
-            );
-          });
-        } : undefined}
       />
 
       {/* Settings Modal */}
@@ -2946,50 +2855,6 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   video: { ...StyleSheet.absoluteFill, zIndex: 0 },
-  previewDebugCard: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    zIndex: 50,
-    elevation: 50,
-    minWidth: 142,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.62)",
-    backgroundColor: "rgba(5,5,5,0.84)",
-  },
-  previewDebugLabel: {
-    color: "#fbbf24",
-    fontSize: 8,
-    fontWeight: "800",
-    letterSpacing: 1.1,
-  },
-  previewDebugText: {
-    color: "#f5f5f5",
-    fontSize: 12,
-    fontWeight: "700",
-    marginTop: 3,
-  },
-  previewDebugMeta: {
-    color: "rgba(255,255,255,0.58)",
-    fontSize: 10,
-    marginTop: 2,
-  },
-  previewDebugReset: {
-    marginTop: 6,
-    alignSelf: "flex-start",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
-    backgroundColor: "#fbbf24",
-  },
-  previewDebugResetText: {
-    color: "#050505",
-    fontSize: 9,
-    fontWeight: "800",
-  },
   previewBlockedOverlay: {
     position: "absolute",
     top: 0,

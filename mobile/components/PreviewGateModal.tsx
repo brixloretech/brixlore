@@ -41,8 +41,6 @@ type Props = {
   onClose: () => void;
   freeCatalogItems?: ContentSummaryDto[];
   onCatalogItemPress?: (item: ContentSummaryDto) => void;
-  previewUsage?: { used: number; remaining: number };
-  onResetPreviewUsage?: () => void;
 };
 
 export function PreviewGateModal({
@@ -57,8 +55,6 @@ export function PreviewGateModal({
   onClose,
   freeCatalogItems = [],
   onCatalogItemPress,
-  previewUsage,
-  onResetPreviewUsage,
 }: Props) {
   const [view, setView] = useState<"offers" | "signup">("offers");
   const [plans, setPlans] = useState<PublicPlanDto[]>([]);
@@ -108,24 +104,16 @@ export function PreviewGateModal({
                 <Ionicons name="close" size={20} color="rgba(255,255,255,0.65)" />
               </Pressable>
             ) : null}
-            <Text style={styles.logo}>BRIXLORE.TV</Text>
+            {/* Logo image */}
+            <Image
+              source={require("../assets/splash-icon.png")}
+              style={styles.logoImage}
+              resizeMode="contain"
+              accessibilityLabel="Brixlore.TV"
+            />
+
             <Text style={styles.title}>Continue watching</Text>
             <Text style={styles.description}>{view === "signup" ? "Create your free Brixlore account to keep exploring." : description}</Text>
-
-            {previewUsage ? (
-              <View style={styles.testingCard}>
-                <View>
-                  <Text style={styles.testingLabel}>PREVIEW TEST STATUS</Text>
-                  <Text style={styles.testingValue}>{previewUsage.used} used · {previewUsage.remaining} remaining</Text>
-                </View>
-                {onResetPreviewUsage ? (
-                  <Pressable onPress={onResetPreviewUsage} style={styles.resetButton}>
-                    <Ionicons name="refresh" size={14} color="#050505" />
-                    <Text style={styles.resetButtonText}>Reset</Text>
-                  </Pressable>
-                ) : null}
-              </View>
-            ) : null}
 
             {view === "signup" ? (
               <View style={styles.signupForm}>
@@ -150,7 +138,7 @@ export function PreviewGateModal({
                 <View style={styles.offerList}>
                   <OfferCard title="FREE PASS" price="$0.00" description="Unlock previews and weekly updates on Brixlore." action={isAuthenticated ? "Free account active" : "Join free"} disabled={isAuthenticated} onPress={() => setView("signup")} />
                   <OfferCard title="MONTHLY PASS" price={paidPlan ? `$${paidPlan.price.toFixed(2)}/mo` : "View plans"} description="Unlimited access to every deep-dive and master file." action="Subscribe" onPress={onSubscribe} />
-                  <OfferCard featured title="ANNUAL PASS" price={paidPlan?.yearlyPrice ? `$${paidPlan.yearlyPrice.toFixed(2)}/yr` : "View plans"} description="Get one full year of unlimited access. Save 17%." action="Join & save" badge={paidPlan?.yearlyPrice ? "SAVE 17%" : undefined} onPress={onSubscribe} />
+                  <OfferCard featured title="ANNUAL PASS" price={paidPlan?.yearlyPrice ? `$${paidPlan.yearlyPrice.toFixed(2)}/yr` : "View plans"} description="Get one full year of unlimited access for the price of 10 months. Save 17%." action="Join & save" badge={paidPlan?.yearlyPrice ? "SAVE 17%" : undefined} onPress={onSubscribe} />
                 </View>
                 {freeCatalogItems.length > 0 ? (
                   <View style={styles.catalog}>
@@ -191,6 +179,7 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(5,5,5,0.82)" },
   panel: { maxHeight: "92%", backgroundColor: "#0a0a0b", borderTopLeftRadius: 28, borderTopRightRadius: 28, borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" },
   content: { padding: spacing.lg, paddingBottom: spacing.xl },
+  logoImage: { width: 156, height: 42, alignSelf: "center", marginTop: 4, marginBottom: spacing.sm },
   close: { alignSelf: "flex-end", padding: 5 },
   logo: { color: colors.textPrimary, fontSize: 15, fontWeight: "800", letterSpacing: 2, textAlign: "center", marginTop: 4 },
   title: { ...typography.h2, color: colors.textPrimary, textAlign: "center", marginTop: 20 },
@@ -222,9 +211,4 @@ const styles = StyleSheet.create({
   catalogImage: { width: 76, height: 44, borderRadius: 7, backgroundColor: "#151515" },
   catalogTitle: { flex: 1, color: "rgba(255,255,255,0.8)", fontSize: 12 },
   footer: { color: "rgba(255,255,255,0.3)", fontSize: 10, textAlign: "center", marginTop: 18 },
-  testingCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderWidth: 1, borderColor: "rgba(251,191,36,0.35)", backgroundColor: "rgba(251,191,36,0.08)", padding: 12, marginTop: 16 },
-  testingLabel: { color: "#fbbf24", fontSize: 9, fontWeight: "800", letterSpacing: 1 },
-  testingValue: { color: "rgba(255,255,255,0.75)", fontSize: 12, marginTop: 4 },
-  resetButton: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#f4f4f5", paddingHorizontal: 11, paddingVertical: 8, borderRadius: 16 },
-  resetButtonText: { color: "#050505", fontSize: 11, fontWeight: "800" },
 });

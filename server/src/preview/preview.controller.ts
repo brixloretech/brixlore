@@ -58,8 +58,4 @@ export class PreviewController {
     return this.previewService.consumeFreePreview(user.id, dto.seconds);
   }
 
-  @Post('free-allowance/reset')
-  resetFree(@CurrentUser() user: User) {
-    return this.previewService.resetFreePreview(user.id);
-  }
 }

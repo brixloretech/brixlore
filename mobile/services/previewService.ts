@@ -64,10 +64,6 @@ class PreviewService {
     return fingerprint;
   }
 
-  async clearDeviceFingerprint(): Promise<void> {
-    await AsyncStorage.removeItem(PreviewService.FINGERPRINT_KEY);
-  }
-
   async startGuestPreview(
     episodeId: string,
     deviceFingerprint?: string,
@@ -140,13 +136,6 @@ class PreviewService {
       freeCatalog: false,
       remainingSeconds: response.data.remainingSeconds,
     };
-  }
-
-  async resetFreePreview(): Promise<number> {
-    const response = await api.post<{ remainingSeconds: number }>(
-      "/preview/free-allowance/reset",
-    );
-    return response.data.remainingSeconds;
   }
 
   async signUp(body: {

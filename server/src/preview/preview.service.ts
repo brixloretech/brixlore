@@ -124,12 +124,4 @@ export class PreviewService {
     return { remainingSeconds: Math.max(0, updated.totalSeconds - updated.consumedSeconds) };
   }
 
-  async resetFreePreview(userId: string) {
-    const allowance = await this.prisma.previewAllowance.upsert({
-      where: { userId },
-      create: { userId, totalSeconds: 1200, consumedSeconds: 0 },
-      update: { totalSeconds: 1200, consumedSeconds: 0 },
-    });
-    return { remainingSeconds: allowance.totalSeconds };
-  }
 }
