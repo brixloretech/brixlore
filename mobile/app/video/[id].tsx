@@ -14,6 +14,7 @@ import {
   Modal,
   Animated,
   Platform,
+  Alert,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
@@ -25,16 +26,18 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { colors as themeColors } from "../../src/theme/colors";
 import { spacing, typography, borderRadius } from "../../constants/theme";
-import { contentService, type EpisodeDto } from "../../services/contentService";
+import { contentService, type ContentSummaryDto, type EpisodeDto } from "../../services/contentService";
 import {
+  buildStreamUrl,
   streamingService,
   type PlaybackInfoResponseDto,
 } from "../../services/streamingService";
+import { previewService } from "../../services/previewService";
 import { downloadService } from "../../services/downloadService";
 import { AddToMyListButton } from "../../components/AddToMyListButton";
 import { useAuthStore } from "../../store/useAuthStore";
+import { authService } from "../../services/authService";
 import { useSubscriptionStore } from "../../store/useSubscriptionStore";
-import { useLimitedAccessStore } from "../../store/useLimitedAccessStore";
 import {
   getAudioPosition,
   preloadAudioFromUrl,
@@ -43,6 +46,7 @@ import {
 } from "../../src/services/playbackService";
 import { useAdPlayer } from "../../hooks/useAdPlayer";
 import { AdOverlay } from "../../components/AdOverlay";
+import { PreviewGateModal } from "../../components/PreviewGateModal";
 import { useMatomo } from "../../hooks/useMatomo";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -120,41 +124,7 @@ export default function WatchScreen() {
   const resumeFromUrlSec = Number.isFinite(resumeAtFromUrl)
     ? Math.max(0, Math.floor(resumeAtFromUrl))
     : 0;
-  const { isAuthenticated } = useAuthStore();
-  const videosWatchedCount = useLimitedAccessStore(
-    (state) => state.videosWatchedCount,
-  );
-  const startVideoWatch = useLimitedAccessStore(
-    (state) => state.startVideoWatch,
-  );
-  const stopVideoWatch = useLimitedAccessStore((state) => state.stopVideoWatch);
-  const updateCurrentVideoWatchTime = useLimitedAccessStore(
-    (state) => state.updateCurrentVideoWatchTime,
-  );
-  const setLoginModalShownFor30s = useLimitedAccessStore(
-    (state) => state.setLoginModalShownFor30s,
-  );
-  const resetCurrentVideoWatchTime = useLimitedAccessStore(
-    (state) => state.resetCurrentVideoWatchTime,
-  );
-  const incrementVideosWatched = useLimitedAccessStore(
-    (state) => state.incrementVideosWatched,
-  );
-  const saveLimitedAccessToStorage = useLimitedAccessStore(
-    (state) => state.saveToStorage,
-  );
-  const getEpisodeCumulativeTime = useLimitedAccessStore(
-    (state) => state.getEpisodeCumulativeTime,
-  );
-  const updateEpisodeCumulativeTime = useLimitedAccessStore(
-    (state) => state.updateEpisodeCumulativeTime,
-  );
-  const freeUnlockedVideoId = useLimitedAccessStore(
-    (state) => state.freeUnlockedVideoId,
-  );
-  const setFreeUnlockedVideoId = useLimitedAccessStore(
-    (state) => state.setFreeUnlockedVideoId,
-  );
+  const { isAuthenticated, refreshUser } = useAuthStore();
   const videoViewRef = useRef<VideoView>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasPlayingRef = useRef(false);
@@ -168,7 +138,13 @@ export default function WatchScreen() {
   const watchTimeTrackerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const videoStartPositionRef = useRef<number | null>(null);
   const currentTimeRef = useRef(0);
-  const initialCumulativeTimeRef = useRef<number>(0);
+  const freePreviewRemainingRef = useRef(0);
+  const freePreviewPendingRef = useRef(0);
+  const freePreviewReportingRef = useRef(false);
+  const freePreviewLastReportedPositionRef = useRef(0);
+  const guestPreviewStartedAtRef = useRef<number | null>(null);
+  const guestPreviewGateTriggeredRef = useRef(false);
+  const guestPreviewWallStartRef = useRef<number | null>(null);
   const watchedEpisodeIdRef = useRef<string | null>(null);
   const [savedProgress, setSavedProgress] = useState<number>(0);
   // expo-video player — source is loaded imperatively via player.replace()
@@ -261,6 +237,26 @@ export default function WatchScreen() {
   );
   const [playbackInfo, setPlaybackInfo] =
     useState<PlaybackInfoResponseDto | null>(null);
+  const [guestPreviewSessionId, setGuestPreviewSessionId] = useState<
+    string | null
+  >(null);
+  const [guestPreviewMaxSeconds, setGuestPreviewMaxSeconds] = useState(45);
+  const [guestPreviewUsage, setGuestPreviewUsage] = useState({
+    used: 0,
+    remaining: 0,
+  });
+  const guestPreviewsUsed = guestPreviewUsage.used;
+  const guestPreviewRemaining = guestPreviewUsage.remaining;
+  const guestPreviewUsageRef = useRef({ used: 0, remaining: 0 });
+  const updateGuestPreviewUsage = useCallback((used: number, remaining: number) => {
+    const next = { used, remaining };
+    guestPreviewUsageRef.current = next;
+    setGuestPreviewUsage(next);
+  }, []);
+  const [guestPreviewElapsed, setGuestPreviewElapsed] = useState(0);
+  const [freePreviewCatalog, setFreePreviewCatalog] = useState(false);
+  const [freePreviewRemaining, setFreePreviewRemaining] = useState(0);
+  const [freeCatalogItems, setFreeCatalogItems] = useState<ContentSummaryDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [comingSoon, setComingSoon] = useState(false);
   const [playbackError, setPlaybackError] = useState<
@@ -273,13 +269,13 @@ export default function WatchScreen() {
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showLimitedAccessLoginModal, setShowLimitedAccessLoginModal] =
     useState(false);
+  const accessGateActiveRef = useRef(false);
   const [limitedAccessModalReason, setLimitedAccessModalReason] = useState<
     "video-limit" | "watch-time" | "free-tier-limit" | "guest-limit"
   >("watch-time");
   const { subscription, fetchSubscription } = useSubscriptionStore();
   const isFreeTier = isAuthenticated && !subscription?.isSubscribed;
   const isGuest = !isAuthenticated;
-  const showUpgradeModal2SecRef = useRef(false);
   const controlsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Last-resort UI guard. API and player failures must resolve to an actionable
@@ -326,6 +322,75 @@ export default function WatchScreen() {
     }, 4000);
   }, []);
 
+  const reportFreePreviewConsumption = useCallback(() => {
+    if (
+      freePreviewReportingRef.current ||
+      freePreviewPendingRef.current <= 0 ||
+      freePreviewRemainingRef.current <= 0
+    ) return;
+    const seconds = Math.min(
+      Math.floor(freePreviewPendingRef.current),
+      freePreviewRemainingRef.current,
+    );
+    if (seconds <= 0) return;
+    freePreviewPendingRef.current -= seconds;
+    freePreviewReportingRef.current = true;
+    void previewService.consumeFreePreview(seconds)
+      .then((result) => {
+        freePreviewRemainingRef.current = result.remainingSeconds;
+        setFreePreviewRemaining(result.remainingSeconds);
+        if (result.remainingSeconds > 0) return;
+        accessGateActiveRef.current = true;
+        safePlayerCall(() => player.pause(), "freePreviewLimitPause");
+        setShowLimitedAccessLoginModal(true);
+        setLimitedAccessModalReason("free-tier-limit");
+        setIsPlaying(false);
+      })
+      .catch(() => {
+        freePreviewPendingRef.current += seconds;
+      })
+      .finally(() => {
+        freePreviewReportingRef.current = false;
+      });
+  }, [player, safePlayerCall]);
+
+  useEffect(() => {
+    if (!isGuest || !guestPreviewSessionId || showLimitedAccessLoginModal) {
+      return;
+    }
+    const timer = setInterval(() => {
+      if (!player.playing) return;
+      if (guestPreviewWallStartRef.current === null) {
+        guestPreviewWallStartRef.current = Date.now();
+      }
+      const elapsed = Math.floor(
+        (Date.now() - guestPreviewWallStartRef.current) / 1000,
+      );
+      setGuestPreviewElapsed(elapsed);
+      if (elapsed < guestPreviewMaxSeconds || guestPreviewGateTriggeredRef.current) {
+        return;
+      }
+      guestPreviewGateTriggeredRef.current = true;
+      accessGateActiveRef.current = true;
+      void previewService.completeGuestPreview(
+        guestPreviewSessionId,
+        guestPreviewMaxSeconds,
+      );
+      safePlayerCall(() => player.pause(), "guestPreviewTimerPause");
+      setLimitedAccessModalReason("guest-limit");
+      setShowLimitedAccessLoginModal(true);
+      setIsPlaying(false);
+    }, 250);
+    return () => clearInterval(timer);
+  }, [
+    guestPreviewMaxSeconds,
+    guestPreviewSessionId,
+    isGuest,
+    player,
+    safePlayerCall,
+    showLimitedAccessLoginModal,
+  ]);
+
   // Keep showControlsRef current for stable callbacks
   useEffect(() => { showControlsRef.current = showControls; }, [showControls]);
 
@@ -357,24 +422,9 @@ export default function WatchScreen() {
       });
       backgroundAudioActiveRef.current = false;
 
-      // Save cumulative watch time for free tier tracking
-      if (watchedEpisodeIdRef.current && isFreeTier) {
-        const currentPos = currentTimeRef.current;
-        if (videoStartPositionRef.current !== null && currentPos > 0) {
-          const actualPlaybackTime = Math.floor(
-            currentPos - videoStartPositionRef.current,
-          );
-          const totalWatchedTime =
-            initialCumulativeTimeRef.current + actualPlaybackTime;
-          updateEpisodeCumulativeTime(
-            watchedEpisodeIdRef.current,
-            totalWatchedTime,
-          );
-          saveLimitedAccessToStorage();
-        }
-      }
+      reportFreePreviewConsumption();
     };
-  }, [isFreeTier, updateEpisodeCumulativeTime, saveLimitedAccessToStorage, player, safePlayerCall]);
+  }, [player, safePlayerCall, reportFreePreviewConsumption]);
 
   // Pause the player whenever this screen loses focus (e.g. user pushes a new
   // video screen on top). Without this, the old player keeps playing audio while
@@ -486,45 +536,41 @@ export default function WatchScreen() {
     }
   }, [isAuthenticated, fetchSubscription]);
 
+  useEffect(() => {
+    if (
+      !showLimitedAccessLoginModal ||
+      (limitedAccessModalReason !== "video-limit" &&
+        limitedAccessModalReason !== "free-tier-limit")
+    ) {
+      return;
+    }
+    void contentService
+      .getFreeCatalog(4)
+      .then(setFreeCatalogItems)
+      .catch(() => setFreeCatalogItems([]));
+  }, [showLimitedAccessLoginModal, limitedAccessModalReason]);
+
   // Reset limited access timer when starting a new video
   useEffect(() => {
-    resetCurrentVideoWatchTime();
     videoStartPositionRef.current = null;
-    showUpgradeModal2SecRef.current = false;
+    freePreviewPendingRef.current = 0;
+    freePreviewLastReportedPositionRef.current = 0;
 
     if (isTrailerPlayback) {
-      initialCumulativeTimeRef.current = 0;
       watchedEpisodeIdRef.current = null;
       return;
     }
 
-    // Load cumulative time for this episode (for free tier tracking)
     const episodeId = episodeIdFromUrl || contentId;
     if (episodeId && (isFreeTier || isGuest)) {
-      // Check if this is the unlocked video (Free Tier only)
-      const isUnlocked = isFreeTier && episodeId === freeUnlockedVideoId;
-
-      const cumulativeTime = getEpisodeCumulativeTime(episodeId);
-      initialCumulativeTimeRef.current = cumulativeTime;
       watchedEpisodeIdRef.current = episodeId;
-
-      // If already watched for 2+ minutes AND NOT UNLOCKED, show modal immediately
-      if (cumulativeTime >= 120 && !isUnlocked) {
-        showUpgradeModal2SecRef.current = true;
-        setShowLimitedAccessLoginModal(true);
-        setLimitedAccessModalReason("free-tier-limit");
-        setIsPlaying(false);
-      }
     } else {
-      initialCumulativeTimeRef.current = 0;
       watchedEpisodeIdRef.current = null;
     }
   }, [
     contentId,
     episodeIdFromUrl,
-    resetCurrentVideoWatchTime,
     isFreeTier,
-    getEpisodeCumulativeTime,
     isTrailerPlayback,
   ]);
 
@@ -578,21 +624,8 @@ export default function WatchScreen() {
     durationRef.current = duration;
   }, [duration]);
 
-  // Limited Access: Check if user is trying to watch more than 3 videos
-  // (This is a backup check to ensure modal stays visible if state changes)
-  useEffect(() => {
-    if (isGuest && selectedEpisodeId && !isTrailerPlayback) {
-      const liveState = useLimitedAccessStore.getState();
-      if (!liveState.watchedVideoIds.has(selectedEpisodeId) && liveState.videosWatchedCount >= 3) {
-        safePlayerCall(() => player.pause(), "backupLimitPause");
-        setShowLimitedAccessLoginModal(true);
-        setLimitedAccessModalReason("video-limit");
-        setIsPlaying(false);
-      }
-    }
-  }, [selectedEpisodeId, isGuest, videosWatchedCount, isTrailerPlayback]);
-
-  // Limited Access: Track actual video playback time and show login after 30 seconds (or 2 minutes for free tier)
+  // Limited Access: track actual playback time. Guest limits come from the
+  // preview-session API; free-tier handling is migrated in the next step.
   useEffect(() => {
     if (isTrailerPlayback) {
       if (watchTimeTrackerRef.current) {
@@ -617,72 +650,25 @@ export default function WatchScreen() {
           const actualPlaybackTime = Math.floor(
             currentPos - videoStartPositionRef.current,
           );
-          updateCurrentVideoWatchTime(actualPlaybackTime);
-
-          // FREE TIER: Show modal after 2 minutes (cumulative across sessions)
+          // FREE TIER: report actual playback to the server allowance.
           if (isFreeTier && watchedEpisodeIdRef.current) {
-            const isUnlocked = watchedEpisodeIdRef.current === freeUnlockedVideoId;
-
-            // If this is the FIRST video they play, unlock it permanently
-            if (!freeUnlockedVideoId) {
-              setFreeUnlockedVideoId(watchedEpisodeIdRef.current);
-              saveLimitedAccessToStorage();
-              // Don't apply limit for the first video
-              return;
+            if (freePreviewCatalog) return;
+            const delta = Math.max(
+              0,
+              Math.min(
+                2,
+                actualPlaybackTime -
+                  freePreviewLastReportedPositionRef.current,
+              ),
+            );
+            freePreviewLastReportedPositionRef.current = actualPlaybackTime;
+            freePreviewPendingRef.current += delta;
+            if (freePreviewPendingRef.current >= 10) {
+              reportFreePreviewConsumption();
             }
-
-            // If it's the unlocked video, don't apply 2-minute limit
-            if (isUnlocked) {
-              return;
-            }
-
-            const totalWatchedTime =
-              initialCumulativeTimeRef.current + actualPlaybackTime;
-
-            // Update cumulative time in store every 5 seconds of playback
-            if (actualPlaybackTime > 0 && actualPlaybackTime % 5 === 0) {
-              updateEpisodeCumulativeTime(
-                watchedEpisodeIdRef.current,
-                totalWatchedTime,
-              );
-              saveLimitedAccessToStorage();
-            }
-
-            if (totalWatchedTime >= 120 && !showUpgradeModal2SecRef.current) {
-              showUpgradeModal2SecRef.current = true;
-              // Save final cumulative time
-              updateEpisodeCumulativeTime(
-                watchedEpisodeIdRef.current,
-                totalWatchedTime,
-              );
-              saveLimitedAccessToStorage();
-              safePlayerCall(() => player.pause(), "freeTierLimitPause");
-              setShowLimitedAccessLoginModal(true);
-              setLimitedAccessModalReason("free-tier-limit");
-              setIsPlaying(false);
-              if (watchTimeTrackerRef.current) {
-                clearInterval(watchTimeTrackerRef.current);
-                watchTimeTrackerRef.current = null;
-              }
-              return;
-            }
+            return;
           }
 
-          // GUEST (NOT AUTHENTICATED): Show login modal after 120 seconds (2 minutes) of actual playback
-          if (isGuest) {
-            const { loginModalShownFor30s } = useLimitedAccessStore.getState();
-            if (actualPlaybackTime >= 120 && !loginModalShownFor30s) {
-              setLoginModalShownFor30s(true);
-              safePlayerCall(() => player.pause(), "guestLimitPause");
-              setShowLimitedAccessLoginModal(true);
-              setLimitedAccessModalReason("guest-limit");
-              setIsPlaying(false);
-              if (watchTimeTrackerRef.current) {
-                clearInterval(watchTimeTrackerRef.current);
-                watchTimeTrackerRef.current = null;
-              }
-            }
-          }
         }
       }, 1000); // Check every second
 
@@ -699,15 +685,14 @@ export default function WatchScreen() {
     isPlaying,
     showLimitedAccessLoginModal,
     isFreeTier,
-    setLoginModalShownFor30s,
-    updateCurrentVideoWatchTime,
-    updateEpisodeCumulativeTime,
-    saveLimitedAccessToStorage,
+    freePreviewCatalog,
+    reportFreePreviewConsumption,
   ]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      accessGateActiveRef.current = false;
       setLoading(true);
       setPlaybackError(null);
       setComingSoon(false);
@@ -834,24 +819,6 @@ export default function WatchScreen() {
           contentDetail.type === "TRAILER" ||
           (contentDetail.trailer && episode.id === contentDetail.trailer.id);
 
-        // ===== GUEST VIDEO LIMIT CHECK =====
-        // Now we know the EXACT episode that will play and whether it's a trailer.
-        // Block BEFORE fetching playback URL if guest has exceeded 3 previews.
-        if (isGuest && !isTrailerSelection) {
-          const liveState = useLimitedAccessStore.getState();
-          if (
-            liveState.videosWatchedCount >= 3 &&
-            !liveState.watchedVideoIds.has(episode.id)
-          ) {
-            setLoading(false);
-            safePlayerCall(() => player.pause(), "videoLimitLoadPause");
-            setShowLimitedAccessLoginModal(true);
-            setLimitedAccessModalReason("video-limit");
-            setIsPlaying(false);
-            return;
-          }
-        }
-
         if (isAuthenticated) {
           let nextSavedProgress = resumeFromUrlSec;
           // Fetch saved progress from continue watching BEFORE loading video
@@ -886,9 +853,81 @@ export default function WatchScreen() {
         // how to fall back from an expired authenticated session to guest play.
         // Do not race it against a second timer here: that race could resolve
         // with null while the valid guest response was still arriving.
-        const playbackRes = await streamingService.getPlaybackInfo(episode.id, {
-          asGuest: !isAuthenticated,
-        });
+        let playbackRes: PlaybackInfoResponseDto | null;
+        if (__DEV__) {
+          console.log("[PreviewDebug] playback access branch", {
+            episodeId: episode.id,
+            isGuest,
+            isAuthenticated,
+            isFreeTier,
+            isTrailerSelection,
+          });
+        }
+        // Guest access is always server-gated, including trailers. This
+        // prevents a user who has exhausted all previews from bypassing the
+        // subscription gate by selecting a trailer episode.
+        if (isGuest) {
+          const preview = await previewService.startGuestPreview(episode.id);
+          if (cancelled) return;
+          updateGuestPreviewUsage(preview.previewsUsed, preview.previewsRemaining);
+          if (__DEV__) console.log("[PreviewDebug] parent usage", guestPreviewUsageRef.current);
+          setFreePreviewCatalog(false);
+          freePreviewRemainingRef.current = 0;
+          setFreePreviewRemaining(0);
+          if (!preview.allowed || !preview.sessionId || !preview.streamKey) {
+            accessGateActiveRef.current = true;
+            safePlayerCall(() => player.pause(), "previewLimitLoadPause");
+            setShowLimitedAccessLoginModal(true);
+            setLimitedAccessModalReason("video-limit");
+            setIsPlaying(false);
+            return;
+          }
+          setGuestPreviewSessionId(preview.sessionId);
+          guestPreviewStartedAtRef.current = null;
+          guestPreviewGateTriggeredRef.current = false;
+          guestPreviewWallStartRef.current = null;
+          setGuestPreviewElapsed(0);
+          setGuestPreviewMaxSeconds(preview.maxSeconds ?? 45);
+          playbackRes = {
+            episodeId: episode.id,
+            type: preview.type ?? "hls",
+            streamKey: preview.streamKey,
+            url: buildStreamUrl(preview.streamKey),
+          };
+        } else if (isFreeTier) {
+          const preview = await previewService.startFreePreview(episode.id);
+          if (cancelled) return;
+          setFreePreviewCatalog(preview.freeCatalog);
+          freePreviewRemainingRef.current = preview.remainingSeconds;
+          setFreePreviewRemaining(preview.remainingSeconds);
+          freePreviewPendingRef.current = 0;
+          freePreviewLastReportedPositionRef.current = 0;
+          if (!preview.allowed || !preview.streamKey) {
+            accessGateActiveRef.current = true;
+            safePlayerCall(() => player.pause(), "freePreviewLimitLoadPause");
+            setShowLimitedAccessLoginModal(true);
+            setLimitedAccessModalReason("free-tier-limit");
+            setIsPlaying(false);
+            return;
+          }
+          setGuestPreviewSessionId(null);
+          guestPreviewStartedAtRef.current = null;
+          guestPreviewGateTriggeredRef.current = false;
+          playbackRes = {
+            episodeId: episode.id,
+            type: preview.type ?? "hls",
+            streamKey: preview.streamKey,
+            url: buildStreamUrl(preview.streamKey),
+          };
+        } else {
+          setFreePreviewCatalog(false);
+          freePreviewRemainingRef.current = 0;
+          setFreePreviewRemaining(0);
+          setGuestPreviewSessionId(null);
+          playbackRes = await streamingService.getPlaybackInfo(episode.id, {
+            asGuest: !isAuthenticated,
+          });
+        }
         if (cancelled) return;
         if (!playbackRes?.url) {
           console.error(
@@ -901,15 +940,6 @@ export default function WatchScreen() {
         console.log("[Watch] Loaded playback info successfully");
         setPlaybackInfo(playbackRes);
 
-        // Mark video as watched for limited access tracking (only if Guest)
-        // Track by EPISODE ID, not content ID, so each episode counts separately
-        if (isGuest && episode && !isTrailerSelection) {
-          const liveState = useLimitedAccessStore.getState();
-          if (!liveState.watchedVideoIds.has(episode.id)) {
-            incrementVideosWatched(episode.id);
-            saveLimitedAccessToStorage();
-          }
-        }
       } catch (err: any) {
         if (cancelled) return;
         const isExpectedGuestAuthError =
@@ -918,9 +948,10 @@ export default function WatchScreen() {
         if (!isExpectedGuestAuthError) {
           console.error("[Watch] Error loading video:", err);
         }
-        if (err.message === "unauthorized") {
+        const status = err?.response?.status;
+        if (err.message === "unauthorized" || status === 401) {
           setPlaybackError("unauthorized");
-        } else if (err.message === "forbidden") {
+        } else if (err.message === "forbidden" || status === 403) {
           setPlaybackError("forbidden");
         } else {
           setPlaybackError("unavailable");
@@ -935,9 +966,9 @@ export default function WatchScreen() {
   }, [
     contentId,
     episodeIdFromUrl,
-    incrementVideosWatched,
     isAuthenticated,
-    saveLimitedAccessToStorage,
+    isGuest,
+    isFreeTier,
   ]);
 
   // Fetch similar videos
@@ -978,23 +1009,15 @@ export default function WatchScreen() {
     contentEndedRef.current = false;
     adJustResumedRef.current = false;
 
-    // Prepare the movie immediately, but keep it paused until the ad flow has
-    // completed. This lets expo-video report readiness independently of ads.
-    safePlayerCall(() => player.pause(), "prePrerollPause");
+    // Start content directly. The startup pre-roll is intentionally disabled.
     safePlayerCall(() => player.replace({ uri: url }), "sourceReplace");
-    const continueToMovie = () => {
-      if (cancelled) return;
-      // Never allow the content player to start beneath a visible/loading ad.
-      // The previous timer-based fallback fired after 12 seconds regardless of
-      // whether an ad was still playing, which made the two videos overlap.
-      if (adSystem.adActiveRef.current) return;
-      safePlayerCall(() => player.play(), "postPrerollPlay");
-    };
-    void adSystem.triggerPreRoll().then(continueToMovie).catch(continueToMovie);
+    safePlayerCall(() => {
+      if (!cancelled) player.play();
+    }, "directContentPlay");
     return () => {
       cancelled = true;
     };
-  }, [adSystem.adActiveRef, adSystem.triggerPreRoll, playbackInfo?.url, player, safePlayerCall]);
+  }, [playbackInfo?.url, player, safePlayerCall]);
 
   // GAP 1: Quality selector URL rebuild (`?quality=720p`) and keep playback position.
   useEffect(() => {
@@ -1052,6 +1075,7 @@ export default function WatchScreen() {
       }
     } else if (status === "error") {
       console.error("[Watch] Video playback error");
+      if (accessGateActiveRef.current) return;
       setPlaybackError("unavailable");
       setLoading(false);
     }
@@ -1061,6 +1085,28 @@ export default function WatchScreen() {
   useEventListener(player, "timeUpdate", ({ currentTime: ct }: { currentTime: number; bufferedPosition: number }) => {
     currentTimeRef.current = ct;
     adSystem.onTimeUpdate(ct);
+
+    // Gate guest previews directly from the native player's time event. This
+    // is more reliable than a separate interval when ads, fullscreen, or
+    // player buffering affect React state updates.
+    if (isGuest && guestPreviewSessionId && !guestPreviewGateTriggeredRef.current) {
+      if (guestPreviewStartedAtRef.current === null && ct > 0) {
+        guestPreviewStartedAtRef.current = ct;
+      }
+      const startedAt = guestPreviewStartedAtRef.current;
+      if (startedAt !== null && ct - startedAt >= guestPreviewMaxSeconds) {
+        guestPreviewGateTriggeredRef.current = true;
+        accessGateActiveRef.current = true;
+        void previewService.completeGuestPreview(
+          guestPreviewSessionId,
+          guestPreviewMaxSeconds,
+        );
+        safePlayerCall(() => player.pause(), "guestPreviewTimeUpdatePause");
+        setLimitedAccessModalReason("guest-limit");
+        setShowLimitedAccessLoginModal(true);
+        setIsPlaying(false);
+      }
+    }
 
     if (isDraggingRef.current) {
       return;
@@ -1602,6 +1648,7 @@ export default function WatchScreen() {
   const handleEpisodeSelect = useCallback(
     async (episodeId: string) => {
       setSelectedEpisodeId(episodeId);
+      accessGateActiveRef.current = false;
       setLoading(true);
       setPlaybackError(null);
       setSavedProgress(0);
@@ -1611,7 +1658,8 @@ export default function WatchScreen() {
       setDuration(0);
       // Reset watch time tracking for new episode
       videoStartPositionRef.current = null;
-      showUpgradeModal2SecRef.current = false;
+      guestPreviewWallStartRef.current = null;
+      setGuestPreviewElapsed(0);
       // Reset ad tracking so all slots can fire again for the new episode.
       adSystem.resetAdState();
       // Reset analytics tracking state for the new episode.
@@ -1644,9 +1692,82 @@ export default function WatchScreen() {
           }
         }
 
-        const playbackRes = await streamingService.getPlaybackInfo(episodeId, {
-          asGuest: !isAuthenticated,
-        });
+        let playbackRes: PlaybackInfoResponseDto | null;
+        const isTrailerSelection =
+          content?.type === "TRAILER" ||
+          (content?.trailer && episodeId === content.trailer.id);
+        if (__DEV__) {
+          console.log("[PreviewDebug] episode access branch", {
+            episodeId,
+            isGuest,
+            isAuthenticated,
+            isFreeTier,
+            isTrailerSelection,
+          });
+        }
+        // Keep the same limit for every guest-playable episode, including
+        // trailers; trailers must not become a limit bypass.
+        if (isGuest) {
+          const preview = await previewService.startGuestPreview(episodeId);
+          updateGuestPreviewUsage(preview.previewsUsed, preview.previewsRemaining);
+          if (__DEV__) console.log("[PreviewDebug] episode usage", guestPreviewUsageRef.current);
+          setFreePreviewCatalog(false);
+          freePreviewRemainingRef.current = 0;
+          if (!preview.allowed || !preview.sessionId || !preview.streamKey) {
+            setPlaybackInfo(null);
+            accessGateActiveRef.current = true;
+            safePlayerCall(() => player.pause(), "episodePreviewLimitPause");
+            setShowLimitedAccessLoginModal(true);
+            setLimitedAccessModalReason("video-limit");
+            setIsPlaying(false);
+            return;
+          }
+          setGuestPreviewSessionId(preview.sessionId);
+          guestPreviewStartedAtRef.current = null;
+          guestPreviewGateTriggeredRef.current = false;
+          guestPreviewWallStartRef.current = null;
+          setGuestPreviewElapsed(0);
+          setGuestPreviewMaxSeconds(preview.maxSeconds ?? 45);
+          playbackRes = {
+            episodeId,
+            type: preview.type ?? "hls",
+            streamKey: preview.streamKey,
+            url: buildStreamUrl(preview.streamKey),
+          };
+        } else if (isFreeTier) {
+          const preview = await previewService.startFreePreview(episodeId);
+          setFreePreviewCatalog(preview.freeCatalog);
+          freePreviewRemainingRef.current = preview.remainingSeconds;
+          setFreePreviewRemaining(preview.remainingSeconds);
+          freePreviewPendingRef.current = 0;
+          freePreviewLastReportedPositionRef.current = 0;
+          if (!preview.allowed || !preview.streamKey) {
+            setPlaybackInfo(null);
+            accessGateActiveRef.current = true;
+            safePlayerCall(() => player.pause(), "episodeFreePreviewLimitPause");
+            setShowLimitedAccessLoginModal(true);
+            setLimitedAccessModalReason("free-tier-limit");
+            setIsPlaying(false);
+            return;
+          }
+          setGuestPreviewSessionId(null);
+          guestPreviewStartedAtRef.current = null;
+          guestPreviewGateTriggeredRef.current = false;
+          playbackRes = {
+            episodeId,
+            type: preview.type ?? "hls",
+            streamKey: preview.streamKey,
+            url: buildStreamUrl(preview.streamKey),
+          };
+        } else {
+          setFreePreviewCatalog(false);
+          freePreviewRemainingRef.current = 0;
+          setFreePreviewRemaining(0);
+          setGuestPreviewSessionId(null);
+          playbackRes = await streamingService.getPlaybackInfo(episodeId, {
+            asGuest: !isAuthenticated,
+          });
+        }
         if (playbackRes?.url) {
           setPlaybackInfo(playbackRes);
           const allEpisodes = [
@@ -1662,28 +1783,6 @@ export default function WatchScreen() {
             });
           }
 
-          if (isGuest) {
-            const isTrailerSelection =
-              content?.type === "TRAILER" ||
-              (content?.trailer && episodeId === content.trailer.id);
-            if (!isTrailerSelection) {
-              // Check guest limit BEFORE allowing playback
-              const liveState = useLimitedAccessStore.getState();
-              if (!liveState.watchedVideoIds.has(episodeId)) {
-                if (liveState.videosWatchedCount >= 3) {
-                  // Already at limit, block this episode
-                  setPlaybackInfo(null);
-                  safePlayerCall(() => player.pause(), "episodeLimitPause");
-                  setShowLimitedAccessLoginModal(true);
-                  setLimitedAccessModalReason("video-limit");
-                  setIsPlaying(false);
-                  return;
-                }
-                incrementVideosWatched(episodeId);
-                saveLimitedAccessToStorage();
-              }
-            }
-          }
         } else {
           setPlaybackError("unavailable");
         }
@@ -1694,9 +1793,10 @@ export default function WatchScreen() {
         if (!isExpectedGuestAuthError) {
           console.error("[Watch] Error changing episode:", err);
         }
-        if (err.message === "unauthorized") {
+        const status = err?.response?.status;
+        if (err.message === "unauthorized" || status === 401) {
           setPlaybackError("unauthorized");
-        } else if (err.message === "forbidden") {
+        } else if (err.message === "forbidden" || status === 403) {
           setPlaybackError("forbidden");
         } else {
           setPlaybackError("unavailable");
@@ -1708,9 +1808,9 @@ export default function WatchScreen() {
     [
       content,
       contentId,
-      incrementVideosWatched,
       isAuthenticated,
-      saveLimitedAccessToStorage,
+      isGuest,
+      isFreeTier,
       seasonEpisodesById,
     ],
   );
@@ -1874,7 +1974,7 @@ export default function WatchScreen() {
     );
   }
 
-  if (playbackError) {
+  if (playbackError && !accessGateActiveRef.current) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.errorContainer}>
@@ -1899,7 +1999,9 @@ export default function WatchScreen() {
       </SafeAreaView>
     );
   }
-  if (!playbackInfo || !primaryEpisode) {
+  // A denied preview intentionally has no playback source, but must still
+  // render the access modal so the user can continue, sign up, or subscribe.
+  if ((!playbackInfo || !primaryEpisode) && !showLimitedAccessLoginModal) {
     return (
       <SafeAreaView style={styles.container} edges={["top"]}>
         <View style={styles.errorContainer}>
@@ -1968,6 +2070,74 @@ export default function WatchScreen() {
           nativeControls={false}
           surfaceType="textureView"
         />
+
+        {__DEV__ && (isGuest || isFreeTier) ? (
+          <View pointerEvents={isFreeTier ? "auto" : "none"} style={styles.previewDebugCard}>
+            <Text style={styles.previewDebugLabel}>PREVIEW TEST</Text>
+            {isGuest ? (
+              <Text style={styles.previewDebugText}>
+                {guestPreviewSessionId
+                  ? (() => {
+                      const elapsed = Math.max(0, guestPreviewElapsed);
+                      const remaining = Math.max(
+                        0,
+                        Math.ceil(guestPreviewMaxSeconds - elapsed),
+                      );
+                      return `Guest · ${elapsed}s / ${guestPreviewMaxSeconds}s · ${remaining}s left`;
+                    })()
+                  : "Guest · preview session pending"}
+              </Text>
+            ) : isFreeTier ? (
+              <Text style={styles.previewDebugText}>
+                Free allowance · {Math.max(0, Math.ceil(freePreviewRemaining))}s left
+              </Text>
+            ) : null}
+            {isGuest ? (
+              <Text style={styles.previewDebugMeta}>
+                {guestPreviewSessionId || guestPreviewsUsed > 0 || guestPreviewRemaining > 0
+                  ? `${guestPreviewsUsed} used · ${guestPreviewRemaining} remaining`
+                  : `Guest preview counters pending · ${isTrailerPlayback ? "trailer bypass" : "session not created"}`}
+              </Text>
+            ) : null}
+            {isFreeTier ? (
+              <Pressable
+                style={styles.previewDebugReset}
+                onPress={() => {
+                  void previewService.resetFreePreview().then((remaining) => {
+                    freePreviewRemainingRef.current = remaining;
+                    setFreePreviewRemaining(remaining);
+                    accessGateActiveRef.current = false;
+                    setShowLimitedAccessLoginModal(false);
+                    safePlayerCall(() => player.play(), "resetFreePreview");
+                  }).catch(() => {
+                    Alert.alert(
+                      "Reset unavailable",
+                      "The server reset endpoint is not deployed yet. Deploy the latest server changes, then try again.",
+                    );
+                  });
+                }}
+              >
+                <Text style={styles.previewDebugResetText}>Reset 20m</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {accessGateActiveRef.current && !showLimitedAccessLoginModal ? (
+          <View style={styles.previewBlockedOverlay}>
+            <Text style={styles.previewBlockedText}>
+              Preview access is required to continue watching
+            </Text>
+            <Pressable
+              style={styles.previewBlockedButton}
+              onPress={() => setShowLimitedAccessLoginModal(true)}
+            >
+              <Text style={styles.previewBlockedButtonText}>
+                View access options
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* Controls Overlay — always mounted for fade animation */}
         <Animated.View
@@ -2273,7 +2443,7 @@ export default function WatchScreen() {
 
       {/* Limited Access Login Modal */}
       <Modal
-        visible={showLimitedAccessLoginModal}
+        visible={false}
         transparent
         animationType="fade"
         onRequestClose={() => {
@@ -2396,6 +2566,85 @@ export default function WatchScreen() {
           </View>
         </View>
       </Modal>
+
+      <PreviewGateModal
+        visible={showLimitedAccessLoginModal}
+        reason={limitedAccessModalReason}
+        contentTitle={content?.title ?? "this story"}
+        isAuthenticated={isAuthenticated}
+        allowContinuePreview={isGuest && guestPreviewRemaining > 0}
+        onContinuePreview={async () => {
+          if (!selectedEpisodeId) return;
+          const preview = await previewService.startGuestPreview(selectedEpisodeId);
+          updateGuestPreviewUsage(preview.previewsUsed, preview.previewsRemaining);
+          if (__DEV__) console.log("[PreviewDebug] continue usage", guestPreviewUsageRef.current);
+          if (!preview.allowed || !preview.sessionId || !preview.streamKey) return;
+          // A continued preview is a completely new timed session. Reset all
+          // timer sources before exposing the player again; otherwise the
+          // previous 45-second wall clock can immediately reopen the gate.
+          accessGateActiveRef.current = false;
+          guestPreviewWallStartRef.current = null;
+          setGuestPreviewSessionId(preview.sessionId);
+          guestPreviewStartedAtRef.current = null;
+          guestPreviewGateTriggeredRef.current = false;
+          setGuestPreviewElapsed(0);
+          setGuestPreviewMaxSeconds(preview.maxSeconds ?? 45);
+          setPlaybackInfo({
+            episodeId: selectedEpisodeId,
+            type: preview.type ?? "hls",
+            streamKey: preview.streamKey,
+            url: buildStreamUrl(preview.streamKey),
+          });
+          setShowLimitedAccessLoginModal(false);
+          setIsPlaying(true);
+          safePlayerCall(() => player.play(), "continueGuestPreview");
+        }}
+        onJoinFree={async (details) => {
+          const tokens = await previewService.signUp(details);
+          await authService.storePreviewSessionTokens(tokens);
+          await refreshUser();
+          accessGateActiveRef.current = false;
+          setShowLimitedAccessLoginModal(false);
+        }}
+        onSubscribe={() => {
+          accessGateActiveRef.current = false;
+          setShowLimitedAccessLoginModal(false);
+          router.push("/plans");
+        }}
+        freeCatalogItems={freeCatalogItems}
+        onCatalogItemPress={(item) => {
+          accessGateActiveRef.current = false;
+          setShowLimitedAccessLoginModal(false);
+          router.push(`/video/${item.id}`);
+        }}
+        onClose={() => {
+          setShowLimitedAccessLoginModal(false);
+        }}
+        previewUsage={__DEV__ && isGuest
+          ? guestPreviewUsage
+          : __DEV__ && isFreeTier
+            ? { used: Math.max(0, 1200 - freePreviewRemaining), remaining: freePreviewRemaining }
+            : undefined}
+        onResetPreviewUsage={__DEV__ && isGuest ? () => {
+          void previewService.clearDeviceFingerprint().then(() => {
+            setShowLimitedAccessLoginModal(false);
+            router.replace(`/video/${contentId}${selectedEpisodeId ? `?episodeId=${encodeURIComponent(selectedEpisodeId)}` : ""}`);
+          });
+        } : __DEV__ && isFreeTier ? () => {
+          void previewService.resetFreePreview().then((remaining) => {
+            freePreviewRemainingRef.current = remaining;
+            setFreePreviewRemaining(remaining);
+            accessGateActiveRef.current = false;
+            setShowLimitedAccessLoginModal(false);
+            safePlayerCall(() => player.play(), "resetFreePreviewModal");
+          }).catch(() => {
+            Alert.alert(
+              "Reset unavailable",
+              "The server reset endpoint is not deployed yet. Deploy the latest server changes, then try again.",
+            );
+          });
+        } : undefined}
+      />
 
       {/* Settings Modal */}
       <Modal
@@ -2697,6 +2946,83 @@ const styles = StyleSheet.create({
     height: "100%",
   },
   video: { ...StyleSheet.absoluteFill, zIndex: 0 },
+  previewDebugCard: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    zIndex: 50,
+    elevation: 50,
+    minWidth: 142,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.62)",
+    backgroundColor: "rgba(5,5,5,0.84)",
+  },
+  previewDebugLabel: {
+    color: "#fbbf24",
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 1.1,
+  },
+  previewDebugText: {
+    color: "#f5f5f5",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  previewDebugMeta: {
+    color: "rgba(255,255,255,0.58)",
+    fontSize: 10,
+    marginTop: 2,
+  },
+  previewDebugReset: {
+    marginTop: 6,
+    alignSelf: "flex-start",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 4,
+    backgroundColor: "#fbbf24",
+  },
+  previewDebugResetText: {
+    color: "#050505",
+    fontSize: 9,
+    fontWeight: "800",
+  },
+  previewBlockedOverlay: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    zIndex: 60,
+    elevation: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+    backgroundColor: "rgba(0,0,0,0.72)",
+  },
+  previewBlockedText: {
+    color: "rgba(255,255,255,0.82)",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  previewBlockedButton: {
+    marginTop: 12,
+    minHeight: 40,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+    backgroundColor: "#f4f4f5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  previewBlockedButtonText: {
+    color: "#050505",
+    fontSize: 12,
+    fontWeight: "800",
+  },
   adUiLayer: {
     position: "absolute",
     top: 0,

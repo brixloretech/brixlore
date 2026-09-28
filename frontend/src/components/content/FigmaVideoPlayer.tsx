@@ -538,7 +538,9 @@ export function FigmaVideoPlayer({
         if (!episode) return;
         setActiveEpisodeId(episode.id);
         setEpisodeTitle(episode.title);
-        if (tier !== "paid" && detail.type !== "TRAILER") {
+        // All non-paid playback is preview-gated, including trailers. A
+        // trailer must not provide a way around an exhausted guest allowance.
+        if (tier !== "paid") {
           if (tier === "guest") {
             const allowed = await beginGuestPreview(episode.id);
             if (!active || !allowed) return;

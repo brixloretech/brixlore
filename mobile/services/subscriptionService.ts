@@ -4,6 +4,7 @@ export type PublicPlanDto = {
   id: string;
   name: string;
   price: number;
+  yearlyPrice?: number | null;
   duration: string;
   deviceLimit: number;
   offlineAllowed: boolean;

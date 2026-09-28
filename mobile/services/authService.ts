@@ -306,6 +306,12 @@ class AuthService {
     }
   }
 
+  async storePreviewSessionTokens(tokens: AuthTokens): Promise<void> {
+    await this.storeTokens(tokens.accessToken, tokens.refreshToken);
+    const user = await this.getCurrentUser();
+    if (user) await this.storeUser(user);
+  }
+
   /**
    * Refresh access token
    */

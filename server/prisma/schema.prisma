@@ -272,7 +272,7 @@ model PreviewSession {
 model PreviewAllowance {
   id              String   @id @default(cuid())
   userId          String   @unique
-  totalSeconds    Int      @default(180)
+  totalSeconds    Int      @default(1200)
   consumedSeconds Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

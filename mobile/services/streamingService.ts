@@ -66,7 +66,7 @@ async function getGuestPlaybackDirect(
   }
 }
 
-function buildStreamUrl(streamKey: string): string {
+export function buildStreamUrl(streamKey: string): string {
   const trimmed = streamKey.trim();
   if (!trimmed) return trimmed;
 

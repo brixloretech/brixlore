@@ -63,7 +63,7 @@ export const previewService = {
       return {
         allowed: true,
         freeCatalog: false,
-        remainingSeconds: 180,
+        remainingSeconds: 1200,
         streamKey: DEFAULT_HLS_TEST_STREAM,
         type: "hls",
       };
@@ -78,12 +78,12 @@ export const previewService = {
   },
 
   async consumeFreePreview(seconds: number): Promise<FreePreviewSessionResponseDto> {
-    if (USE_MOCK_API) return { allowed: true, freeCatalog: false, remainingSeconds: Math.max(0, 180 - seconds) };
+    if (USE_MOCK_API) return { allowed: true, freeCatalog: false, remainingSeconds: Math.max(0, 1200 - seconds) };
     const auth = getStoredAuth();
     if (!auth?.accessToken) throw new Error("Not authenticated");
     const result = await patch<{ remainingSeconds: number }>(
       "preview/free-allowance",
-      { seconds: Math.min(180, Math.max(0, Math.floor(seconds))) },
+      { seconds: Math.min(1200, Math.max(0, Math.floor(seconds))) },
       { headers: { Authorization: `Bearer ${auth.accessToken}` } },
     );
     return { allowed: result.remainingSeconds > 0, freeCatalog: false, remainingSeconds: result.remainingSeconds };

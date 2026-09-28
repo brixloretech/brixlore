@@ -151,7 +151,7 @@ Stores each guest preview attempt, including:
 Stores the one-time authenticated free allowance:
 
 ```prisma
-totalSeconds    Int @default(180)
+totalSeconds    Int @default(1200)
 consumedSeconds Int @default(0)
 ```
 

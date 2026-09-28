@@ -90,7 +90,7 @@ export class PreviewService {
       return {
         allowed: true,
         freeCatalog: true,
-        remainingSeconds: 180,
+        remainingSeconds: 1200,
         ...(await this.streamingService.getGuestPlaybackMetadata(episodeId)),
       };
     }
@@ -122,5 +122,14 @@ export class PreviewService {
       data: { consumedSeconds: next },
     });
     return { remainingSeconds: Math.max(0, updated.totalSeconds - updated.consumedSeconds) };
+  }
+
+  async resetFreePreview(userId: string) {
+    const allowance = await this.prisma.previewAllowance.upsert({
+      where: { userId },
+      create: { userId, totalSeconds: 1200, consumedSeconds: 0 },
+      update: { totalSeconds: 1200, consumedSeconds: 0 },
+    });
+    return { remainingSeconds: allowance.totalSeconds };
   }
 }

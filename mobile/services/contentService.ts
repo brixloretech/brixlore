@@ -66,6 +66,17 @@ class ContentService {
     }
   }
 
+  async getFreeCatalog(limit = 4): Promise<ContentSummaryDto[]> {
+    try {
+      const response = await api.get<ContentListResponseDto>("/content", {
+        params: { limit: String(limit), freeCatalog: "true" },
+      });
+      return Array.isArray(response.data?.items) ? response.data.items : [];
+    } catch {
+      return [];
+    }
+  }
+
   /**
    * Get categories
    */

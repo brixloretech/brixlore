@@ -5,6 +5,7 @@ export { notificationService } from "./notificationService"; // Safe - notificat
 export { authService } from "./authService";
 export { accountService } from "./accountService";
 export { subscriptionService } from "./subscriptionService";
+export { previewService } from "./previewService";
 export { playBillingService } from "./playBillingService";
 export { deviceService } from "./deviceService";
 export { siteService } from "./siteService";
@@ -26,6 +27,11 @@ export type {
   PublicPlanDto,
   SubscriptionMeResponseDto,
 } from "./subscriptionService";
+export type {
+  GuestPreviewSession,
+  FreePreviewSession,
+  PreviewSignupResponse,
+} from "./previewService";
 export type { DeviceDto } from "./deviceService";
 export type {
   ContactSupportRequestDto,
