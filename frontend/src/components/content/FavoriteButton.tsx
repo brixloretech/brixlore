@@ -2,12 +2,12 @@
 
 import { useMyList } from "@/contexts";
 
-type FigmaFavoriteButtonProps = {
+type FavoriteButtonProps = {
   contentId: string;
 };
 
-/** Favorite control for the Figma movie cards, using the card's original styling. */
-export function FigmaFavoriteButton({ contentId }: FigmaFavoriteButtonProps) {
+/** Favorite control for the movie cards, using the card's original styling. */
+export function FavoriteButton({ contentId }: FavoriteButtonProps) {
   const { toggle, isInList } = useMyList();
   const inList = isInList(contentId);
 

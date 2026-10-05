@@ -292,6 +292,41 @@ export class AuthService {
     return this.issueTokens(user, deviceIdentifier!.trim());
   }
 
+  async loginInline(email: string, password: string, platform?: Platform, deviceIdentifier?: string) {
+    const user = await this.validateUser(email, password);
+    if (!user) throw new UnauthorizedException('Invalid email or password');
+    const resolvedPlatform = platform ?? Platform.WEB;
+    const resolvedDevice = deviceIdentifier?.trim() || `inline-${randomUUID()}`;
+    await this.devicesService.registerDevice(user.id, resolvedPlatform, resolvedDevice);
+    return this.issueTokens(user, resolvedDevice);
+  }
+
+  async signUpInline(email: string, password: string, name: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (existing) throw new ConflictException('User with this email already exists');
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const user = await this.prisma.user.create({
+      data: { email: normalizedEmail, passwordHash, name: name.trim() },
+    });
+    const freePlan = await this.prisma.plan.findFirst({ where: { name: 'Free Account' } });
+    if (freePlan) {
+      const endDate = new Date();
+      endDate.setFullYear(endDate.getFullYear() + 100);
+      await this.prisma.subscription.create({
+        data: { userId: user.id, planId: freePlan.id, status: 'ACTIVE', startDate: new Date(), endDate },
+      });
+    }
+    try {
+      await this.sendVerificationEmail(user);
+    } catch (err) {
+      this.logger.error(`[Auth] Failed to send verification email to ${user.email}:`, err);
+    }
+    const deviceIdentifier = `inline-${randomUUID()}`;
+    await this.devicesService.registerDevice(user.id, Platform.WEB, deviceIdentifier);
+    return this.issueTokens(user, deviceIdentifier);
+  }
+
   async refresh(refreshToken: string) {
     let payload: JwtPayload;
     try {

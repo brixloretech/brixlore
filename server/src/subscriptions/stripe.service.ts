@@ -804,6 +804,49 @@ export class StripeService {
     return { url };
   }
 
+  async createEmbeddedCheckoutSession(
+    userId: string,
+    planId: string,
+    userEmail: string,
+    userName: string | null | undefined,
+    billingCycle: 'MONTHLY' | 'YEARLY' = 'MONTHLY',
+  ): Promise<{ clientSecret: string }> {
+    const activeSubscription = await (this.prisma as any).subscription.findFirst({
+      where: { userId, status: { in: ['ACTIVE', 'CANCELLED'] }, endDate: { gt: new Date() } },
+      include: { plan: { select: { price: true } } },
+    });
+    // Every newly created account receives an active $0 Free Account record.
+    // Only a paid entitlement should prevent a new paid checkout session.
+    if (activeSubscription && Number(activeSubscription.plan.price) > 0) {
+      throw new BadRequestException('You already have an active subscription.');
+    }
+    const plan = await (this.prisma as any).plan.findUnique({ where: { id: planId } });
+    if (!plan) throw new NotFoundException('Plan not found');
+    const isYearly = billingCycle === 'YEARLY';
+    let priceId = isYearly ? (plan.yearlyStripePriceId ?? null) : (plan.stripePriceId ?? null);
+    if (!priceId) priceId = await this.resolveOrRegisterPriceInStripe(planId, billingCycle);
+    const customerId = await this.getOrCreateStripeCustomer(userId, userEmail, userName);
+    const stripe = this.getStripe();
+    const trialDays = (await (this.prisma as any).subscription.count({ where: { userId } })) === 0
+      ? this.defaultTrialDays
+      : 0;
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      ui_mode: 'embedded',
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      redirect_on_completion: 'if_required',
+      return_url: `${process.env.FRONTEND_URL ?? 'http://localhost:3000'}/subscription/success`,
+      metadata: { userId, planId, billingCycle },
+      subscription_data: {
+        metadata: { userId, planId, billingCycle },
+        ...(trialDays > 0 ? { trial_period_days: trialDays } : {}),
+      },
+    });
+    if (!session.client_secret) throw new BadRequestException('Failed to create embedded checkout session');
+    return { clientSecret: session.client_secret };
+  }
+
   /**
    * Create Customer Portal session for managing subscription.
    */

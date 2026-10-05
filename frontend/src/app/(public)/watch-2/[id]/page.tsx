@@ -16,15 +16,12 @@ import {
   Sparkles,
 } from "lucide-react";
 import { BrowseAtmosphere } from "@/components/content/BrowseAtmosphere";
-import { FigmaFavoriteButton } from "@/components/content/FigmaFavoriteButton";
-import { FigmaVideoPlayer } from "@/components/content/FigmaVideoPlayer";
+import { FavoriteButton } from "@/components/content/FavoriteButton";
+import { VideoPlayer } from "@/components/content/VideoPlayer";
 import MoviesSwiper from "@/components/content/MoviesSwiper";
 import { contentService } from "@/lib/services/content.service";
 import { formatDuration } from "@/lib/video-utils";
-import type {
-  ContentDetailDto,
-  EpisodeResponseDto,
-} from "@/types/api";
+import type { ContentDetailDto, EpisodeResponseDto } from "@/types/api";
 
 type WatchTwoPageProps = { params: { id: string } };
 
@@ -80,12 +77,10 @@ function EpisodeCard({
     <Link
       href={`/watch-2/${contentId}?episodeId=${encodeURIComponent(episode.id)}`}
       aria-current={active ? "page" : undefined}
-    className={`group flex min-w-0 items-center gap-4 border-t  px-4 sm:px-6 border-white/10 py-4 transition ${
-      active
-          ? "bg-white/[0.07]"
-          : "hover:bg-white/[0.045]"
+      className={`group flex min-w-0 items-center gap-4 border-t  px-4 sm:px-6 border-white/10 py-4 transition ${
+        active ? "bg-white/[0.07]" : "hover:bg-white/[0.045]"
       }`}
-  >
+    >
       <div className="relative h-[76px] w-[128px] shrink-0 overflow-hidden rounded-xl bg-white/[0.06] sm:h-[86px] sm:w-[152px]">
         {image ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -98,24 +93,36 @@ function EpisodeCard({
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,255,255,.16),transparent_38%),#111]" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-transparent to-transparent" />
-        <span className={`absolute inset-0 m-auto grid h-9 w-9 place-items-center rounded-full backdrop-blur-md transition ${active ? "bg-white text-black" : "bg-black/55 text-white group-hover:bg-white group-hover:text-black"}`}>
+        <span
+          className={`absolute inset-0 m-auto grid h-9 w-9 place-items-center rounded-full backdrop-blur-md transition ${active ? "bg-white text-black" : "bg-black/55 text-white group-hover:bg-white group-hover:text-black"}`}
+        >
           <Play size={15} fill="currentColor" />
         </span>
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2">
-          <p className="shrink-0 text-xs font-semibold text-white/45">{episode.episodeNumber}.</p>
-          <h3 className="line-clamp-1 text-sm font-semibold tracking-[-0.02em] text-white sm:text-base">{episode.title}</h3>
+          <p className="shrink-0 text-xs font-semibold text-white/45">
+            {episode.episodeNumber}.
+          </p>
+          <h3 className="line-clamp-1 text-sm font-semibold tracking-[-0.02em] text-white sm:text-base">
+            {episode.title}
+          </h3>
         </div>
         <div className="mt-1.5 flex items-center gap-2 text-xs text-white/48">
           {episode.duration && <span>{formatDuration(episode.duration)}</span>}
-          <span className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-semibold text-white/60">TV-{active ? "MA" : "14"}</span>
+          <span className="rounded border border-white/20 px-1.5 py-0.5 text-[10px] font-semibold text-white/60">
+            TV-{active ? "MA" : "14"}
+          </span>
         </div>
         <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-white/45">
           {episode.description || "Episode details are not available yet."}
         </p>
       </div>
-      {active && <span className="shrink-0 text-white" aria-label="Playing now"><Play size={18} fill="currentColor" /></span>}
+      {active && (
+        <span className="shrink-0 text-white" aria-label="Playing now">
+          <Play size={18} fill="currentColor" />
+        </span>
+      )}
     </Link>
   );
 }
@@ -129,7 +136,9 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [activeTab, setActiveTab] = useState<"episodes" | "related" | "details">("episodes");
+  const [activeTab, setActiveTab] = useState<
+    "episodes" | "related" | "details"
+  >("episodes");
 
   useEffect(() => {
     let active = true;
@@ -225,10 +234,21 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
   if (notFound || !content) {
     return (
       <main className="flex min-h-[75vh] flex-col items-center justify-center bg-[#030303] px-5 pt-28 text-center text-white">
-        <span className="grid h-14 w-14 place-items-center rounded-full border border-white/15 bg-white/[0.05]"><Search size={21} /></span>
-        <h1 className="mt-6 text-3xl font-semibold tracking-[-0.05em]">This story is off-air.</h1>
-        <p className="mt-3 max-w-md text-sm leading-6 text-white/50">It may have moved or is no longer available in the collection.</p>
-        <Link href="/browse-2" className="mt-7 inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black">Return to browse <ArrowUpRight size={15} /></Link>
+        <span className="grid h-14 w-14 place-items-center rounded-full border border-white/15 bg-white/[0.05]">
+          <Search size={21} />
+        </span>
+        <h1 className="mt-6 text-3xl font-semibold tracking-[-0.05em]">
+          This story is off-air.
+        </h1>
+        <p className="mt-3 max-w-md text-sm leading-6 text-white/50">
+          It may have moved or is no longer available in the collection.
+        </p>
+        <Link
+          href="/browse-2"
+          className="mt-7 inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-black"
+        >
+          Return to browse <ArrowUpRight size={15} />
+        </Link>
       </main>
     );
   }
@@ -251,7 +271,11 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
   async function sharePage() {
     const url = window.location.href;
     if (navigator.share) {
-      await navigator.share({ title: displayTitle, text: shareDescription, url });
+      await navigator.share({
+        title: displayTitle,
+        text: shareDescription,
+        url,
+      });
       return;
     }
     await navigator.clipboard.writeText(url);
@@ -274,139 +298,310 @@ export default function WatchTwoPage({ params }: WatchTwoPageProps) {
 
       <div className="relative mx-auto max-w-[1660px] px-4 sm:px-6 lg:px-10 xl:px-[6vw]">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/40">
-            <Link href="/browse-2" className="inline-flex items-center gap-2 transition hover:text-white"><ArrowLeft size={14} /> Browse</Link>
+          <nav
+            aria-label="Breadcrumb"
+            className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/40"
+          >
+            <Link
+              href="/browse-2"
+              className="inline-flex items-center gap-2 transition hover:text-white"
+            >
+              <ArrowLeft size={14} /> Browse
+            </Link>
             <ChevronRight size={13} />
             {isEpisodic && episodeId ? (
               <>
-                <Link href={`/watch-2/${content.id}`} className="max-w-[180px] truncate transition hover:text-white sm:max-w-none">{content.title}</Link>
+                <Link
+                  href={`/watch-2/${content.id}`}
+                  className="max-w-[180px] truncate transition hover:text-white sm:max-w-none"
+                >
+                  {content.title}
+                </Link>
                 <ChevronRight size={13} className="hidden sm:block" />
-                <span className="hidden max-w-[220px] truncate text-white/70 sm:block">{currentEpisode?.title}</span>
+                <span className="hidden max-w-[220px] truncate text-white/70 sm:block">
+                  {currentEpisode?.title}
+                </span>
               </>
             ) : (
-              <span className="max-w-[220px] truncate text-white/70">{content.title}</span>
+              <span className="max-w-[220px] truncate text-white/70">
+                {content.title}
+              </span>
             )}
           </nav>
-
         </div>
 
-        <section aria-label="Video player" className="relative overflow-hidden rounded-[22px] border border-white/15 bg-black shadow-[0_35px_120px_rgba(0,0,0,.65)] sm:rounded-[28px]">
+        <section
+          aria-label="Video player"
+          className="relative overflow-hidden rounded-[22px] border border-white/15 bg-black shadow-[0_35px_120px_rgba(0,0,0,.65)] sm:rounded-[28px]"
+        >
           <div className="absolute inset-x-[12%] -top-px z-10 h-px bg-gradient-to-r from-transparent via-white/75 to-transparent" />
-          <FigmaVideoPlayer contentId={content.id} episodeId={currentEpisode?.id ?? episodeId} />
+          <VideoPlayer
+            contentId={content.id}
+            episodeId={currentEpisode?.id ?? episodeId}
+          />
         </section>
 
         <section className="grid gap-8 border-b border-white/10 py-9 sm:py-12 lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-16 lg:py-14">
           <div>
             {isEpisodic && (
-              <Link href={`/watch-2/${content.id}`} className="mb-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.17em] text-white/42 transition hover:text-white">
+              <Link
+                href={`/watch-2/${content.id}`}
+                className="mb-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.17em] text-white/42 transition hover:text-white"
+              >
                 <Layers3 size={14} /> From the series · {content.title}
               </Link>
             )}
-            <h1 className="max-w-5xl text-4xl font-semibold leading-[0.94] tracking-[-0.06em] sm:text-5xl lg:text-6xl">{displayTitle}</h1>
+            <h1 className="max-w-5xl text-4xl font-semibold leading-[0.94] tracking-[-0.06em] sm:text-5xl lg:text-6xl">
+              {displayTitle}
+            </h1>
             <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-medium text-white/45 sm:text-sm">
               {isEpisodic && currentEpisode && (
-                <span>S{String(seasonNumber ?? 1).padStart(2, "0")} E{String(currentEpisode.episodeNumber).padStart(2, "0")}</span>
+                <span>
+                  S{String(seasonNumber ?? 1).padStart(2, "0")} E
+                  {String(currentEpisode.episodeNumber).padStart(2, "0")}
+                </span>
               )}
               <span>{content.releaseYear}</span>
-              <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold text-white/60">{content.ageRating || "NR"}</span>
-              {displayDuration && <span className="flex items-center gap-1.5"><Clock3 size={14} /> {formatDuration(displayDuration)}</span>}
-              {content.category && <Link href={`/search?category=${encodeURIComponent(content.category)}`} className="text-white/70 transition hover:text-white">{content.category}</Link>}
+              <span className="rounded-full border border-white/15 px-2.5 py-1 text-[10px] font-semibold text-white/60">
+                {content.ageRating || "NR"}
+              </span>
+              {displayDuration && (
+                <span className="flex items-center gap-1.5">
+                  <Clock3 size={14} /> {formatDuration(displayDuration)}
+                </span>
+              )}
+              {content.category && (
+                <Link
+                  href={`/search?category=${encodeURIComponent(content.category)}`}
+                  className="text-white/70 transition hover:text-white"
+                >
+                  {content.category}
+                </Link>
+              )}
             </div>
-            <p className="mt-7 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-white/54 sm:text-base sm:leading-8">{currentEpisode?.description || content.description || "No description available yet."}</p>
+            <p className="mt-7 max-w-3xl whitespace-pre-wrap text-sm leading-7 text-white/54 sm:text-base sm:leading-8">
+              {currentEpisode?.description ||
+                content.description ||
+                "No description available yet."}
+            </p>
           </div>
 
           <aside className="flex flex-col justify-between rounded-[24px] border border-white/10 bg-white/[0.045] p-5 backdrop-blur-xl sm:p-6">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">In your orbit</p>
-              <p className="mt-3 text-sm leading-6 text-white/55">Save this title for later or share the current episode with someone.</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">
+                In your orbit
+              </p>
+              <p className="mt-3 text-sm leading-6 text-white/55">
+                Save this title for later or share the current episode with
+                someone.
+              </p>
             </div>
             <div className="mt-7 flex items-center gap-3">
-              <div className="[&_button]:!h-11 [&_button]:!w-11 [&_button]:!bg-white [&_button]:!text-black [&_button]:hover:!bg-white/80"><FigmaFavoriteButton contentId={content.id} /></div>
-              <button type="button" onClick={() => void sharePage()} className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.06] text-xs font-semibold text-white transition hover:bg-white hover:text-black">
-                {copied ? <Check size={15} /> : <Share2 size={15} />} {copied ? "Link copied" : "Share"}
+              <div className="[&_button]:!h-11 [&_button]:!w-11 [&_button]:!bg-white [&_button]:!text-black [&_button]:hover:!bg-white/80">
+                <FavoriteButton contentId={content.id} />
+              </div>
+              <button
+                type="button"
+                onClick={() => void sharePage()}
+                className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-full border border-white/15 bg-white/[0.06] text-xs font-semibold text-white transition hover:bg-white hover:text-black"
+              >
+                {copied ? <Check size={15} /> : <Share2 size={15} />}{" "}
+                {copied ? "Link copied" : "Share"}
               </button>
             </div>
           </aside>
         </section>
 
         <div className="border-b border-white/10 pt-10 sm:pt-14">
-          <div className="flex items-center gap-8 border-b border-white/10" role="tablist" aria-label="Watch information">
+          <div
+            className="flex items-center gap-8 border-b border-white/10"
+            role="tablist"
+            aria-label="Watch information"
+          >
             {(["episodes", "related", "details"] as const).map((tab) => (
-              <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} onClick={() => setActiveTab(tab)} className={`border-b-2 px-1 pb-4 text-sm font-semibold transition sm:text-base ${activeTab === tab ? "border-white text-white" : "border-transparent text-white/42 hover:text-white"}`}>
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                onClick={() => setActiveTab(tab)}
+                className={`border-b-2 px-1 pb-4 text-sm font-semibold transition sm:text-base ${activeTab === tab ? "border-white text-white" : "border-transparent text-white/42 hover:text-white"}`}
+              >
                 {tab[0].toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
         </div>
 
-        {activeTab === "episodes" && isEpisodic && (content.episodes?.length ?? 0) > 0 && (
-          <section className="border-b border-white/10 py-10 sm:py-14" aria-labelledby="episodes-heading">
-            <div className="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-end">
-              <div>
-                <p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38"><Sparkles size={13} /> Continue the story</p>
-                <h2 id="episodes-heading" className="text-3xl font-semibold tracking-[-0.055em] sm:text-5xl">Episodes</h2>
+        {activeTab === "episodes" &&
+          isEpisodic &&
+          (content.episodes?.length ?? 0) > 0 && (
+            <section
+              className="border-b border-white/10 py-10 sm:py-14"
+              aria-labelledby="episodes-heading"
+            >
+              <div className="mb-8 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+                <div>
+                  <p className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38">
+                    <Sparkles size={13} /> Continue the story
+                  </p>
+                  <h2
+                    id="episodes-heading"
+                    className="text-3xl font-semibold tracking-[-0.055em] sm:text-5xl"
+                  >
+                    Episodes
+                  </h2>
+                </div>
+                {sortedSeasons.length > 0 && (
+                  <div
+                    className="no-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1"
+                    aria-label="Choose a season"
+                  >
+                    {sortedSeasons.map((season) => {
+                      const selected = selectedSeason?.id === season.id;
+                      return (
+                        <button
+                          key={season.id}
+                          type="button"
+                          onClick={() => setSelectedSeasonId(season.id)}
+                          aria-pressed={selected}
+                          className={`shrink-0 rounded-full px-5 py-2.5 text-xs font-semibold transition ${selected ? "bg-white text-black" : "border border-white/12 bg-white/[0.04] text-white/55 hover:border-white/30 hover:text-white"}`}
+                        >
+                          {season.title || `Season ${season.seasonNumber}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-              {sortedSeasons.length > 0 && (
-                <div className="no-scrollbar flex max-w-full gap-2 overflow-x-auto pb-1" aria-label="Choose a season">
-                  {sortedSeasons.map((season) => {
-                    const selected = selectedSeason?.id === season.id;
-                    return (
-                      <button key={season.id} type="button" onClick={() => setSelectedSeasonId(season.id)} aria-pressed={selected} className={`shrink-0 rounded-full px-5 py-2.5 text-xs font-semibold transition ${selected ? "bg-white text-black" : "border border-white/12 bg-white/[0.04] text-white/55 hover:border-white/30 hover:text-white"}`}>
-                        {season.title || `Season ${season.seasonNumber}`}
-                      </button>
-                    );
-                  })}
+
+              {selectedSeason?.description && (
+                <p className="mb-8 max-w-2xl text-sm leading-6 text-white/45">
+                  {selectedSeason.description}
+                </p>
+              )}
+              {visibleEpisodes.length ? (
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]">
+                  {visibleEpisodes.map((episode) => (
+                    <EpisodeCard
+                      key={episode.id}
+                      contentId={content.id}
+                      episode={episode}
+                      active={currentEpisode?.id === episode.id}
+                      fallbackImage={content.thumbnailUrl || content.bannerUrl}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-[22px] border border-dashed border-white/15 px-6 py-14 text-center text-sm text-white/45">
+                  Episodes for this season are coming soon.
                 </div>
               )}
-            </div>
+            </section>
+          )}
 
-            {selectedSeason?.description && <p className="mb-8 max-w-2xl text-sm leading-6 text-white/45">{selectedSeason.description}</p>}
-            {visibleEpisodes.length ? (
-              <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025]">
-                {visibleEpisodes.map((episode) => (
-                  <EpisodeCard key={episode.id} contentId={content.id} episode={episode} active={currentEpisode?.id === episode.id} fallbackImage={content.thumbnailUrl || content.bannerUrl} />
-                ))}
+        {activeTab === "related" && (
+          <section
+            className="py-14 sm:py-16 lg:py-20"
+            aria-labelledby="related-heading"
+          >
+            <div className="mb-8 grid gap-4 sm:mb-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
+              <div>
+                <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38">
+                  Stay on this frequency
+                </p>
+                <h2
+                  id="related-heading"
+                  className="text-3xl font-semibold tracking-[-0.055em] sm:text-5xl"
+                >
+                  More like this
+                </h2>
               </div>
-            ) : (
-              <div className="rounded-[22px] border border-dashed border-white/15 px-6 py-14 text-center text-sm text-white/45">Episodes for this season are coming soon.</div>
-            )}
+              <div>
+                <p className="text-sm leading-6 text-white/45">
+                  More films and shows from the same corner of the Brixlore
+                  collection.
+                </p>
+                <Link
+                  href="/search"
+                  className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/65 transition hover:text-white"
+                >
+                  Explore all <ArrowUpRight size={14} />
+                </Link>
+              </div>
+            </div>
+            <MoviesSwiper contentId={content.id} slidesPerView={4} />
           </section>
         )}
 
-        {activeTab === "related" && <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="related-heading">
-          <div className="mb-8 grid gap-4 sm:mb-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:items-end">
-            <div>
-              <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38">Stay on this frequency</p>
-              <h2 id="related-heading" className="text-3xl font-semibold tracking-[-0.055em] sm:text-5xl">More like this</h2>
+        {activeTab === "details" && (
+          <section
+            className="py-14 sm:py-16 lg:py-20"
+            aria-labelledby="details-heading"
+          >
+            <div className="max-w-3xl rounded-2xl border border-white/10 bg-white/[0.035] p-6 sm:p-8">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38">
+                About this story
+              </p>
+              <h2
+                id="details-heading"
+                className="mt-3 text-3xl font-semibold tracking-[-0.05em]"
+              >
+                Details
+              </h2>
+              <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-white/55">
+                {content.description || "No description available yet."}
+              </p>
+              <dl className="mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 sm:grid-cols-4">
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Type
+                  </dt>
+                  <dd className="mt-2 text-sm text-white/75">{content.type}</dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Year
+                  </dt>
+                  <dd className="mt-2 text-sm text-white/75">
+                    {content.releaseYear}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Rating
+                  </dt>
+                  <dd className="mt-2 text-sm text-white/75">
+                    {content.ageRating || "NR"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">
+                    Category
+                  </dt>
+                  <dd className="mt-2 text-sm text-white/75">
+                    {content.category || "—"}
+                  </dd>
+                </div>
+              </dl>
             </div>
-            <div>
-              <p className="text-sm leading-6 text-white/45">More films and shows from the same corner of the Brixlore collection.</p>
-              <Link href="/search" className="mt-4 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white/65 transition hover:text-white">Explore all <ArrowUpRight size={14} /></Link>
-            </div>
-          </div>
-          <MoviesSwiper contentId={content.id} slidesPerView={4} />
-        </section>}
-
-        {activeTab === "details" && <section className="py-14 sm:py-16 lg:py-20" aria-labelledby="details-heading">
-          <div className="max-w-3xl rounded-2xl border border-white/10 bg-white/[0.035] p-6 sm:p-8">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/38">About this story</p>
-            <h2 id="details-heading" className="mt-3 text-3xl font-semibold tracking-[-0.05em]">Details</h2>
-            <p className="mt-5 whitespace-pre-wrap text-sm leading-7 text-white/55">{content.description || "No description available yet."}</p>
-            <dl className="mt-8 grid grid-cols-2 gap-6 border-t border-white/10 pt-6 sm:grid-cols-4">
-              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Type</dt><dd className="mt-2 text-sm text-white/75">{content.type}</dd></div>
-              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Year</dt><dd className="mt-2 text-sm text-white/75">{content.releaseYear}</dd></div>
-              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Rating</dt><dd className="mt-2 text-sm text-white/75">{content.ageRating || "NR"}</dd></div>
-              <div><dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-white/35">Category</dt><dd className="mt-2 text-sm text-white/75">{content.category || "—"}</dd></div>
-            </dl>
-          </div>
-        </section>}
+          </section>
+        )}
 
         {categories.length > 0 && (
           <section className="flex flex-col gap-5 border-t border-white/10 pt-8 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/35">Explore another world</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/35">
+              Explore another world
+            </p>
             <div className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
               {categories.slice(0, 7).map((category) => (
-                <Link key={category} href={`/search?category=${encodeURIComponent(category)}`} className="shrink-0 rounded-full border border-white/10 px-4 py-2 text-xs font-medium text-white/50 transition hover:border-white/30 hover:text-white">{category}</Link>
+                <Link
+                  key={category}
+                  href={`/search?category=${encodeURIComponent(category)}`}
+                  className="shrink-0 rounded-full border border-white/10 px-4 py-2 text-xs font-medium text-white/50 transition hover:border-white/30 hover:text-white"
+                >
+                  {category}
+                </Link>
               ))}
             </div>
           </section>

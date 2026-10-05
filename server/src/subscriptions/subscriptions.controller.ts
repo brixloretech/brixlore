@@ -11,6 +11,7 @@ import { PlanResponseDto } from './dto/plan-response.dto';
 import { BillingSummaryDto } from './dto/billing-summary.dto';
 import { SubscriptionMeResponseDto } from './dto/subscription-me-response.dto';
 import { CreateCheckoutSessionDto } from './dto/create-checkout-session.dto';
+import { CreateEmbeddedCheckoutSessionDto } from './dto/create-embedded-checkout-session.dto';
 import { UpdateSubscriptionPlanDto } from './dto/update-subscription-plan.dto';
 
 @Controller('subscriptions')
@@ -118,6 +119,20 @@ export class SubscriptionsController {
       dto.planId,
       successUrl,
       cancelUrl,
+      user.email,
+      user.name,
+      dto.billingCycle ?? 'MONTHLY',
+    );
+  }
+
+  @Post('embedded-checkout-session')
+  async createEmbeddedCheckoutSession(
+    @CurrentUser() user: User,
+    @Body() dto: CreateEmbeddedCheckoutSessionDto,
+  ) {
+    return this.stripeService.createEmbeddedCheckoutSession(
+      user.id,
+      dto.planId,
       user.email,
       user.name,
       dto.billingCycle ?? 'MONTHLY',

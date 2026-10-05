@@ -240,6 +240,20 @@ export const subscriptionService = {
     }
   },
 
+  async createEmbeddedCheckoutSession(args: {
+    planId: string;
+    billingCycle?: "MONTHLY" | "YEARLY";
+  }): Promise<{ clientSecret: string }> {
+    if (USE_MOCK_API) return { clientSecret: "mock-client-secret" };
+    const auth = getStoredAuth();
+    if (!auth?.accessToken) throw new Error("Not authenticated");
+    return post<{ clientSecret: string }>(
+      "subscriptions/embedded-checkout-session",
+      args,
+      { headers: { Authorization: `Bearer ${auth.accessToken}` } },
+    );
+  },
+
   async getBillingSummary(): Promise<BillingSummaryDto> {
     if (USE_MOCK_API) {
       return { paymentMethod: null, invoices: [] };

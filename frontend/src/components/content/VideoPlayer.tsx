@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { CalendarDays, UserRound, Video, X } from "lucide-react";
 import { HLSVideoPlayerLazy } from "@/components/player";
 import { MagicCard } from "@/components/ui/magic-card";
@@ -16,7 +16,6 @@ import {
 import { generateDeviceIdentifier } from "@/lib/device-utils";
 import type {
   ContentDetailDto,
-  ContentSummaryDto,
   PlaybackType,
   PublicPlanDto,
 } from "@/types/api";
@@ -24,6 +23,14 @@ import { BorderBeam } from "../ui/border-beam";
 import { LOGO_HEIGHT, LOGO_WIDTH } from "@/lib/seo";
 import { useBrandLogo } from "@/hooks";
 import Image from "next/image";
+import {
+  EmbeddedCheckout,
+  EmbeddedCheckoutProvider,
+} from "@stripe/react-stripe-js";
+import { loadStripe } from "@stripe/stripe-js";
+import { authService } from "@/lib/services/auth.service";
+import { getApiErrorMessage } from "@/lib/api-client";
+import { validateEmail, validatePassword } from "@/lib/validation";
 
 const PROGRESS = "guest-playback-progress-v1";
 const MAX_PREVIEWS = 3;
@@ -84,48 +91,100 @@ type PreviewOffer = {
   price: string;
   description: string;
   action: string;
-  href?: string;
   planId?: string;
   billingCycle?: "monthly" | "yearly";
   featured?: boolean;
   discountLabel?: string;
 };
 
+type PopupDraft = {
+  view: "offers" | "login" | "signup" | "checkout" | "success";
+  name: string;
+  email: string;
+  password: string;
+  selectedPlan: { id: string; cycle: "monthly" | "yearly" } | null;
+  checkoutSecret: string | null;
+  verificationNotice: boolean;
+  alreadySubscribed: boolean;
+  authenticated: boolean;
+};
+
+let popupDraft: PopupDraft = {
+  view: "offers",
+  name: "",
+  email: "",
+  password: "",
+  selectedPlan: null,
+  checkoutSecret: null,
+  verificationNotice: false,
+  alreadySubscribed: false,
+  authenticated: false,
+};
+
 function PreviewGatePopup({
   contentTitle,
-  returnUrl,
   onClose,
   allowContinuePreview,
   onContinuePreview,
-  showFreeCatalog,
   isAuthenticated,
-  onJoinFree,
-  freeCatalogItems,
+  onAuthenticated,
+  onPurchaseComplete,
 }: {
   contentTitle: string;
-  returnUrl: string;
   onClose: () => void;
   previewCount: number;
   allowContinuePreview: boolean;
   onContinuePreview: () => void;
-  showFreeCatalog: boolean;
   isAuthenticated: boolean;
-  onJoinFree: (details: {
-    name: string;
-    email: string;
-    password: string;
-  }) => Promise<void>;
-  freeCatalogItems: ContentSummaryDto[];
+  onAuthenticated: () => Promise<void>;
+  onPurchaseComplete: () => void;
 }) {
   const logoUrl = useBrandLogo();
-  const [view, setView] = useState<"offers" | "signup">("offers");
+  const [view, setView] = useState<
+    "offers" | "login" | "signup" | "checkout" | "success"
+  >(popupDraft.view);
   const [isClosing, setIsClosing] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [name, setName] = useState(popupDraft.name);
+  const [email, setEmail] = useState(popupDraft.email);
+  const [password, setPassword] = useState(popupDraft.password);
   const [submitting, setSubmitting] = useState(false);
-  const [signupError, setSignupError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [verificationNotice, setVerificationNotice] = useState(popupDraft.verificationNotice);
+  const [alreadySubscribed, setAlreadySubscribed] = useState(popupDraft.alreadySubscribed);
   const [plans, setPlans] = useState<PublicPlanDto[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<{
+    id: string;
+    cycle: "monthly" | "yearly";
+  } | null>(popupDraft.selectedPlan);
+  const [checkoutSecret, setCheckoutSecret] = useState<string | null>(popupDraft.checkoutSecret);
+  const [authenticatedInPopup, setAuthenticatedInPopup] = useState(
+    isAuthenticated || popupDraft.authenticated,
+  );
+  const resumedCheckoutRef = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
+  const ensureStripe = () => {
+    if (stripePromise) return stripePromise;
+    const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    if (!key) return null;
+    const promise = loadStripe(key);
+    setStripePromise(promise);
+    return promise;
+  };
+  useEffect(() => {
+    popupDraft = {
+      view, name, email, password, selectedPlan, checkoutSecret,
+      verificationNotice, alreadySubscribed, authenticated: authenticatedInPopup,
+    };
+  }, [view, name, email, password, selectedPlan, checkoutSecret, verificationNotice, alreadySubscribed, authenticatedInPopup]);
+  useEffect(() => {
+    if (authenticatedInPopup) return;
+    void authService.getSession().then((session) => {
+      if (!session) return;
+      setAuthenticatedInPopup(true);
+      if (selectedPlan) setView("checkout");
+    }).catch(() => undefined);
+  }, [authenticatedInPopup, selectedPlan]);
   useEffect(() => {
     let active = true;
     void subscriptionService
@@ -140,48 +199,191 @@ function PreviewGatePopup({
       active = false;
     };
   }, []);
-  const paidPlan = plans.find((plan) => plan.isPopular) ?? plans[0];
-  const finishClose = (action: () => void) => {
-    if (isClosing) return;
-    setIsClosing(true);
-    window.setTimeout(action, 220);
-  };
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !submitting) {
+        setIsClosing(true);
+        window.setTimeout(onClose, 220);
+      }
+      if (event.key !== "Tab" || !panelRef.current) return;
+      const focusable = panelRef.current.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [submitting, onClose]);
+  const monthlyPlan =
+    plans.find((plan) => Math.abs(plan.price - 9.99) < 0.01) ??
+    plans.find((plan) => plan.isPopular) ??
+    plans[0];
+  const rentalPlan =
+    plans.find((plan) => Math.abs(plan.price - 4.99) < 0.01) ?? plans[0];
   const offers: PreviewOffer[] = [
     {
-      icon: UserRound,
-      label: "Free pass",
-      price: "$0.00",
-      description: "Unlock previews and weekly updates on Brixlore.",
-      action: "Join free",
-      href: `/signup?returnUrl=${encodeURIComponent(returnUrl)}`,
+      icon: Video,
+      label: "Single Rental Pass",
+      price: "$4.99",
+      description: "Ad-free access. Cancel anytime.",
+      action: "Choose plan",
+      planId: rentalPlan?.id,
+      billingCycle: "monthly",
     },
     {
       icon: Video,
       label: "Monthly pass",
-      price: paidPlan ? `$${paidPlan.price.toFixed(2)}/mo` : "View plans",
-      description: "Unlimited access to every deep-dive and master file.",
+      price: "$9.99/mo",
+      description:
+        "Unlimited streaming access to all Brixlore original series, shorts & releases.",
       action: "Subscribe",
-      href: `/subscription?returnUrl=${encodeURIComponent(returnUrl)}`,
-      planId: paidPlan?.id,
+      planId: monthlyPlan?.id,
       billingCycle: "monthly",
       featured: false,
     },
     {
       icon: CalendarDays,
       label: "Annual pass",
-      price: paidPlan?.yearlyPrice
-        ? `$${paidPlan.yearlyPrice.toFixed(2)}/yr`
-        : "View plans",
+      price: "$99.99/yr",
       description:
         "Get one full year of unlimited access for the price of 10 months. Save 17%.",
       action: "Join & save",
-      href: `/subscription?cycle=yearly&returnUrl=${encodeURIComponent(returnUrl)}`,
-      planId: paidPlan?.yearlyPrice ? paidPlan.id : undefined,
+      planId: monthlyPlan?.yearlyPrice ? monthlyPlan.id : undefined,
       billingCycle: "yearly",
-      discountLabel: paidPlan?.yearlyPrice ? "Save 17%" : undefined,
+      discountLabel: "Save 17%",
       featured: true,
     },
   ];
+
+  const beginCheckout = async (planId: string, cycle: "monthly" | "yearly") => {
+    setSelectedPlan({ id: planId, cycle });
+    setFormError(null);
+    if (!isAuthenticated && !authenticatedInPopup) {
+      setView("signup");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const subscription = await subscriptionService.getSubscription(true);
+      if (subscription.isSubscribed) {
+        setAlreadySubscribed(true);
+        setView("success");
+        return;
+      }
+      if (!ensureStripe()) {
+        setFormError("Payment configuration is unavailable right now.");
+        return;
+      }
+      const result = await subscriptionService.createEmbeddedCheckoutSession({
+        planId,
+        billingCycle: cycle === "yearly" ? "YEARLY" : "MONTHLY",
+      });
+      setCheckoutSecret(result.clientSecret);
+      setView("checkout");
+    } catch (error) {
+      setFormError(getApiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (
+      resumedCheckoutRef.current ||
+      view !== "checkout" ||
+      checkoutSecret ||
+      !selectedPlan ||
+      (!isAuthenticated && !authenticatedInPopup)
+    ) return;
+    resumedCheckoutRef.current = true;
+    void beginCheckout(selectedPlan.id, selectedPlan.cycle);
+  }, [view, checkoutSecret, selectedPlan, isAuthenticated, authenticatedInPopup]);
+
+  const submitAuth = async (
+    event: React.FormEvent,
+    mode: "login" | "signup",
+  ) => {
+    event.preventDefault();
+    setFormError(null);
+    const emailError = validateEmail(email);
+    const passwordError = validatePassword(password);
+    if (emailError || passwordError || (mode === "signup" && !name.trim())) {
+      setFormError(emailError ?? passwordError ?? "Name is required.");
+      return;
+    }
+    try {
+      setSubmitting(true);
+      await (mode === "login"
+          ? authService.loginInline({ email, password })
+          : await authService.registerInline({
+              name: name.trim(),
+              email,
+              password,
+            }));
+      setAuthenticatedInPopup(true);
+      if (mode === "signup") setVerificationNotice(true);
+      const subscription = await subscriptionService.getSubscription(true);
+      if (subscription.isSubscribed) {
+        setAlreadySubscribed(true);
+        setView("success");
+        return;
+      }
+      if (selectedPlan) {
+        if (!ensureStripe()) {
+          setFormError("Payment configuration is unavailable right now.");
+          return;
+        }
+        const checkout =
+          await subscriptionService.createEmbeddedCheckoutSession({
+            planId: selectedPlan.id,
+            billingCycle:
+              selectedPlan.cycle === "yearly" ? "YEARLY" : "MONTHLY",
+          });
+        setCheckoutSecret(checkout.clientSecret);
+        setView("checkout");
+      } else setView("success");
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      if (mode === "signup" && /already exists|already registered|email.*taken/i.test(message)) {
+        setView("login");
+        setFormError("An account already exists for this email. Please sign in.");
+        return;
+      }
+      setFormError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const finishClose = (action: () => void) => {
+    if (isClosing || submitting) return;
+    setIsClosing(true);
+    window.setTimeout(action, 220);
+  };
+
+  const chooseAnotherPlan = () => {
+    setCheckoutSecret(null);
+    setSelectedPlan(null);
+    setFormError(null);
+    setView("offers");
+  };
+
+  const clearDraft = () => {
+    popupDraft = {
+      view: "offers", name: "", email: "", password: "", selectedPlan: null,
+      checkoutSecret: null, verificationNotice: false, alreadySubscribed: false,
+      authenticated: false,
+    };
+  };
 
   return (
     <div
@@ -191,19 +393,18 @@ function PreviewGatePopup({
       aria-labelledby="preview-gate-title"
     >
       <div
+        ref={panelRef}
         className={`preview-gate-panel relative mx-2 max-h-[88dvh] w-full overflow-y-auto rounded-t-[28px] border border-white/10 bg-[#0a0a0b] p-5 text-white shadow-[0_25px_90px_rgba(255,255,255,.07)] sm:max-h-[90vh] sm:max-w-5xl sm:rounded-[28px] sm:p-7 ${isClosing ? "is-closing" : ""}`}
       >
         <div className="mx-auto w-full max-w-4xl">
-          {allowContinuePreview && (
-            <button
-              type="button"
-              onClick={() => finishClose(onClose)}
-              aria-label="Close access options"
-              className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
-            >
-              <X size={17} />
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => finishClose(onClose)}
+            aria-label="Close access options"
+            className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-white/55 transition hover:bg-white/10 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          >
+            <X size={17} />
+          </button>
 
           <div className="border-b border-white/10 pb-5 flex justify-center flex-col">
             {logoUrl ? (
@@ -233,8 +434,12 @@ function PreviewGatePopup({
             </h2>
             <p className="mt-2 text-md leading-5 text-white/65 sm:text-md text-center">
               {view === "signup"
-                ? "Create your free Brixlore account to keep exploring."
-                : `Choose how you want to keep watching ${contentTitle}.`}
+                ? "Create your account to continue."
+                : view === "login"
+                  ? "Sign in to continue without leaving this page."
+                  : view === "checkout"
+                    ? "Complete your subscription securely below."
+                    : `Choose how you want to keep watching ${contentTitle}.`}
             </p>
           </div>
 
@@ -248,65 +453,141 @@ function PreviewGatePopup({
             </button>
           )}
 
-          {view === "signup" ? (
+          {view === "checkout" && checkoutSecret && stripePromise ? (
+            <div className="mt-6 space-y-3">
+              <button type="button" onClick={chooseAnotherPlan} className="w-full text-sm text-white/65 hover:text-white">
+                ← Choose another plan
+              </button>
+              <div className="rounded-2xl bg-white p-3 text-black">
+              <EmbeddedCheckoutProvider
+                stripe={stripePromise}
+                options={{
+                  clientSecret: checkoutSecret,
+                  onComplete: () => setView("success"),
+                }}
+              >
+                <EmbeddedCheckout />
+              </EmbeddedCheckoutProvider>
+              </div>
+            </div>
+          ) : view === "success" ? (
+            <div className="mt-8 space-y-4 text-center">
+              <p className="text-2xl font-semibold">
+                {alreadySubscribed
+                  ? "Your subscription is active."
+                  : "You’re all set."}
+              </p>
+              <p className="text-sm text-white/60">
+                {alreadySubscribed
+                  ? "You already have access, so no additional payment is needed."
+                  : "Your access is active. You can close this window and continue watching."}
+              </p>
+              {alreadySubscribed && (
+                <Link
+                  href="/dashboard/subscription"
+                  onClick={() => {
+                    clearDraft();
+                    onPurchaseComplete();
+                    onClose();
+                  }}
+                  className="inline-flex h-12 w-full items-center justify-center rounded-full border border-white/20 bg-white/[0.08] font-semibold text-white hover:bg-white/15"
+                >
+                  Upgrade your plan
+                </Link>
+              )}
+              {verificationNotice && (
+                <p className="text-xs text-white/50">
+                  We sent a verification link to {email}. You can verify it
+                  anytime.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  void onAuthenticated().finally(() => {
+                    clearDraft();
+                    onPurchaseComplete();
+                    onClose();
+                  });
+                }}
+                className="h-12 w-full rounded-full bg-white font-semibold text-black"
+              >
+                Continue watching
+              </button>
+            </div>
+          ) : view === "login" || view === "signup" ? (
             <form
+              key={view}
               className="mt-6 space-y-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setSignupError(null);
-                setSubmitting(true);
-                void onJoinFree({ name, email, password })
-                  .catch((error: unknown) =>
-                    setSignupError(
-                      error instanceof Error
-                        ? error.message
-                        : "Unable to create your free account.",
-                    ),
-                  )
-                  .finally(() => setSubmitting(false));
-              }}
+              onSubmit={(event) => void submitAuth(event, view)}
             >
-              <input
-                required
-                minLength={2}
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Name"
-                className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/45 focus:bg-white/[0.07]"
-              />
+              {view === "signup" && (
+                <input
+                  required
+                  minLength={2}
+                  name="name"
+                  autoComplete="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Name"
+                  aria-label="Name"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/45 focus:bg-white/[0.07]"
+                />
+              )}
               <input
                 required
                 type="email"
+                name="email"
+                autoComplete="email"
                 value={email}
+                autoFocus={view === "login"}
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="Email"
+                aria-label="Email"
                 className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/45 focus:bg-white/[0.07]"
               />
               <input
                 required
                 minLength={8}
                 type="password"
+                name="password"
+                autoComplete={
+                  view === "login" ? "current-password" : "new-password"
+                }
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Password (8+ characters)"
+                aria-label="Password"
                 className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.045] px-4 text-sm text-white outline-none placeholder:text-white/30 focus:border-white/45 focus:bg-white/[0.07]"
               />
-              {signupError && (
-                <p className="text-xs text-red-300">{signupError}</p>
+              {formError && (
+                <p role="alert" className="text-xs text-red-300">
+                  {formError}
+                </p>
               )}
               <button
                 disabled={submitting}
                 className="inline-flex h-12 w-full items-center justify-center rounded-full bg-white px-5 text-sm font-semibold text-black disabled:opacity-60"
               >
-                {submitting ? "Creating account…" : "Create free account"}
+                {submitting
+                  ? "Please wait…"
+                  : view === "login"
+                    ? "Sign in"
+                    : "Create account"}
               </button>
               <button
                 type="button"
                 disabled={submitting}
-                onClick={() => setView("offers")}
+                onClick={() => {
+                  const nextView = view === "login" ? "signup" : "login";
+                  if (nextView === "login") setName("");
+                  setView(nextView);
+                }}
                 className="w-full text-xs text-white/50 hover:text-white"
               >
-                Back to access options
+                {view === "login"
+                  ? "New here? Create account"
+                  : "Already have an account? Sign in"}
               </button>
             </form>
           ) : (
@@ -320,7 +601,7 @@ function PreviewGatePopup({
                     gradientOpacity={0.72}
                     gradientFrom={offer.featured ? "#ffffff" : "#737373"}
                     gradientTo={offer.featured ? "#7b8498" : "#262626"}
-                    className={`h-full min-h-[250px] rounded-[28px] bg-[#0a0a0b] ${offer.featured ? "shadow-[0_25px_90px_rgba(255,255,255,.07)]" : ""}`}
+                    className={`h-full rounded-[28px] bg-[#0a0a0b] ${offer.featured ? "shadow-[0_25px_90px_rgba(255,255,255,.07)]" : ""}`}
                   >
                     <div className="relative flex h-full flex-col p-6 sm:p-5 border border-white/10 rounded-[28px]">
                       {offer.featured && (
@@ -356,66 +637,34 @@ function PreviewGatePopup({
                           </div>
                         </div>
                       </div>
-                      {offer.label === "Free pass" && !isAuthenticated ? (
-                        <button
-                          type="button"
-                          onClick={() => setView("signup")}
-                          className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${
-                            offer.featured
-                              ? "border-white bg-white text-black hover:bg-white/82"
-                              : "border-white/18 bg-white/[0.06] text-white hover:bg-white hover:text-black"
-                          }`}
-                        >
-                          {offer.action}
-                        </button>
-                      ) : offer.label === "Free pass" ? (
-                        <span className="mt-6 inline-flex h-12 w-full items-center justify-center rounded-full border border-white/10 bg-white/5 px-5 text-sm font-semibold text-neutral-400">
-                          Free account active
-                        </span>
-                      ) : (
-                        <Link
-                          href={
-                            isAuthenticated &&
-                            offer.planId &&
-                            offer.billingCycle
-                              ? `/subscription/payment-details?plan=${encodeURIComponent(offer.planId)}&autostart=1&billingCycle=${offer.billingCycle}&returnUrl=${encodeURIComponent(returnUrl)}`
-                              : (offer.href ?? "/subscription")
-                          }
-                          className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${offer.featured ? "border-white bg-white text-black hover:bg-white/82" : "border-white/18 bg-white/[0.06] text-white hover:bg-white hover:text-black"}`}
-                        >
-                          {offer.action}
-                        </Link>
-                      )}
+                      <button
+                        type="button"
+                        disabled={!offer.planId || submitting}
+                        onClick={() =>
+                          offer.planId &&
+                          offer.billingCycle &&
+                          void beginCheckout(offer.planId, offer.billingCycle)
+                        }
+                        className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-full border px-5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 ${offer.featured ? "border-white bg-white text-black hover:bg-white/82" : "border-white/18 bg-white/[0.06] text-white hover:bg-white hover:text-black"}`}
+                      >
+                        {submitting &&
+                        selectedPlan?.id === offer.planId &&
+                        selectedPlan?.cycle === offer.billingCycle ? (
+                          <>
+                            <span
+                              aria-hidden="true"
+                              className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent"
+                            />
+                            Checkout…
+                          </>
+                        ) : (
+                          offer.action
+                        )}
+                      </button>
                     </div>
                   </MagicCard>
                 );
               })}
-            </div>
-          )}
-
-          {showFreeCatalog && freeCatalogItems.length > 0 && (
-            <div className="mt-5 border-t border-white/10 pt-4">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
-                Explore free stories
-              </p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                {freeCatalogItems.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/watch-2/${item.id}`}
-                    className="overflow-hidden rounded-lg border border-white/10 bg-white/[0.04] text-xs text-white/80 hover:bg-white/10"
-                  >
-                    {item.thumbnailUrl && (
-                      <img
-                        src={item.thumbnailUrl}
-                        alt=""
-                        className="aspect-video w-full object-cover"
-                      />
-                    )}
-                    <span className="block truncate p-2">{item.title}</span>
-                  </Link>
-                ))}
-              </div>
             </div>
           )}
 
@@ -428,7 +677,7 @@ function PreviewGatePopup({
   );
 }
 
-export function FigmaVideoPlayer({
+export function VideoPlayer({
   contentId,
   episodeId,
 }: {
@@ -463,9 +712,6 @@ export function FigmaVideoPlayer({
   const [previewSessionId, setPreviewSessionId] = useState<string | null>(null);
   const [, setFreeRemaining] = useState(0);
   const [freeCatalog, setFreeCatalog] = useState(false);
-  const [freeCatalogItems, setFreeCatalogItems] = useState<ContentSummaryDto[]>(
-    [],
-  );
   const currentTimeRef = useRef(0);
   const resumePlaybackRef = useRef(false);
   const freeLastPositionRef = useRef<number | null>(null);
@@ -600,18 +846,6 @@ export function FigmaVideoPlayer({
   }, [contentId, episodeId, tier]);
 
   useEffect(() => {
-    if (
-      !popupOpen ||
-      !(previewCount >= MAX_PREVIEWS || (tier === "free" && limited))
-    )
-      return;
-    void contentService
-      .getContent({ limit: 4 }, undefined, true)
-      .then((result) => setFreeCatalogItems(result.items))
-      .catch(() => setFreeCatalogItems([]));
-  }, [popupOpen, previewCount, tier, limited]);
-
-  useEffect(() => {
     if (!popupOpen) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -735,20 +969,20 @@ export function FigmaVideoPlayer({
               : "This video cannot be played right now."}
         </p>
         {error !== "unavailable" && (
-          <Link
-            href={
-              error === "unauthorized"
-                ? `/login?returnUrl=${encodeURIComponent(`/watch-2/${contentId}`)}`
-                : "/subscription"
-            }
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setLimited(true);
+              setPopupOpen(true);
+            }}
             className="rounded-[5px] bg-white px-4 py-2 text-sm font-semibold text-black"
           >
             {error === "unauthorized" ? "Sign in" : "View plans"}
-          </Link>
+          </button>
         )}
       </div>
     );
-  const returnUrl = `/watch-2/${contentId}${episodeId ? `?episodeId=${encodeURIComponent(episodeId)}` : ""}`;
   return (
     <div className="w-full space-y-3">
       <div className="aspect-video w-full overflow-hidden rounded-[10px] md:rounded-[10px]">
@@ -831,7 +1065,6 @@ export function FigmaVideoPlayer({
       {limited && popupOpen && (
         <PreviewGatePopup
           contentTitle={content?.title ?? "this story"}
-          returnUrl={returnUrl}
           previewCount={previewCount}
           allowContinuePreview={tier === "guest" && previewCount < MAX_PREVIEWS}
           onContinuePreview={() => {
@@ -852,16 +1085,8 @@ export function FigmaVideoPlayer({
               });
           }}
           isAuthenticated={isAuthenticated}
-          onJoinFree={async (details) => {
-            await previewService.signUp(details);
-            await refreshUser();
-            setLimited(false);
-            setPopupOpen(false);
-          }}
-          freeCatalogItems={freeCatalogItems}
-          showFreeCatalog={
-            previewCount >= MAX_PREVIEWS || (tier === "free" && limited)
-          }
+          onAuthenticated={refreshUser}
+          onPurchaseComplete={() => setLimited(false)}
           onClose={() => setPopupOpen(false)}
         />
       )}

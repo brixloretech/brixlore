@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-export default function FigmaRuntime() {
+export default function VideoRuntime() {
   useEffect(() => {
     void Promise.all([
       import("@/lib/figma/gsap-custom.js"),

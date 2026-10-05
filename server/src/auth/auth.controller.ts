@@ -75,6 +75,19 @@ export class AuthController {
   }
 
   @Public()
+  @Post('login-inline')
+  @HttpCode(HttpStatus.OK)
+  async loginInline(@Body() dto: LoginDto): Promise<TokensResponseDto> {
+    return this.authService.loginInline(dto.email, dto.password, dto.platform, dto.deviceIdentifier);
+  }
+
+  @Public()
+  @Post('signup-inline')
+  async signupInline(@Body() dto: SignUpDto): Promise<TokensResponseDto> {
+    return this.authService.signUpInline(dto.email, dto.password, dto.name ?? '');
+  }
+
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refresh(@Body() dto: RefreshTokenDto): Promise<TokensResponseDto> {

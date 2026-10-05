@@ -6,7 +6,7 @@ import type { PropsWithChildren } from "react";
 import Swiper from "swiper";
 import { contentService } from "@/lib/services/content.service";
 import type { ContentSummaryDto } from "@/types/api";
-import { FigmaFavoriteButton } from "./FigmaFavoriteButton";
+import { FavoriteButton } from "./FavoriteButton";
 
 let contentRequest: Promise<ContentSummaryDto[]> | null = null;
 
@@ -21,16 +21,16 @@ function getMoviesOptions(maxSlidesPerView: number) {
   const desktopSlides = Math.max(1, maxSlidesPerView);
 
   return {
-  loop: true,
-  slidesPerView: 2,
-  spaceBetween: 25,
-  breakpoints: {
-    640: { slidesPerView: 2 },
-    720: { slidesPerView: 3 },
-    1024: { slidesPerView: Math.min(4, desktopSlides) },
-    1280: { slidesPerView: Math.min(5, desktopSlides) },
-    1536: { slidesPerView: desktopSlides },
-  },
+    loop: true,
+    slidesPerView: 2,
+    spaceBetween: 25,
+    breakpoints: {
+      640: { slidesPerView: 2 },
+      720: { slidesPerView: 3 },
+      1024: { slidesPerView: Math.min(4, desktopSlides) },
+      1280: { slidesPerView: Math.min(5, desktopSlides) },
+      1536: { slidesPerView: desktopSlides },
+    },
   };
 }
 
@@ -61,7 +61,7 @@ function MovieCard({ item }: { item: ContentSummaryDto }) {
           </Link>
           <div className="flex items-center justify-center flex-wrap gap-[5px] absolute bottom-[10px] left-[15px] transform transition-all duration-300 ease-in-out opacity-0 invisible group-hover:opacity-100 group-hover:visible group-hover:bottom-[20px]">
             {/* <button type="button" className="flex items-center justify-center text-white bg-white/30 rounded-full w-[30px] h-[30px] transition-all duration-300 ease-in-out hover:bg-primary hover:text-white"><i className="ri-heart-line" /></button> */}
-            <FigmaFavoriteButton contentId={item.id} />
+            <FavoriteButton contentId={item.id} />
           </div>
           <Link
             href={watchHref}
@@ -137,13 +137,16 @@ export default function MoviesSwiper({
     let active = true;
     void Promise.all([
       getContent(),
-      currentContentId ? contentService.getContentById(currentContentId) : Promise.resolve(null),
+      currentContentId
+        ? contentService.getContentById(currentContentId)
+        : Promise.resolve(null),
     ])
       .then(([content, current]) => {
         const category = current?.content.category?.trim().toLowerCase();
-        const related = content.filter((item) =>
-          item.id !== currentContentId &&
-          (!category || item.category?.trim().toLowerCase() === category),
+        const related = content.filter(
+          (item) =>
+            item.id !== currentContentId &&
+            (!category || item.category?.trim().toLowerCase() === category),
         );
         if (active) setItems(related);
       })
@@ -157,7 +160,10 @@ export default function MoviesSwiper({
 
   useEffect(() => {
     if (!containerRef.current || loading) return;
-    const swiper = new Swiper(containerRef.current, getMoviesOptions(slidesPerView));
+    const swiper = new Swiper(
+      containerRef.current,
+      getMoviesOptions(slidesPerView),
+    );
     return () => {
       swiper.destroy(true, true);
     };

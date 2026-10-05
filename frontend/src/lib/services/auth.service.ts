@@ -160,6 +160,42 @@ export const authService = {
     };
   },
 
+  async loginInline(body: LoginRequestDto): Promise<LoginResponseDto> {
+    if (USE_MOCK_API) return this.login(body);
+    const platform = typeof window !== "undefined" ? detectPlatform() : undefined;
+    const deviceIdentifier = typeof window !== "undefined" ? generateDeviceIdentifier() : undefined;
+    const tokens = await post<TokensResponse>("auth/login-inline", {
+      email: body.email,
+      password: body.password,
+      platform,
+      deviceIdentifier,
+    });
+    setStoredAuth({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: Date.now() + tokens.expiresIn * 1000,
+    });
+    const user = await getMe();
+    return { user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, expiresIn: tokens.expiresIn };
+  },
+
+  async registerInline(body: RegisterRequestDto): Promise<LoginResponseDto> {
+    if (USE_MOCK_API) {
+      const result = await mockSignup(body.name, body.email, body.password);
+      if (!result.success) throw new Error(result.error ?? "Registration failed");
+      persistMockSession(result.user);
+      return { user: userToDto(result.user), accessToken: MOCK_TOKEN, expiresIn: 3600 };
+    }
+    const tokens = await post<TokensResponse>("auth/signup-inline", body);
+    setStoredAuth({
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: Date.now() + tokens.expiresIn * 1000,
+    });
+    const user = await getMe();
+    return { user, accessToken: tokens.accessToken, refreshToken: tokens.refreshToken, expiresIn: tokens.expiresIn };
+  },
+
   async register(body: RegisterRequestDto): Promise<RegisterResponseDto> {
     if (USE_MOCK_API) {
       const result = await mockSignup(body.name, body.email, body.password);

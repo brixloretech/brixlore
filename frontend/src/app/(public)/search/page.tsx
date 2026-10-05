@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, SlidersHorizontal, X } from "lucide-react";
 import { contentService } from "@/lib/services/content.service";
 import type { ContentSummaryDto } from "@/types/api";
-import { FigmaFavoriteButton } from "@/components/content/FigmaFavoriteButton";
+import { FavoriteButton } from "@/components/content/FavoriteButton";
 
 const cardClass =
   "bg-white rounded-[5px] py-[4px] px-[14px] transition-all ease-in-out duration-300 hover:bg-primary hover:text-white";
@@ -36,7 +36,7 @@ function MovieCard({ item }: { item: ContentSummaryDto }) {
           )}
         </Link>
         <div className="absolute bottom-[10px] left-[15px] flex flex-wrap items-center justify-center gap-[5px] opacity-0 invisible transition-all duration-300 ease-in-out group-hover:visible group-hover:bottom-[20px] group-hover:opacity-100">
-          <FigmaFavoriteButton contentId={item.id} />
+          <FavoriteButton contentId={item.id} />
         </div>
         <Link
           href={watchHref}
@@ -218,16 +218,13 @@ export default function SearchPage() {
               }}
               className="relative"
             >
-              
-             
-                <input
-                  type="text"
-                  className="form-input !h-[50px] rounded-full "
-                  placeholder="Search for movies or TV shows"
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                />
-       
+              <input
+                type="text"
+                className="form-input !h-[50px] rounded-full "
+                placeholder="Search for movies or TV shows"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+              />
 
               {query && (
                 <button
