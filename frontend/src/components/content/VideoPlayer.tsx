@@ -149,20 +149,28 @@ function PreviewGatePopup({
   const [password, setPassword] = useState(popupDraft.password);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [verificationNotice, setVerificationNotice] = useState(popupDraft.verificationNotice);
-  const [alreadySubscribed, setAlreadySubscribed] = useState(popupDraft.alreadySubscribed);
+  const [verificationNotice, setVerificationNotice] = useState(
+    popupDraft.verificationNotice,
+  );
+  const [alreadySubscribed, setAlreadySubscribed] = useState(
+    popupDraft.alreadySubscribed,
+  );
   const [plans, setPlans] = useState<PublicPlanDto[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<{
     id: string;
     cycle: "monthly" | "yearly";
   } | null>(popupDraft.selectedPlan);
-  const [checkoutSecret, setCheckoutSecret] = useState<string | null>(popupDraft.checkoutSecret);
+  const [checkoutSecret, setCheckoutSecret] = useState<string | null>(
+    popupDraft.checkoutSecret,
+  );
   const [authenticatedInPopup, setAuthenticatedInPopup] = useState(
     isAuthenticated || popupDraft.authenticated,
   );
   const resumedCheckoutRef = useRef(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
+  const [stripePromise, setStripePromise] = useState<ReturnType<
+    typeof loadStripe
+  > | null>(null);
   const ensureStripe = () => {
     if (stripePromise) return stripePromise;
     const key = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -173,17 +181,37 @@ function PreviewGatePopup({
   };
   useEffect(() => {
     popupDraft = {
-      view, name, email, password, selectedPlan, checkoutSecret,
-      verificationNotice, alreadySubscribed, authenticated: authenticatedInPopup,
+      view,
+      name,
+      email,
+      password,
+      selectedPlan,
+      checkoutSecret,
+      verificationNotice,
+      alreadySubscribed,
+      authenticated: authenticatedInPopup,
     };
-  }, [view, name, email, password, selectedPlan, checkoutSecret, verificationNotice, alreadySubscribed, authenticatedInPopup]);
+  }, [
+    view,
+    name,
+    email,
+    password,
+    selectedPlan,
+    checkoutSecret,
+    verificationNotice,
+    alreadySubscribed,
+    authenticatedInPopup,
+  ]);
   useEffect(() => {
     if (authenticatedInPopup) return;
-    void authService.getSession().then((session) => {
-      if (!session) return;
-      setAuthenticatedInPopup(true);
-      if (selectedPlan) setView("checkout");
-    }).catch(() => undefined);
+    void authService
+      .getSession()
+      .then((session) => {
+        if (!session) return;
+        setAuthenticatedInPopup(true);
+        if (selectedPlan) setView("checkout");
+      })
+      .catch(() => undefined);
   }, [authenticatedInPopup, selectedPlan]);
   useEffect(() => {
     let active = true;
@@ -303,10 +331,17 @@ function PreviewGatePopup({
       checkoutSecret ||
       !selectedPlan ||
       (!isAuthenticated && !authenticatedInPopup)
-    ) return;
+    )
+      return;
     resumedCheckoutRef.current = true;
     void beginCheckout(selectedPlan.id, selectedPlan.cycle);
-  }, [view, checkoutSecret, selectedPlan, isAuthenticated, authenticatedInPopup]);
+  }, [
+    view,
+    checkoutSecret,
+    selectedPlan,
+    isAuthenticated,
+    authenticatedInPopup,
+  ]);
 
   const submitAuth = async (
     event: React.FormEvent,
@@ -323,12 +358,12 @@ function PreviewGatePopup({
     try {
       setSubmitting(true);
       await (mode === "login"
-          ? authService.loginInline({ email, password })
-          : await authService.registerInline({
-              name: name.trim(),
-              email,
-              password,
-            }));
+        ? authService.loginInline({ email, password })
+        : await authService.registerInline({
+            name: name.trim(),
+            email,
+            password,
+          }));
       setAuthenticatedInPopup(true);
       if (mode === "signup") setVerificationNotice(true);
       const subscription = await subscriptionService.getSubscription(true);
@@ -353,9 +388,14 @@ function PreviewGatePopup({
       } else setView("success");
     } catch (error) {
       const message = getApiErrorMessage(error);
-      if (mode === "signup" && /already exists|already registered|email.*taken/i.test(message)) {
+      if (
+        mode === "signup" &&
+        /already exists|already registered|email.*taken/i.test(message)
+      ) {
         setView("login");
-        setFormError("An account already exists for this email. Please sign in.");
+        setFormError(
+          "An account already exists for this email. Please sign in.",
+        );
         return;
       }
       setFormError(message);
@@ -379,8 +419,14 @@ function PreviewGatePopup({
 
   const clearDraft = () => {
     popupDraft = {
-      view: "offers", name: "", email: "", password: "", selectedPlan: null,
-      checkoutSecret: null, verificationNotice: false, alreadySubscribed: false,
+      view: "offers",
+      name: "",
+      email: "",
+      password: "",
+      selectedPlan: null,
+      checkoutSecret: null,
+      verificationNotice: false,
+      alreadySubscribed: false,
       authenticated: false,
     };
   };
@@ -455,19 +501,23 @@ function PreviewGatePopup({
 
           {view === "checkout" && checkoutSecret && stripePromise ? (
             <div className="mt-6 space-y-3">
-              <button type="button" onClick={chooseAnotherPlan} className="w-full text-sm text-white/65 hover:text-white">
+              <button
+                type="button"
+                onClick={chooseAnotherPlan}
+                className="w-full text-sm text-white/65 hover:text-white"
+              >
                 ← Choose another plan
               </button>
               <div className="rounded-2xl bg-white p-3 text-black">
-              <EmbeddedCheckoutProvider
-                stripe={stripePromise}
-                options={{
-                  clientSecret: checkoutSecret,
-                  onComplete: () => setView("success"),
-                }}
-              >
-                <EmbeddedCheckout />
-              </EmbeddedCheckoutProvider>
+                <EmbeddedCheckoutProvider
+                  stripe={stripePromise}
+                  options={{
+                    clientSecret: checkoutSecret,
+                    onComplete: () => setView("success"),
+                  }}
+                >
+                  <EmbeddedCheckout />
+                </EmbeddedCheckoutProvider>
               </div>
             </div>
           ) : view === "success" ? (
@@ -504,9 +554,9 @@ function PreviewGatePopup({
               <button
                 type="button"
                 onClick={() => {
+                  onPurchaseComplete();
                   void onAuthenticated().finally(() => {
                     clearDraft();
-                    onPurchaseComplete();
                     onClose();
                   });
                 }}
@@ -713,6 +763,7 @@ export function VideoPlayer({
   const [, setFreeRemaining] = useState(0);
   const [freeCatalog, setFreeCatalog] = useState(false);
   const currentTimeRef = useRef(0);
+  const resumePositionRef = useRef<number | null>(null);
   const resumePlaybackRef = useRef(false);
   const freeLastPositionRef = useRef<number | null>(null);
   const freePendingSecondsRef = useRef(0);
@@ -765,7 +816,6 @@ export function VideoPlayer({
     freePendingSecondsRef.current = 0;
     freeReportingRef.current = false;
     freeRemainingRef.current = 0;
-    resumePlaybackRef.current = false;
     async function load() {
       try {
         const result = await contentService.getContentById(contentId);
@@ -825,7 +875,13 @@ export function VideoPlayer({
         }
         setUrl(playback.url);
         setType(playback.type);
-        setStart(playback.progress ?? savedProgress(episode.id));
+        const resumePosition = resumePositionRef.current;
+        setStart(
+          resumePosition != null
+            ? resumePosition
+            : Math.max(playback.progress ?? 0, savedProgress(episode.id)),
+        );
+        resumePositionRef.current = null;
       } catch (value) {
         if (!active) return;
         setError(
@@ -1086,7 +1142,15 @@ export function VideoPlayer({
           }}
           isAuthenticated={isAuthenticated}
           onAuthenticated={refreshUser}
-          onPurchaseComplete={() => setLimited(false)}
+          onPurchaseComplete={() => {
+            const resumeAt = Math.max(0, Math.floor(currentTimeRef.current));
+            resumePositionRef.current = resumeAt;
+            setStart(resumeAt);
+            setStartedAt(resumeAt);
+            resumePlaybackRef.current = true;
+            setLimited(false);
+            setPopupOpen(false);
+          }}
           onClose={() => setPopupOpen(false)}
         />
       )}
