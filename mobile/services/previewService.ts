@@ -138,6 +138,15 @@ class PreviewService {
     };
   }
 
+  async resetTestAccess(): Promise<void> {
+    const fingerprint = await this.getDeviceFingerprint();
+    await api.post(
+      "/preview/reset-test-access",
+      {},
+      { headers: { "X-Device-Fingerprint": fingerprint } },
+    );
+  }
+
   async signUp(body: {
     name: string;
     email: string;

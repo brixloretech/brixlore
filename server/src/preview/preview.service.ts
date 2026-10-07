@@ -124,4 +124,27 @@ export class PreviewService {
     return { remainingSeconds: Math.max(0, updated.totalSeconds - updated.consumedSeconds) };
   }
 
+  /**
+   * Clears guest preview records for one test device. This is intentionally
+   * limited to the caller's IP/device identity; it never affects other users.
+   */
+  async resetGuestTestAccess(ip: string, deviceFingerprint: string) {
+    const identityHash = this.identityHash(ip, deviceFingerprint);
+    const viewer = await this.prisma.previewViewer.findUnique({
+      where: { identityHash },
+      select: { id: true },
+    });
+
+    if (viewer) {
+      await this.prisma.previewSession.deleteMany({
+        where: { viewerId: viewer.id },
+      });
+      await this.prisma.previewViewer.delete({
+        where: { id: viewer.id },
+      });
+    }
+
+    return { ok: true };
+  }
+
 }

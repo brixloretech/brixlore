@@ -39,6 +39,7 @@ type Props = {
   }) => Promise<void>;
   onSubscribe: () => void;
   onClose: () => void;
+  onResetTestAccess?: () => Promise<void>;
   freeCatalogItems?: ContentSummaryDto[];
   onCatalogItemPress?: (item: ContentSummaryDto) => void;
 };
@@ -53,6 +54,7 @@ export function PreviewGateModal({
   onJoinFree,
   onSubscribe,
   onClose,
+  onResetTestAccess,
   freeCatalogItems = [],
   onCatalogItemPress,
 }: Props) {
@@ -154,6 +156,14 @@ export function PreviewGateModal({
               </>
             )}
             <Text style={styles.footer}>Secure access · Your playback position will be kept</Text>
+            {onResetTestAccess ? (
+              <Pressable
+                onPress={() => void onResetTestAccess()}
+                style={styles.resetTestAccess}
+              >
+                <Text style={styles.resetTestAccessLabel}>Reset test access</Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         </View>
       </View>
@@ -211,4 +221,6 @@ const styles = StyleSheet.create({
   catalogImage: { width: 76, height: 44, borderRadius: 7, backgroundColor: "#151515" },
   catalogTitle: { flex: 1, color: "rgba(255,255,255,0.8)", fontSize: 12 },
   footer: { color: "rgba(255,255,255,0.3)", fontSize: 10, textAlign: "center", marginTop: 18 },
+  resetTestAccess: { alignItems: "center", paddingVertical: 8 },
+  resetTestAccessLabel: { color: "rgba(252,211,77,0.8)", fontSize: 11 },
 });

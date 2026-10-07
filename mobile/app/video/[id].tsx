@@ -53,6 +53,9 @@ const PROGRESS_REPORT_INTERVAL_SEC = 10;
 const DOUBLE_TAP_WINDOW_MS = 320;
 const TAP_ACCUMULATION_RESET_MS = 900;
 const PLAYER_DEBUG = __DEV__;
+const TEST_ACCESS_RESET_ENABLED =
+  __DEV__ ||
+  process.env.EXPO_PUBLIC_PREVIEW_TEST_RESET_ENABLED === "true";
 
 // Report progress every 10 seconds
 type ContentDetailDto = {
@@ -2553,6 +2556,31 @@ export default function WatchScreen() {
         onClose={() => {
           setShowLimitedAccessLoginModal(false);
         }}
+        onResetTestAccess={TEST_ACCESS_RESET_ENABLED ? async () => {
+          if (!selectedEpisodeId) return;
+          await previewService.resetTestAccess();
+          const preview = await previewService.startGuestPreview(selectedEpisodeId);
+          if (!preview.allowed || !preview.sessionId || !preview.streamKey) {
+            return;
+          }
+          accessGateActiveRef.current = false;
+          guestPreviewWallStartRef.current = null;
+          guestPreviewStartedAtRef.current = null;
+          guestPreviewGateTriggeredRef.current = false;
+          setGuestPreviewSessionId(preview.sessionId);
+          setGuestPreviewRemaining(preview.previewsRemaining);
+          setGuestPreviewElapsed(0);
+          setGuestPreviewMaxSeconds(preview.maxSeconds ?? 45);
+          setPlaybackInfo({
+            episodeId: selectedEpisodeId,
+            type: preview.type ?? "hls",
+            streamKey: preview.streamKey,
+            url: buildStreamUrl(preview.streamKey),
+          });
+          setShowLimitedAccessLoginModal(false);
+          setIsPlaying(true);
+          safePlayerCall(() => player.play(), "resetTestAccess");
+        } : undefined}
       />
 
       {/* Settings Modal */}
@@ -2744,7 +2772,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 112 },
+  scrollContent: { paddingBottom: 200 },
   watchInfo: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 24 },
   watchTitle: { color: "#fff", fontSize: 26, lineHeight: 31, fontWeight: "700", letterSpacing: -0.6 },
   watchMeta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 7, marginTop: 10 },

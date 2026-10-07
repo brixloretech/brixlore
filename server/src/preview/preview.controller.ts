@@ -1,4 +1,13 @@
-import { Body, Controller, Headers, Ip, Patch, Param, Post } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Headers,
+  Ip,
+  Patch,
+  Param,
+  Post,
+} from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { CreatePreviewSessionDto } from './dto/create-preview-session.dto';
 import { CompletePreviewSessionDto } from './dto/complete-preview-session.dto';
@@ -56,6 +65,25 @@ export class PreviewController {
   @Patch('free-allowance')
   consumeFree(@CurrentUser() user: User, @Body() dto: ConsumeFreePreviewDto) {
     return this.previewService.consumeFreePreview(user.id, dto.seconds);
+  }
+
+  /**
+   * Development/staging-only escape hatch for manually retesting guest gates.
+   * It is intentionally disabled unless explicitly enabled at deployment time.
+   */
+  @Public()
+  @Post('reset-test-access')
+  resetTestAccess(
+    @Ip() ip: string,
+    @Headers('x-device-fingerprint') deviceFingerprint?: string,
+  ) {
+    if (process.env.PREVIEW_TEST_RESET_ENABLED !== 'true') {
+      throw new ForbiddenException('Test access reset is disabled.');
+    }
+    return this.previewService.resetGuestTestAccess(
+      ip || '',
+      deviceFingerprint?.trim() || '',
+    );
   }
 
 }
