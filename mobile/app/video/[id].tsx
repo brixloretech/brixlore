@@ -53,10 +53,7 @@ const PROGRESS_REPORT_INTERVAL_SEC = 10;
 const DOUBLE_TAP_WINDOW_MS = 320;
 const TAP_ACCUMULATION_RESET_MS = 900;
 const PLAYER_DEBUG = __DEV__;
-const TEST_ACCESS_RESET_ENABLED =
-  __DEV__ ||
-  process.env.EXPO_PUBLIC_PREVIEW_TEST_RESET_ENABLED === "true";
-
+const TEST_ACCESS_RESET_ENABLED = true;
 // Report progress every 10 seconds
 type ContentDetailDto = {
   id: string;
