@@ -25,7 +25,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
 import { colors as themeColors } from "../../src/theme/colors";
 import { spacing, typography, borderRadius } from "../../constants/theme";
-import { contentService, type ContentSummaryDto, type EpisodeDto } from "../../services/contentService";
+import { contentService, type EpisodeDto } from "../../services/contentService";
 import {
   buildStreamUrl,
   streamingService,
@@ -35,7 +35,6 @@ import { previewService } from "../../services/previewService";
 import { downloadService } from "../../services/downloadService";
 import { AddToMyListButton } from "../../components/AddToMyListButton";
 import { useAuthStore } from "../../store/useAuthStore";
-import { authService } from "../../services/authService";
 import { useSubscriptionStore } from "../../store/useSubscriptionStore";
 import {
   getAudioPosition,
@@ -47,13 +46,13 @@ import { useAdPlayer } from "../../hooks/useAdPlayer";
 import { AdOverlay } from "../../components/AdOverlay";
 import { PreviewGateModal } from "../../components/PreviewGateModal";
 import { useMatomo } from "../../hooks/useMatomo";
+import { useBottomNavigationInset } from "../../hooks/useBottomNavigationInset";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const PROGRESS_REPORT_INTERVAL_SEC = 10;
 const DOUBLE_TAP_WINDOW_MS = 320;
 const TAP_ACCUMULATION_RESET_MS = 900;
 const PLAYER_DEBUG = __DEV__;
-const TEST_ACCESS_RESET_ENABLED = true;
 // Report progress every 10 seconds
 type ContentDetailDto = {
   id: string;
@@ -104,6 +103,11 @@ function durationToSeconds(duration?: string): number {
 }
 export default function WatchScreen() {
   const insets = useSafeAreaInsets();
+  const {
+    appBottomNavigationHeight: appBottomNavHeight,
+    contentBottomPadding,
+    systemBottomInset,
+  } = useBottomNavigationInset();
   const router = useRouter();
   const params = useLocalSearchParams<{
     id: string;
@@ -244,7 +248,6 @@ export default function WatchScreen() {
   const [guestPreviewElapsed, setGuestPreviewElapsed] = useState(0);
   const [freePreviewCatalog, setFreePreviewCatalog] = useState(false);
   const [freePreviewRemaining, setFreePreviewRemaining] = useState(0);
-  const [freeCatalogItems, setFreeCatalogItems] = useState<ContentSummaryDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [comingSoon, setComingSoon] = useState(false);
   const [playbackError, setPlaybackError] = useState<
@@ -523,20 +526,6 @@ export default function WatchScreen() {
       fetchSubscription();
     }
   }, [isAuthenticated, fetchSubscription]);
-
-  useEffect(() => {
-    if (
-      !showLimitedAccessLoginModal ||
-      (limitedAccessModalReason !== "video-limit" &&
-        limitedAccessModalReason !== "free-tier-limit")
-    ) {
-      return;
-    }
-    void contentService
-      .getFreeCatalog(4)
-      .then(setFreeCatalogItems)
-      .catch(() => setFreeCatalogItems([]));
-  }, [showLimitedAccessLoginModal, limitedAccessModalReason]);
 
   // Reset limited access timer when starting a new video
   useEffect(() => {
@@ -2318,7 +2307,10 @@ export default function WatchScreen() {
     <SafeAreaView style={styles.container} edges={isFullscreen ? [] : ["top"]}>
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: contentBottomPadding },
+        ]}
         scrollEnabled={!isFullscreen && !isDragging}
       >
         {/* Video Player */}
@@ -2532,52 +2524,19 @@ export default function WatchScreen() {
           setIsPlaying(true);
           safePlayerCall(() => player.play(), "continueGuestPreview");
         }}
-        onJoinFree={async (details) => {
-          const tokens = await previewService.signUp(details);
-          await authService.storePreviewSessionTokens(tokens);
+        onAccessGranted={async () => {
+          const resumeAt = Math.max(0, Math.floor(currentTimeRef.current));
+          setSavedProgress(resumeAt);
+          hasSeekedToSavedProgressRef.current = false;
           await refreshUser();
+          await fetchSubscription();
           accessGateActiveRef.current = false;
           setShowLimitedAccessLoginModal(false);
-        }}
-        onSubscribe={() => {
-          accessGateActiveRef.current = false;
-          setShowLimitedAccessLoginModal(false);
-          router.push("/plans");
-        }}
-        freeCatalogItems={freeCatalogItems}
-        onCatalogItemPress={(item) => {
-          accessGateActiveRef.current = false;
-          setShowLimitedAccessLoginModal(false);
-          router.push(`/video/${item.id}`);
+          setIsPlaying(true);
         }}
         onClose={() => {
           setShowLimitedAccessLoginModal(false);
         }}
-        onResetTestAccess={TEST_ACCESS_RESET_ENABLED ? async () => {
-          if (!selectedEpisodeId) return;
-          await previewService.resetTestAccess();
-          const preview = await previewService.startGuestPreview(selectedEpisodeId);
-          if (!preview.allowed || !preview.sessionId || !preview.streamKey) {
-            return;
-          }
-          accessGateActiveRef.current = false;
-          guestPreviewWallStartRef.current = null;
-          guestPreviewStartedAtRef.current = null;
-          guestPreviewGateTriggeredRef.current = false;
-          setGuestPreviewSessionId(preview.sessionId);
-          setGuestPreviewRemaining(preview.previewsRemaining);
-          setGuestPreviewElapsed(0);
-          setGuestPreviewMaxSeconds(preview.maxSeconds ?? 45);
-          setPlaybackInfo({
-            episodeId: selectedEpisodeId,
-            type: preview.type ?? "hls",
-            streamKey: preview.streamKey,
-            url: buildStreamUrl(preview.streamKey),
-          });
-          setShowLimitedAccessLoginModal(false);
-          setIsPlaying(true);
-          safePlayerCall(() => player.play(), "resetTestAccess");
-        } : undefined}
       />
 
       {/* Settings Modal */}
@@ -2670,8 +2629,8 @@ export default function WatchScreen() {
           style={[
             styles.tabBarContainer,
             {
-              height: 76 + Math.max(insets.bottom, Platform.OS === "android" ? 10 : 0),
-              paddingBottom: Math.max(insets.bottom, Platform.OS === "android" ? 10 : 0),
+              height: appBottomNavHeight,
+              paddingBottom: systemBottomInset,
             },
           ]}
         >

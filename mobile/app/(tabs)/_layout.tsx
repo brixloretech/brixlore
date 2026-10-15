@@ -1,8 +1,8 @@
 import { Tabs } from "expo-router";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useBottomNavigationInset } from "../../hooks/useBottomNavigationInset";
 
 function TabIcon({
   focused,
@@ -28,13 +28,8 @@ function TabIcon({
 }
 
 export default function TabsLayout() {
-  const insets = useSafeAreaInsets();
-  // Android edge-to-edge can report a zero bottom inset on some devices even
-  // though the system navigation bar still overlays the app.
-  const bottomInset = Math.max(
-    insets.bottom,
-    Platform.OS === "android" ? 10 : 0,
-  );
+  const { appBottomNavigationHeight, systemBottomInset } =
+    useBottomNavigationInset();
 
   return (
     <Tabs
@@ -45,8 +40,8 @@ export default function TabsLayout() {
           {
             // The inset must be part of the bar height so the tab labels are
             // laid out above Android's system navigation area.
-            height: 76 + bottomInset,
-            paddingBottom: bottomInset,
+            height: appBottomNavigationHeight,
+            paddingBottom: systemBottomInset,
           },
         ],
         tabBarShowLabel: false,

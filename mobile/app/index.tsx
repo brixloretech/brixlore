@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { useAuthStore } from "../store/useAuthStore";
 import { useLimitedAccessStore } from "../store/useLimitedAccessStore";
-import SplashScreen from "../screens/SplashScreen";
 import { colors as themeColors } from "../src/theme/colors";
 
 export default function Index() {
@@ -11,7 +10,6 @@ export default function Index() {
   const loadLimitedAccess = useLimitedAccessStore(
     (state) => state.loadFromStorage,
   );
-  const [showSplash, setShowSplash] = useState(true);
   const [forceStopLoading, setForceStopLoading] = useState(false);
 
   useEffect(() => {
@@ -35,17 +33,6 @@ export default function Index() {
 
     return () => clearTimeout(timeout);
   }, [checkAuth, loadLimitedAccess]);
-
-  // Show splash screen first (displays for full duration in SplashScreen)
-  if (showSplash) {
-    return (
-      <SplashScreen
-        onFinish={() => {
-          setShowSplash(false);
-        }}
-      />
-    );
-  }
 
   // After splash, show loading if still checking auth (but not forever)
   if (isLoading && !forceStopLoading) {

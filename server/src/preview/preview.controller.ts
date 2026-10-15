@@ -58,21 +58,4 @@ export class PreviewController {
     return this.previewService.consumeFreePreview(user.id, dto.seconds);
   }
 
-  /**
-   * Test escape hatch for manually retesting guest gates.
-   * This only clears preview records for the caller's IP/device identity.
-   * Remove this route before production release.
-   */
-  @Public()
-  @Post('reset-test-access')
-  resetTestAccess(
-    @Ip() ip: string,
-    @Headers('x-device-fingerprint') deviceFingerprint?: string,
-  ) {
-    return this.previewService.resetGuestTestAccess(
-      ip || '',
-      deviceFingerprint?.trim() || '',
-    );
-  }
-
 }

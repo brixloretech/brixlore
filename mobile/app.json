@@ -8,11 +8,6 @@
     "userInterfaceStyle": "dark",
     "scheme": "brixlore",
     "newArchEnabled": true,
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#000000"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],

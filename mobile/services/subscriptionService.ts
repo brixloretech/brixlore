@@ -90,6 +90,20 @@ class SubscriptionService {
     });
     return response.data;
   }
+
+  async createEmbeddedCheckoutSession(
+    planId: string,
+    billingCycle: "MONTHLY" | "YEARLY",
+  ): Promise<{ clientSecret: string }> {
+    const response = await api.post<{ clientSecret: string }>(
+      "/subscriptions/embedded-checkout-session",
+      { planId, billingCycle },
+    );
+    if (!response.data?.clientSecret) {
+      throw new Error("Unable to prepare secure checkout.");
+    }
+    return response.data;
+  }
 }
 
 export const subscriptionService = new SubscriptionService();

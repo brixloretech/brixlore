@@ -30,6 +30,7 @@ import {
   contentService,
   type ContentSummaryDto,
 } from "../services/contentService";
+import { useBottomNavigationInset } from "../hooks/useBottomNavigationInset";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const HERO_HEIGHT = Math.min(500, Math.max(430, SCREEN_WIDTH * 1.08));
@@ -64,6 +65,7 @@ function toVideoCardItem(item: ContentSummaryDto): VideoCardItem {
 export default function HomeScreen() {
   const router = useRouter();
   const { trackEvent } = useMatomo();
+  const { contentBottomPadding } = useBottomNavigationInset();
 
   const [heroItems, setHeroItems] = useState<ContentSummaryDto[]>([]);
   const [contentItems, setContentItems] = useState<ContentSummaryDto[]>([]);
@@ -246,7 +248,10 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <ScrollView
         style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: contentBottomPadding },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -402,13 +407,12 @@ export default function HomeScreen() {
           <Text style={styles.eyebrow}>Take the signal with you</Text>
           <Text style={styles.ctaTitle}>Your screen. Your pace. Your stories.</Text>
           <Text style={styles.ctaDescription}>Keep watching wherever the day takes you. Download once, watch offline, and move between devices without losing your place.</Text>
-          <Pressable style={styles.ctaButton} onPress={() => router.push("/downloads")}>
+          <Pressable style={styles.ctaButton} onPress={() => router.push("/download")}>
             <Text style={styles.ctaButtonText}>Watch your way</Text>
-            <Ionicons name="arrow-forward" size={16} color="#030303" />
+            <Ionicons name="arrow-forward" size={16} color={themeColors.background} />
           </Pressable>
         </View>
 
-        <View style={{ height: spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -423,9 +427,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    // The tab bar is absolutely positioned, so it does not reserve layout
-    // space for the last section of the feed.
-    paddingBottom: 200,
+    // Bottom padding is supplied by useBottomNavigationInset.
   },
   loadingContainer: {
     flex: 1,
@@ -779,7 +781,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
     borderRadius: borderRadius.full,
-    backgroundColor: themeColors.foreground,
+    backgroundColor: themeColors.textPrimary,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },

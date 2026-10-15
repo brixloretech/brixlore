@@ -9,6 +9,7 @@ import { useAuthStore } from "../../store/useAuthStore";
 import { subscriptionService } from "../../services/subscriptionService";
 import { contentService } from "../../services/contentService";
 import { useSubscriptionStore } from "../../store/useSubscriptionStore";
+import { useBottomNavigationInset } from "../../hooks/useBottomNavigationInset";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -23,6 +24,7 @@ function Row({ icon, title, detail, onPress }: { icon: IconName; title: string; 
 function GuestProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { contentBottomPadding } = useBottomNavigationInset();
   const benefits: Array<{ icon: IconName; text: string }> = [
     { icon: "play-outline", text: "Pick up any story, on any screen." },
     { icon: "bookmark-outline", text: "Keep a personal list of titles." },
@@ -30,7 +32,10 @@ function GuestProfile() {
   ];
   return <View style={[styles.screen, { paddingTop: insets.top }]}>
     <StatusBar barStyle="light-content" />
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[styles.scroll, { paddingBottom: contentBottomPadding }]}
+    >
       <View style={styles.guestHero}>
         <Text style={styles.eyebrow}>BRIXLORE / ACCOUNT</Text>
         <Text style={styles.guestTitle}>Make it{"\n"}yours.</Text>
@@ -50,6 +55,7 @@ function GuestProfile() {
 function AuthenticatedProfile() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { contentBottomPadding } = useBottomNavigationInset();
   const { user, logout } = useAuthStore();
   const { subscription, fetchSubscription } = useSubscriptionStore();
   const [planName, setPlanName] = useState("Free");
@@ -79,7 +85,10 @@ function AuthenticatedProfile() {
   const signOut = () => { void logout(); router.replace("/login"); };
   return <View style={[styles.screen, { paddingTop: insets.top }]}>
     <StatusBar barStyle="light-content" />
-    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={[styles.scroll, { paddingBottom: contentBottomPadding }]}
+    >
       <View style={styles.accountHero}>
         <Text style={styles.eyebrow}>MEMBER SPACE / 01</Text>
         <View style={styles.accountTopline}><View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View><View style={styles.online}><View style={styles.onlineDot} /><Text style={styles.onlineText}>ACTIVE</Text></View></View>
@@ -116,7 +125,7 @@ function AuthenticatedProfile() {
 export default function ProfileScreen() { return useAuthStore((state) => state.isAuthenticated) ? <AuthenticatedProfile /> : <GuestProfile />; }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#050505" }, scroll: { paddingBottom: 118 },
+  screen: { flex: 1, backgroundColor: "#050505" }, scroll: { paddingBottom: spacing.lg },
   eyebrow: { ...typography.smallBold, color: "rgba(255,255,255,0.45)", fontSize: 10, letterSpacing: 1.8 },
   accountHero: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 28, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.13)" }, accountTopline: { marginTop: 24, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }, avatar: { width: 58, height: 58, borderRadius: 29, alignItems: "center", justifyContent: "center", backgroundColor: "#f4f4f5" }, avatarText: { ...typography.title, color: "#050505", fontSize: 18, fontWeight: "800", letterSpacing: -0.5 }, online: { flexDirection: "row", gap: 6, alignItems: "center" }, onlineDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#a3e635" }, onlineText: { ...typography.smallBold, color: "rgba(255,255,255,0.55)", fontSize: 9, letterSpacing: 1.2 }, name: { ...typography.h1, color: themeColors.textPrimary, fontSize: 40, lineHeight: 42, letterSpacing: -1.8, marginTop: 20 }, namePeriod: { color: "rgba(255,255,255,0.35)" }, email: { ...typography.small, color: "rgba(255,255,255,0.52)", marginTop: 6 }, copyRule: { borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.5)", marginTop: 22, paddingLeft: 14, maxWidth: 290 }, welcomeCopy: { ...typography.small, color: "rgba(255,255,255,0.66)", lineHeight: 20 },
   statGrid: { flexDirection: "row", marginHorizontal: spacing.lg, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.13)" }, stat: { flex: 1, paddingVertical: 20 }, statBorderRight: { borderRightWidth: 1, borderRightColor: "rgba(255,255,255,0.13)", paddingRight: spacing.md, marginRight: spacing.md }, statValue: { ...typography.title, color: themeColors.textPrimary, fontSize: 27, lineHeight: 30, letterSpacing: -1 }, statLabel: { ...typography.smallBold, marginTop: 7, color: "rgba(255,255,255,0.43)", fontSize: 8, letterSpacing: 1.15 },

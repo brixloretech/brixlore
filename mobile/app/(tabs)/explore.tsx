@@ -12,6 +12,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { useBottomNavigationInset } from "../../hooks/useBottomNavigationInset";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors as themeColors } from "../../src/theme/colors";
@@ -23,7 +24,8 @@ import {
   type ContentSummaryDto,
 } from "../../services/contentService";
 
-const CARD_WIDTH = (Dimensions.get("window").width - spacing.lg * 2 - spacing.md) / 2;
+const CARD_WIDTH =
+  (Dimensions.get("window").width - spacing.lg * 2 - spacing.md) / 2;
 
 function PosterCard({
   item,
@@ -92,6 +94,7 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { category } = useLocalSearchParams<{ category?: string }>();
   const { trackEvent } = useMatomo();
+  const { contentBottomPadding } = useBottomNavigationInset();
   const [query, setQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [items, setItems] = useState<ContentSummaryDto[]>([]);
@@ -162,7 +165,10 @@ export default function ExploreScreen() {
         keyExtractor={(item) => item.id}
         numColumns={2}
         columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          { paddingBottom: contentBottomPadding },
+        ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -277,10 +283,10 @@ export default function ExploreScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#030303" },
-  content: { paddingBottom: 110 },
+  content: { paddingBottom: spacing.lg },
   intro: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.xxxl,
     paddingBottom: spacing.lg,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(255,255,255,0.10)",

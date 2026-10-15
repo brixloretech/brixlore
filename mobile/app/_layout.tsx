@@ -2,8 +2,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LogBox, View } from "react-native";
-import { useCallback, useEffect, useState } from "react";
-import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
 import { useFonts } from "expo-font";
 import {
   Outfit_400Regular,
@@ -35,11 +34,6 @@ import {
 
 const APP_BG = "#0b0b0e";
 
-// Keep native splash visible until root layout is mounted and painted.
-SplashScreen.preventAutoHideAsync().catch(() => {
-  // Ignore if splash is already prevented/hidden.
-});
-
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Outfit_400Regular,
@@ -51,7 +45,6 @@ export default function RootLayout() {
   const { register, loadNotifications } = useNotificationStore();
   const { isAuthenticated, user } = useAuthStore();
   const { loadFromStorage: loadLimitedAccess } = useLimitedAccessStore();
-  const [isLayoutReady, setIsLayoutReady] = useState(false);
   // Removed checkAuth from here - it's called in index.tsx to avoid duplicate calls
 
   // Register download notification handlers
@@ -197,17 +190,6 @@ export default function RootLayout() {
   }, []);
 
   useEffect(() => {
-    if (!isLayoutReady) return;
-    SplashScreen.hideAsync().catch(() => {
-      // Ignore if already hidden.
-    });
-  }, [isLayoutReady]);
-
-  const handleRootLayout = useCallback(() => {
-    setIsLayoutReady(true);
-  }, []);
-
-  useEffect(() => {
     if (!isAuthenticated) {
       return;
     }
@@ -236,10 +218,7 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <View
-      style={{ flex: 1, backgroundColor: APP_BG }}
-      onLayout={handleRootLayout}
-    >
+    <View style={{ flex: 1, backgroundColor: APP_BG }}>
       <SafeAreaProvider>
         <DarkThemeProvider>
           <MyListProvider>

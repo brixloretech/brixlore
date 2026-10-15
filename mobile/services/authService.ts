@@ -251,6 +251,35 @@ class AuthService {
     }
   }
 
+  async loginInline(credentials: LoginCredentials): Promise<LoginResponse> {
+    const { deviceIdentifier, platform } =
+      await deviceService.getDeviceIdentity();
+    const response = await api.post<{
+      accessToken: string;
+      refreshToken: string;
+    }>("/auth/login-inline", {
+      email: credentials.email.trim(),
+      password: credentials.password,
+      platform,
+      deviceIdentifier,
+    });
+    const { accessToken, refreshToken } = response.data;
+    if (!accessToken || !refreshToken) {
+      throw new Error("Invalid response from server: missing tokens");
+    }
+    await this.storeTokens(accessToken, refreshToken);
+    await SecureStore.setItemAsync(DEVICE_IDENTIFIER_KEY, deviceIdentifier);
+    const user = await this.getCurrentUser();
+    const resolvedUser: User = user ?? {
+      id: "temp",
+      email: credentials.email.trim(),
+      name: credentials.email.trim().split("@")[0],
+      role: "user",
+    };
+    await this.storeUser(resolvedUser);
+    return { user: resolvedUser, accessToken, refreshToken };
+  }
+
   /**
    * Sign up user and start an authenticated session immediately.
    */
@@ -304,6 +333,31 @@ class AuthService {
         error.response?.data?.message || error.message || "Registration failed";
       throw new Error(message);
     }
+  }
+
+  async signUpInline(credentials: Required<SignUpCredentials>): Promise<LoginResponse> {
+    const response = await api.post<{
+      accessToken: string;
+      refreshToken: string;
+    }>("/auth/signup-inline", {
+      name: credentials.name.trim(),
+      email: credentials.email.trim(),
+      password: credentials.password,
+    });
+    const { accessToken, refreshToken } = response.data;
+    if (!accessToken || !refreshToken) {
+      throw new Error("Invalid response from server: missing tokens");
+    }
+    await this.storeTokens(accessToken, refreshToken);
+    const user = await this.getCurrentUser();
+    const resolvedUser: User = user ?? {
+      id: "temp",
+      email: credentials.email.trim(),
+      name: credentials.name.trim(),
+      role: "user",
+    };
+    await this.storeUser(resolvedUser);
+    return { user: resolvedUser, accessToken, refreshToken };
   }
 
   async storePreviewSessionTokens(tokens: AuthTokens): Promise<void> {
